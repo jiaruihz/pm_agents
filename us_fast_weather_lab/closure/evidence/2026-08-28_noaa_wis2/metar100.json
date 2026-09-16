@@ -1,0 +1,39 @@
+{
+    "type":"FeatureCollection",
+    "features":[],
+    "numberMatched":0,
+    "numberReturned":0,
+    "links":[
+        {
+            "type":"application/geo+json",
+            "rel":"self",
+            "title":"This document as GeoJSON",
+            "href":"https:/collections/wis2_notifications/items?f=json&limit=100&metadata_id=urn%3Awmo%3Amd%3Aus-noaa-nws%3Aaviation-metar-observations&sortby=-pubtime"
+        },
+        {
+            "rel":"alternate",
+            "type":"application/ld+json",
+            "title":"This document as RDF (JSON-LD)",
+            "href":"https:/collections/wis2_notifications/items?f=jsonld&limit=100&metadata_id=urn%3Awmo%3Amd%3Aus-noaa-nws%3Aaviation-metar-observations&sortby=-pubtime"
+        },
+        {
+            "type":"text/html",
+            "rel":"alternate",
+            "title":"This document as HTML",
+            "href":"https:/collections/wis2_notifications/items?f=html&limit=100&metadata_id=urn%3Awmo%3Amd%3Aus-noaa-nws%3Aaviation-metar-observations&sortby=-pubtime"
+        },
+        {
+            "type":"text/csv; charset=utf-8",
+            "rel":"alternate",
+            "title":"This document as CSV",
+            "href":"https:/collections/wis2_notifications/items?f=csv&limit=100&metadata_id=urn%3Awmo%3Amd%3Aus-noaa-nws%3Aaviation-metar-observations&sortby=-pubtime"
+        },
+        {
+            "type":"application/json",
+            "title":"WIS2 Notifications",
+            "rel":"collection",
+            "href":"https:/collections/wis2_notifications"
+        }
+    ],
+    "timeStamp":"2026-08-28T15:22:30.748980Z"
+}

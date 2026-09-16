@@ -1,0 +1,884 @@
+# Weather Analysis Contract
+
+Status: current-source
+Updated: 2026-08-30 unified replay-case derived views
+Source of truth: yes
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
+
+> 任何天气策略分析（绩效 / 血缘 / 持仓敞口）必须遵守本文件中的所有定义。  
+> 口径改动必须先 PR 进本文件，然后才能在分析报告或 skill 中使用新口径。
+
+---
+
+## §0 通用规约
+
+### 数据刷新按问题分层（硬规定）
+
+**禁止为了查询单笔订单、当前 runner 状态或少量 raw lineage，执行全库同步或重建。**
+
+0. 先运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`。物理 canonical DB 应为
+   `/Volumes/jrs/pm_agents/runtime/weather.db`，仓库 `runtime/weather.db` 必须是同一 device/inode 的兼容入口；
+   split 或存在非 canonical consumer 时停止 canonical 分析和 rebuild。
+1. 当前订单 / runner / 触发原因：先按 city、date、order_id 读取对应实例的 raw
+   `orders.jsonl`、`events.jsonl`、`opportunities.jsonl`，并报告文件覆盖时间。
+2. 已有 canonical 分析：只读检查 `runtime/weather.db` 的 mtime、目标窗口覆盖和
+   `MAX(fact_built_at_utc)`；覆盖足够就直接查询，不得为形式上的“完整 lineage”重建存量数据。
+3. 发布最新 live order/fill/fee/PnL，且现有 DB 确实陈旧：先运行 bounded canonical
+   refresh `scripts/ops/start_weather_canonical_refresh_tmux.sh`。WCIR candidate/label/coverage 缺口只运行
+   相应的、已审批的增量 materializer。只有增量流程不能满足、schema/全历史派生层确实失效，
+   且用户明确同意全量重建时，才运行：
+
+   ```bash
+   scripts/ops/sync_weather_remote.sh
+   scripts/weather_dashboard/run_stack.sh --rebuild
+   ```
+
+无参数 `scripts/weather_dashboard/run_stack.sh` 只读 controller/DB 状态，不启停 API/FE，保留现有 DB；
+`--rebuild` 是显式、长耗时的全量重建操作。
+
+> 若数据源不可达，在报告“数据快照”段注明，并写明本地缓存的最后覆盖时间；不得用一次全量重建掩盖源缺失。
+
+### 数据源路由（按问题 grain，不设一个万能优先级）
+
+| 问题 | 首选证据 | 次选 |
+|---|---|---|
+| 当前 runner / order / trigger / fill | `production.yaml`/manifest/进程参数解析出的 Mac active runtime + exchange response | canonical DB（仅在已同步时） |
+| 最新 snapshot / orderbook / forecast / source event | `/Volumes/jrs/weather_data_feed_service_runtime` raw | 本机 market mirror |
+| fill 绩效 / settlement / opportunity alpha | `runtime/weather.db` 的 canonical facts | Dashboard API（同一 DB 的展示层） |
+| 历史 N100 窗口 | 已同步的 N100 mirror | N100 raw（仅历史恢复且可达） |
+
+N100 在 2026-07-01 磁盘事故恢复完成前不是 present-state truth。`weather.db` 是分析派生层，也不能替代当前进程和订单的 raw 证据。报告必须写清 evidence layer、覆盖截止和本次是否同步/重建。
+
+### WCIR 决策血缘与 build identity（硬规定）
+
+新城市日内 runtime 的分析主链是：
+
+```text
+EventEnvelope -> DecisionContext -> ModelOutput -> SignalCandidate -> TradeIntent
+-> shared execution handoff -> plan -> order -> fill -> settlement
+```
+
+legacy signal 只能通过显式 adapter 投影，不伪造缺失的 `TradeIntent`。每次研究/绩效/血缘报告必须固定：
+
+- event/available/first-seen/observation 四时钟、revision parent 与 checkpoint identity。
+- model/artifact/config/schema/runtime contract hash 及 `candidate_grain_version`。
+- `feature_book_snapshot_id` 与 `execution_book_snapshot_id`；模型盘口不是成交价。
+- DB realpath、device/inode、canonical materialization `build_id`/build time 与报告
+  `observed_at_utc`。运行中 refresh 切换 build 时，重启查询或按 build 分层，不得静默混合分母。
+- `TradeIntent` 与 execution handoff 的 blocker/record-only 语义；zero-notional 不得伪造成正 shares。
+
+### 统一案例与错题派生合同（2026-08-30）
+
+历史 case 的 canonical 分母是 `fact_signal_candidates`，不得另建一张只收“典型案例”或“错误案例”的
+手工事实表。schema hook 在完整 candidate contract 可用时安装两个只读视图：
+
+- `weather_replay_cases_v1`：每个 `candidate_id` 恰好一行，保留 scored、blocked、selected、未成交、
+  settled、pending、正确和错误 case；`replay_case_id = candidate_id`。
+- `weather_replay_mistakes_v1`：前者的派生筛选，只收
+  `model_error_flag`、`selected_loss_flag`、`realized_loss_flag` 或
+  `paper_unfilled_winner_flag` 命中的 row，不拥有独立真相。
+
+错误类型必须分轴报告，不能把“模型概率判断错”“策略选中后 outcome loss”“真实已结算亏损”和
+“paper 想下但 live 未成交的赢家”混成一个标签。`model_error_flag` 的固定定义是：把表达侧概率以
+`0.5` 二分后与表达侧结算结果比较；概率质量的主指标仍是同 rows 的 Brier/logloss，而不是 accuracy。
+
+`replay_capability` 固定为：
+
+| 值 | 含义 |
+|---|---|
+| `full_decision` | v2 event-checkpoint 的 event、checkpoint、feature/model 和 decision book 引用完整、一致且 PIT 时钟合法，可进入 model + policy 重放 |
+| `model_only` | model 输入血缘完整，但 decision book/entry 引用不足，只能重放概率判断 |
+| `legacy_summary_only` | v1 日级旧 row 可统一查询、结算与归因，但不能伪装成完整 PIT replay |
+| `blocked` | v2 引用缺失、late backfill first-seen 不可知、引用错配或发生 future leak；具体原因见 blocker 字段 |
+
+案例视图不 join fill-grain `fact_trades`，避免一对多 fill 把 candidate 分母放大。真实逐 fill 执行、fee 与
+settlement PnL 仍以 `fact_trades`/raw exchange lineage 为准。人工 golden casebook、对话时间线和机制案例
+只可作为同一 `candidate_id` 的叙事/证据附件；不能替代全分母，也不能反向决定哪些 row 被保留。
+
+每次 view contract 都绑定 `replay_catalog_build_id`，catalog build 和 artifact verification 都是 append-only。
+这里的 `ready/full_decision` 是 **catalog 引用层 readiness**；新 case 默认输出
+`replay_artifact_verification_status='not_checked_by_catalog'`。真正执行 replay 前，verifier 必须在 registered
+artifact root 内解析 absolute path 并核对真实 file SHA-256；aggregate/source hash 不能冒充 file evidence。
+验证状态固定为 `ready`、`legacy_summary_only`、`blocked_evidence`、`blocked_missing_artifact`、
+`blocked_hash_mismatch` 或 `blocked_unverifiable_artifact`，并绑定 catalog/verifier build id。视图完整性也以
+candidate materialization coverage 为上限：尚未 dual-write
+或 backfill 到 `fact_signal_candidates` 的旧 runner/raw 判断必须列为 coverage gap，不能把“视图里没有”解释成
+“当时没有判断”。
+
+### Immutable dataset / split / label 合同（2026-08-30）
+
+模型完善后的回测不得直接指向仍在增长的 DB 或“最新目录”。一次 dataset seal 必须固定：canonical DB
+realpath/device/inode/schema/file SHA、rows/row-identity hash、每个 raw source 的 logical + physical snapshot
+hash/count/availability clock/cutoff、catalog build、code SHA、label value/availability 字段和 label cutoff。
+`weather_candidate_settlement_labels` 是 append-only correction history；训练/评测只能选择
+`label_available_at_utc <= cutoff` 的一条可知 label，unknown availability 不得补成已知。
+
+split 只按完整 `target_date` block 做，顺序固定为 `train → validation → test → frozen_forward`；同一日期
+不能跨 split，每个 dataset row 必须恰好归属一个 split，且后一个 block 必须严格晚于前一个。Replay run
+identity 固定绑定 `dataset_hash + split_manifest_hash + catalog_build_id + code_sha + source_snapshot_hashes`。
+这样换模型只换 code/model identity，历史 CLOB+天气 evidence 与分母仍可原样重放。
+
+### Frozen shadow / maker 增益合同（2026-08-30）
+
+frozen shadow epoch 必须固定 dataset/split/model/execution-assumption hash 和完整 target-date 清单，且
+orders/fills/notional/runtime_* 全为 0；它只有 evidence authority，没有 promotion authority。maker 对比必须
+与 taker 使用完全相同的 `row_id` 分母。`quote_touched` 不是 fill：maker proxy 至少需要显式
+`sell_volume >= visible_queue + own_size`、正 own size、fee/price/markout 假设，并单列 missing evidence。
+因此 shadow 输出只能称 `proxy_only` 或 blocked；没有真实 queue lifecycle、成交与 adverse-selection
+证据时，不能宣称 maker 已有可兑现增益。
+
+### 当前研究主口径（2026-07-15）
+
+当前没有达到 confirmed、可扩 live 的策略。研究默认目标是 fee-adjusted、PIT、可执行、能在 frozen forward 重复的 `P(outcome)-market` residual：
+
+1. 模型/物理特征先在固定同分母 rows 上用 logloss/Brier/calibration 与 market 比，再评 selected trade ROI。
+2. 先跑宽分母 sanity check，再做机制切片；少量事件或物理故事不能替代全量反证。
+3. source event 必须按 first-seen grain，并校准 source→official/settlement basis；快源打印不等于确定结算标签。
+4. maker 回放必须建 fill/queue/adverse selection；future price touch 不是实际 fill。
+5. 当前运行中的 live probe 只算 forward 取证，不自动构成策略已确认。
+
+每份机制/策略研究必须分开列：
+
+```text
+signal funnel: raw universe -> mechanism candidate -> first event/city-day signal -> selected
+evidence funnel: PIT source -> PIT book -> settlement -> executable expression -> actual fill
+```
+
+每层标 grain、行数、独立 target dates。盘口/结算/archive 缺失只能记 coverage gap，不能伪装成策略筛除。
+
+样本命名也属于合同：禁止用未限定的“全量历史 / 全部数据 / full history / long history”。每个训练、评测和绩效
+artifact 必须保存 `denominator_scope`、输入 artifact/表、原始 rows/日期/城市范围及逐层过滤 funnel。按时间、城市、
+模型、季节、label、PIT/book/settlement availability 过滤后的集合只能称 slice。只有紧邻声明 universe、覆盖起止、
+来源和已知缺口时，才可称该 scope 内全量；artifact 的全部 rows 也不能自动外推为项目全部历史。
+
+### SQLite 查询可靠性（硬规定）
+
+manifest 的 `db_route.status=healthy` 且 storage audit 无 critical 后，`runtime/weather.db` 是 JRS physical canonical 的同 inode 兼容入口，也是 WAL 模式 SQLite。普通分析只读查询必须有明确 timeout，避免无界交互式 sqlite 卡住；不要在只读连接里运行 checkpoint / WAL 修复类 PRAGMA。
+
+CLI 推荐：
+
+```bash
+sqlite3 -batch -cmd ".timeout 1000" runtime/weather.db "SELECT COUNT(*) FROM fact_signal_candidates;"
+```
+
+Python 推荐：
+
+```python
+import sqlite3
+
+conn = sqlite3.connect("file:runtime/weather.db?mode=ro", uri=True, timeout=1.0)
+conn.execute("PRAGMA query_only=ON")
+conn.execute("PRAGMA busy_timeout=1000")
+conn.row_factory = sqlite3.Row
+```
+
+长查询、bootstrap、join-heavy 研究应先确认现有 DB 覆盖目标窗口，再制作一致性 snapshot 读取；
+制作 snapshot 本身不要求先跑 `run_stack.sh --rebuild`：
+
+```bash
+mkdir -p runtime/analysis_snapshots
+sqlite3 -batch -cmd ".timeout 5000" runtime/weather.db \
+  "VACUUM INTO 'runtime/analysis_snapshots/weather_YYYYMMDD_HHMMSS.db';"
+```
+
+`immutable=1` 只用于一致性 snapshot 或确认 WAL 为空且没有活跃 writer 的静态 DB；不要直接对仍可能由 dashboard / rebuild 写入的 live `runtime/weather.db` 使用 `immutable=1`。
+
+### 禁止清单
+
+- 不准在 `/tmp` 或未 git 的目录写一次性 pandas 脚本，不存档不记录
+- canonical 绩效不得临时改指标定义；研究确需新增指标/切片时，必须先定义 grain、公式、PIT 可得性和复用归属，并在报告/contract 中登记
+- 不准把 strategy_id 之外的字段当作策略唯一标识
+- 不准只输出数字结论而不写 Markdown 报告
+- 不准跳过报告的"数据完整性自检"段
+- 不准在未通过三道门时给 keep / cut / 降 size / 上 live 建议
+- 不准把 `fact_trades`、`fact_signal_candidates`、orderbook snapshot 的字段混成一个 grain
+
+### 绩效结论三道门（硬规定）
+
+任何 weather 绩效、A/B、城市 alpha、策略表现或回测结论，如果要导向 live 动作（keep / cut / 调 size / 改 city pool / 改 entry band / 上新策略），必须同时通过三道门。
+
+| 门 | 通过条件 | 不通过时 |
+|---|---|---|
+| 显著性门 | ROI、超额 ROI、PnL delta 或 A/B delta 的 bootstrap 95% CI 不跨 0；若是相对基准，则 CI 不跨基准 | `inconclusive`，不得给 live 动作 |
+| 基准门 | 概率/模型以同 rows 的 market probability 为主基准；交易表达以同一时点 executable market cost 为主基准。同价位无脑买 NO/YES 与随机选边只作 side/base-rate sanity check | 只是 base-rate 或天气预测能力，不算 market residual alpha |
+| 前瞻门 | train 窗选出的规则、城市、side 或参数，在 holdout 或后续日期仍同号且仍有超额 | 只能 `shadow_candidate`，不得改 live |
+
+结论只能使用以下等级：
+
+| 等级 | 条件 | 允许动作 |
+|---|---|---|
+| `confirmed` | 三门全过 | 可建议 live keep / cut / 调 size，但仍必须走 `weather-strategy-deploy` |
+| `shadow_candidate` | 显著且超额，但前瞻未验证 | 只能 shadow / paper，不得改 live |
+| `inconclusive` | CI 跨 0、样本不足、未超额、基准缺失、前瞻失败或口径缺失 | 禁止 live 动作 |
+
+报告中每条交易动作相关结论必须标：
+
+```text
+significance=PASS/FAIL/NA
+baseline=PASS/FAIL/NA
+forward=PASS/FAIL/NA
+conclusion=confirmed/shadow_candidate/inconclusive
+```
+
+一句话总结必须采用：
+
+```text
+在 [窗口]，[策略/切片] 相对 [零模型] 的超额 ROI 为 X%（95% CI [a,b]），
+前瞻 [PASS/FAIL/NA]，结论等级 [confirmed/shadow_candidate/inconclusive]。
+```
+
+禁止用“ROI +Y%，建议保留 A 城砍 B 城”作为最终结论。
+
+样本门槛：
+
+- 城市或切片级 keep/cut 默认需要 `active_days >= 10` 且 `settled_fills >= 30`。
+- 低于门槛只能标 `low_sample` / `inconclusive`，除非用户明确只要探索性描述。
+- 同一 `target_date` 多城市、多 bracket 或多 fill 存在相关性时，优先按 `target_date` 做 block/cluster bootstrap。
+- 可报告相关性折减后的 `n_eff = n / (1 + (n - 1) * rho_bar)`；若 `n_eff` 远低于 naive n，结论必须降级或标高风险。
+- 若本轮试了多个城市/切片/版本，报告候选数量 K，并说明是否做了 Bonferroni、FDR、Deflated Sharpe 或其他多重检验处理。
+
+日内概率模型的统一补充口径：
+
+- checkpoint、state-transition、state-entry 分别计分，不能用大量容易的重复
+  checkpoint 淹没关键状态切换；
+- 每个 grain 内先按 `target_date` 等权；多 grain objective 的权重必须在训练前固定；
+- ordered outcome 增加 RPS；多 horizon event 增加 integrated horizon
+  Brier/logloss，并验证概率单调/coherent；
+- calibration、AUC、accuracy 都只能作 proper loss 的补充，不能替代同 rows
+  Brier/logloss 与 market baseline；
+- 共享实现位于 `weather_model_evaluation`，城市 adapter/特征/模型仍可独立。
+
+### 8 环覆盖自检（报告必须声明）
+
+每份策略研究报告必须声明覆盖了哪些环、缺哪些环。缺环不是自动失败，但如果缺的是显著性、基准或前瞻，不能给 live 动作。
+
+| 环 | 问题 | 默认授权源 |
+|---|---|---|
+| 1 描述性绩效切片 | 谁赚谁亏 | `fact_trades` |
+| 2 统计推断 | 盈亏是否显著、是否多重检验后仍成立 | `fact_trades` + block bootstrap |
+| 3 信号判别 | 模型是否有排序/IC 能力 | `signals` / `fact_trades` / `fact_signal_candidates`，需明确 grain |
+| 4 概率分布评估 | 概率/分布是否校准 | `signals` + `settlements` 或专门模型评估脚本 |
+| 5 执行微结构 | 点差、滑点、可成交 edge、fill/unfill 偏差 | 见“三源口径” |
+| 6 容量 | size 放大后 edge 是否还存在 | orderbook depth / live fills |
+| 7 组合相关性 | 同日多城是否是假分散 | `target_date` / city outcome / PnL block |
+| 8 基准/反事实 | 相对无脑 NO / 市场 EV / 随机是否有超额 | `fact_signal_candidates` + `fact_trades` |
+
+### Live 账户余额 / CLOB 对账（wallet cashflow）
+
+当问题是“余额少了 / 钱包对不上 / 最近几天账户到底亏没亏 / CLOB fill 链路是否漏记”时，**这不是普通绩效切片**。必须使用固定脚本，不准再写一次性 pandas/SQL 临时脚本：
+
+```bash
+python3 scripts/analysis/account_reconcile/weather_live_account_reconcile.py \
+  --start YYYY-MM-DD \
+  --end YYYY-MM-DD \
+  --date-field fill_date_bj \
+  --group-by instance,selected_date
+```
+
+账户对账必须同时报告这些层，不能互相替代：
+
+| 指标 | 含义 | 授权来源 |
+|---|---|---|
+| `submitted_notional_usd` | raw live order 记录的下单名义金额，可能含未成交/失败/占用 | `runtime/weather_edge_v1/remote_pm_agent/live/*orders.jsonl` |
+| `posted_notional_usd` | 实际提交到 live 记录里的订单名义金额 | raw live order JSONL |
+| `actual_fill_cost_usd` / `cash_cost_usd` | 已成交买入真正花掉的现金 | `fills.filled_price * fills.filled_shares`，并与 `fact_trades.cost_usd` 交叉检查 |
+| `realized_pnl_usd` | 已结算真实 PnL | `fact_trades.pnl_usd_at_fill WHERE settlement_status='settled'` |
+| `open_cost_usd` | 未结算仓位成本，仍在风险中 | `fact_trades.cost_usd WHERE settlement_status<>'settled' OR settlement_status IS NULL` |
+| `unrealized_pnl_mid/bid/last_fill` | 未结算仓位估值，不是 realized PnL | `fact_trades.val_*`，必须附 `val_snapshot_ts_utc` |
+
+时间字段硬规定：
+- `fill_date_bj` = 真实成交花钱日期；解释钱包现金流默认用它。
+- `target_date` = 天气合约目标日；只用于策略归因、城市日归属，不解释余额减少。
+- `fact_trades.order_date_bj` **禁止用于余额现金流结论**；它可能受回填/重建链路污染，只能作为策略下单归属诊断字段。
+- `orders.placed_at_utc` / raw order `created_at_utc` 用于 submitted/posted notional；它不是已花掉的 fill cost。
+
+最终报告前必须输出 fill 链路一致性：
+- `db_live_real_distinct_fills`
+- `raw_clob_distinct_fills`
+- `db_not_in_raw`
+- `raw_not_in_db`
+- `weather_clob_fill_coverage_gate.py` 的 `gate_pass`
+- `missing_order_rows`
+- `over_order_keys`
+- `db_cache_fill_id_mismatch`
+- `db_fill_cost_minus_fact_cost`
+
+若 raw live order 文件或 raw CLOB fills 比 `MAX(fact_built_at_utc)` / `MAX(fill_ts_utc)` 更新，结论必须明确写“DB 滞后”，并把 raw submitted/posted notional 与 DB fill cost 分开列。
+
+### CLOB fill recovery 规则（2026-06-07 勘误）
+
+真实 CLOB fill 的权威顺序是：
+
+1. `orders.exchange_response.place.status='matched'` 的即时成交回报（含 `makingAmount`/`takingAmount`）。
+2. authenticated CLOB order / trade 数据。
+3. public activity / trades API 只作 fallback，并且必须按 partial fill 粒度聚合、受 order cap 约束。
+
+fill 数量来源与 fee 来源必须分别取最强证据；即时 `matched` 回报不能提前结束 fee 证据链。fee 权威顺序是：
+
+1. authenticated order/trade 的非零 `takerFee`；
+2. `place.transactionsHashes` 精确命中的 public activity BUY 现金差：`max(0, usdcSize - size * price)`；
+3. public fallback partial BUY 每一段各自使用同一现金差；
+4. 明确 maker fill 记 `maker_zero`；
+5. 以上都不可得时才按 Weather 官方曲线估算，并标 `weather_fee_curve_estimate`，不得静默写 0。
+
+**禁止**把 Polymarket public activity 当成逐 order 的权威 fill 来源。public activity 是账户级成交活动，不保证携带本地 CLOB `order_id` 粒度；同 market split child orders 或同 token 多笔订单时，旧 fallback 会把账户级成交错误分配给某个 child order，造成：
+
+- `order_id` mismatch；
+- 同一 public activity 被错误归属；
+- partial fill 只记第一段导致少算；
+- 或累计 fill cost/shares 超过订单 cap 导致多算。
+
+所有 weather live rebuild / refresh 后必须跑：
+
+```bash
+python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
+```
+
+`gate_pass=false` 时禁止发布 live_real PnL、ROI、city/side rank、近 7/15 天曲线。必须先修复 `clob_fills.jsonl` / CLOB fill sync，再重建 `runtime/weather.db`。
+
+`fills` 是 append-only。历史错误 fee 不得 `UPDATE/DELETE fills`，必须写入
+`runtime/weather_edge_v1/clob_fill_fee_adjustments.jsonl`，重建时导入
+`fill_fee_adjustments`；`fact_trades.fees_usd = fills.fees_usd + SUM(fee_delta_usd)`。
+调整必须带 `fee_source`、`fee_evidence_class`、tx/evidence 与 market fee metadata；
+`public_activity_tx_exact`、`maker_zero`（exact/order semantics）与 `weather_fee_curve_estimate` 必须分层报告。
+coverage gate 必须令已知 immediate matched taker 的“effective fee=0 且无 adjustment evidence”失败。
+
+### Polymarket 交易费口径（2026-07-03 勘误）
+
+任何 weather 策略回测、执行回放、maker/taker 对比或 stop/TP 研究，只要声称是可执行 ROI，必须按 Polymarket 官方 fee 公式建模，不准自造 flat fee / gross fee 作为主口径。
+
+官方 taker fee 公式：
+
+```text
+fee = shares * feeRate * price * (1 - price)
+```
+
+当前 Weather 类别 fee 口径：
+
+```text
+taker feeRate = 0.05
+maker feeRate = 0
+maker rebate = 25% fee-curve weighted（可作为单独 upside，不得默认计入 baseline）
+fee precision = round to 5 decimals; below 0.00001 rounds to zero
+```
+
+执行研究必须同时声明：
+
+- entry/exit 是 `maker` 还是 `taker`；maker fill 不扣 taker fee，但必须单独处理 fill probability / adverse selection / queue risk。
+- 若有 `condition_id` / `token_id`，优先查询 CLOB market info（`getClobMarketInfo(conditionID)` 的 `fd={r,e,to}`）或 `/fee-rate?token_id=...` 并把返回值写进报告；查询失败时才回落类别默认 `Weather feeRate=0.05`，并注明。
+- stop/TP 若按 hit bid 或 marketable sell 执行，exit 也要扣 taker fee；若按 resting maker sell 执行，不扣 taker fee，但不能把 future max-bid touch 当成实际 fill。
+- 额外 `+1c`、queue haircut、maker fill rate stress 可以作为 sensitivity，但不能替代官方 fee baseline。
+
+### 结算 near-binary 规则（2026-06-06 勘误）
+
+`pm_history` 里的 Polymarket 已结算价格不一定是精确 `1.0 / 0.0`；大量已基本结算的 bracket 会写成 `0.9995 / 0.0005`。因此：
+
+- `pm_history_settlements.py`、`build_weather_fact_trades.py`、`build_weather_signal_candidates.py` 必须按 near-binary 规则识别结算：接近 1 的 bracket 归一化为 `final_yes=1.0`，接近 0 的 bracket 归一化为 `final_yes=0.0`。
+- **旧口径“只认精确 1.0 / 0.0”已废弃**；用旧口径生成的 `missing_bracket`、settled PnL、ROI、win rate、city/side rank 都可能低估/偏移。
+- `missing_bracket` 只表示 `pm_history` 中找不到对应 bracket / event，不再表示 near-binary price 未归一化。
+- 引用 2026-06-06 之前的报告时，若报告头中有大量 `missing_bracket`（例如 725/734/28 这类数），必须先按新结算规则重建 `runtime/weather.db` 并重算。
+
+2026-06-16 起，`pm_history_settlements.py` 必须双写：
+
+- `settlements`：用于 `condition_id + bracket` 的 trade/fill join，保持现有 fact builders 口径。
+- `settlement_outcomes`：用于 `source_system + city + target_date + bracket` 的源头结算 grain。篮子、city-day、source-sensitive 研究必须优先读这张 DB 表；不要在每个策略脚本里各自直读 raw `pm_history` 并定义不同 fallback。
+
+2026-06-06 已验证基线（历史快照；后续成交会改变 live_real 行数，最终以 CLOB coverage gate 为准）：
+
+```text
+db_live_real_distinct_fills=852
+raw_clob_distinct_fills=852
+db_not_in_raw=0
+raw_not_in_db=0
+missing_bracket: 725 -> 0 after rebuild
+```
+
+### 报告头必填项
+
+每份分析报告的第一个 H2 段（`## 数据快照`）必须包含：
+
+| 字段 | 说明 |
+|---|---|
+| 数据源 | DB / API / 镜像 CSV / N100 raw（注明路径） |
+| 数据快照时间 | DB last_modified 或 JSON `generated_at` 字段 |
+| 记录行数 | 查询返回的 orders / fills 行数 |
+| unsettled 占比 | unsettled_n / total_n |
+| missing_bracket 数 | 结算状态为 `missing_bracket` 的笔数 |
+
+---
+
+## §1 数据源清单
+
+### fact_trades（强制唯一取数源）
+
+**绩效分析必须读 `fact_trades`，禁止绕过直接查 fills/orders/signals 等原始表自算指标。**
+这条约束针对 fill 绩效、settled PnL、open exposure 估值；**账户余额 / wallet cashflow / raw CLOB 对账必须走 §0 的 `weather_live_account_reconcile.py`，不能只看 `fact_trades` 下结论。**
+
+- DB 表：`runtime/weather.db` 的 `fact_trades` 表（73 列，每 fill 一行）
+- Parquet：`runtime/weather_edge_v1/market_data/research/fact_trades.parquet`（与 DB 同步）
+- 重建：`run_stack.sh` 在 ingest 后自动调用 `scripts/etl/build_weather_fact_trades.py`
+- 设计文档：[WEATHER_FACT_TRADES_DESIGN.md](WEATHER_FACT_TRADES_DESIGN.md)
+
+**物理 DB 只许 `/Volumes/jrs/pm_agents/runtime/weather.db`**；`runtime/weather.db` 只许作为同 device/inode 兼容入口。先用 `weather_storage_identity_audit.py` 排除独立副本。
+
+#### 取数 quickstart
+
+```python
+import sqlite3
+conn = sqlite3.connect("file:runtime/weather.db?mode=ro", uri=True, timeout=1.0)
+conn.execute("PRAGMA query_only=ON")
+conn.execute("PRAGMA busy_timeout=1000")
+conn.row_factory = sqlite3.Row
+
+# --- 最常用：取所有已结算成交，直接用预算好的 PnL ---
+rows = conn.execute("""
+    SELECT
+        trade_class,       -- live_real / live_simulated / paper / snapshot_replay
+        city, city_pool,
+        side, bracket,
+        target_date, order_date_bj,
+        model_version,     -- ecmwf / gfs
+        fill_price, plan_price, fill_qty, fees_usd,
+        cost_usd,
+        final_yes,         -- 归一化结算价（0.0 或 1.0；pm_history raw 可能是 0.0005/0.9995）
+        pnl_usd_at_fill,   -- 唯一授权 PnL，基于 fill_price 算
+        pnl_usd_at_plan,   -- 以 plan_price 为基准（衡量滑点影响）
+        edge, abs_edge,
+        strategy_id, run_id,
+        settlement_status  -- settled / missing_bracket / unsettled
+    FROM fact_trades
+    WHERE settlement_status = 'settled'
+""").fetchall()
+
+# --- 按城市/方向切片 ---
+rows = conn.execute("""
+    SELECT city, side,
+           COUNT(*) AS n,
+           SUM(pnl_usd_at_fill) AS total_pnl,
+           AVG(CASE WHEN pnl_usd_at_fill > 0 THEN 1.0 ELSE 0.0 END) AS win_rate
+    FROM fact_trades
+    WHERE settlement_status = 'settled'
+      AND city_pool = 't1_trading'
+    GROUP BY city, side
+    ORDER BY total_pnl DESC
+""").fetchall()
+
+# --- 只看 live 实盘（区分 paper） ---
+rows = conn.execute("""
+    SELECT * FROM fact_trades
+    WHERE trade_class = 'live_real'
+      AND settlement_status = 'settled'
+""").fetchall()
+```
+
+常用 `trade_class` 枚举值：
+
+| 值 | 含义 |
+|---|---|
+| `live_real` | execution_mode=live 且 fill_status=filled（真实 CLOB 成交） |
+| `live_simulated` | execution_mode=live 且 fill_status=simulated |
+| `paper` | paper 模拟下单 |
+| `snapshot_replay` | snapshot 快照 replay |
+
+> **不要把 `live_real` 小/空直接解释成没有真实成交。** 当前 pipeline 是：`production.yaml[*].live_order_path` → `orders(venue=polymarket_clob)` → authenticated `clob_fill_sync` / canonical fill cache → `fills(status=filled)` → `fact_trades(trade_class='live_real')`。历史 N100 raw 只属于历史窗口。**不要拿 `live_simulated` 冒充 `live_real`，也不要拿 paper PnL 冒充实盘 PnL。**
+
+> **2026-06-07 补充**：`live_real` 行数会随新增真实成交变化，不是固定基线。判断是否可用于实盘 PnL 的标准是 `weather_clob_fill_coverage_gate.py gate_pass=true`，不是某个历史行数。
+
+#### 已迁移的参考实现（可以直接抄）
+
+| 脚本 | 说明 |
+|---|---|
+| `scripts/analysis/live_performance/weather_live_full_research.py` | 按城市/方向/模型全量切片，`_load_trades()` 展示了典型的 fact_trades 读法 |
+| `scripts/analysis/city_selection/weather_city_day_portfolio.py` | `load_live_fills()` 展示了只取 live_real + settled 的过滤方式 |
+| `weather_dashboard/metrics/calc.py` | `compute_metrics()` 展示了 run 级别聚合 |
+
+### fact_signal_candidates（机会粒度授权源）
+
+**机会粒度问题必须读 `fact_signal_candidates`，禁止回到 raw JSON 自己 JOIN 重算。**
+它和 `fact_trades` 是**互补的两张授权底表**，grain 不同，结论不准互相硬塞：
+
+| 表 | grain | 回答 | PnL 列 |
+|---|---|---|---|
+| `fact_trades` | 每 fill 一行（只有成交了的） | 已成交 realized 绩效 | `pnl_usd_at_fill` / `pnl_usd_at_plan` |
+| `fact_signal_candidates` | 每机会一行 `(condition_id, side, event_date)`（全机会宇宙） | 全机会 alpha、成交率、漏单、滑点、漏掉的赢家 | `counterfactual_pnl`（反事实，非成交 PnL） |
+
+- DB 表：`runtime/weather.db` 的 `fact_signal_candidates` 表（每机会一行）
+- Parquet：`runtime/weather_edge_v1/market_data/research/fact_signal_candidates.parquet`
+- 重建：`run_stack.sh` 在 fact_trades **之后**调用 `scripts/etl/build_weather_signal_candidates.py`
+- 设计文档：[WEATHER_SIGNAL_CANDIDATES_DESIGN.md](WEATHER_SIGNAL_CANDIDATES_DESIGN.md)
+
+当前物化表仍是 `v1_legacy_daily` 语义：每
+`(condition_id, side, event_date)` 一行。first-seen/event-driven 研究的目标
+grain 是同表 additive `v2_event_checkpoint`，按 trigger event/checkpoint
+保留一天内多次真正的新信息决策；在 schema/rebuild 落地前不得把 raw
+`source_events` 临时 join 的结果声称为 canonical
+`fact_signal_candidates`。落地后所有查询必须显式声明
+`candidate_grain_version`，禁止混合 v1/v2 分母。完整契约见
+[WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md](WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md)。
+
+**口径硬规定：**
+- **反事实主口径 = `counterfactual_pnl`**，用**决策窗 `decision_entry_price`**（T-22~24h 真能看到的价）算，
+  公式沿用 §2.1 已验证的 BUY_YES/BUY_NO（含 2026-05-29 BUY_NO 勘误）。
+  `counterfactual_pnl_best`（用 `best_entry_price`）**仅作诊断上限，禁止当主绩效**（交易时不可能预知全天最优价）。
+- **链路标志**：`seen`(恒1) / `eligible` / `paper_ordered` / `live_filled`。派生视图：
+  `missed_fill = paper_ordered=1 AND live_filled=0`、
+  `counterfactual_win = paper_ordered=0 AND win_by_count=1`、
+  `filtered_out = eligible=0`。
+- **可用反事实分母**：只在 `final_yes IS NOT NULL AND decision_window_missing=0 AND eligible=1` 上算城市/方向/模型 alpha，
+  其余留空不估值（本表不做 Phase 1.5）。
+- **`live_filled` 只认 `trade_class='live_real'`**；`live_pnl_usd` 直接引用 `fact_trades.pnl_usd_at_fill`，不重算。
+- **`paper_ordered` 来自全池 paper ledger（T1+T2 paper 决定），不是 live 下单意图**。
+  因此 `missed_fill` 大多是 paper≠live 的设计差异，**不是 live 执行漏单**；
+  不要把 paper 成交率当 live 成交率。真实 live 覆盖率看 `live_filled / eligible`。
+
+#### 取数 quickstart
+
+```python
+import sqlite3
+conn = sqlite3.connect("file:runtime/weather.db?mode=ro", uri=True, timeout=1.0)
+conn.execute("PRAGMA query_only=ON")
+conn.execute("PRAGMA busy_timeout=1000")
+conn.row_factory = sqlite3.Row
+
+# 全 eligible 机会宇宙的城市/方向反事实 alpha（settled + 决策窗存在）
+rows = conn.execute("""
+    SELECT city, side,
+           COUNT(*) AS n,
+           SUM(paper_ordered) AS ordered, SUM(live_filled) AS live_fill,
+           AVG(CAST(win_by_count AS REAL)) AS win_rate,
+           SUM(counterfactual_pnl) AS cf_pnl
+    FROM fact_signal_candidates
+    WHERE eligible=1 AND final_yes IS NOT NULL AND decision_window_missing=0
+    GROUP BY city, side
+    ORDER BY cf_pnl DESC
+""").fetchall()
+
+# 滑点（live 实际成交价 − paper 想进价）
+rows = conn.execute("""
+    SELECT side, COUNT(*) n, AVG(slippage_vs_paper) avg_slippage
+    FROM fact_signal_candidates
+    WHERE slippage_vs_paper IS NOT NULL GROUP BY side
+""").fetchall()
+```
+
+### 执行微结构三源口径（硬规定）
+
+执行微结构不能声称所有字段都在同一张 fact 表。必须按 grain 分开：
+
+| 层 | 授权源 | 可回答 |
+|---|---|---|
+| 已成交 fill | `fact_trades` | 真实成交价 `fill_price`、真实成交 PnL、fill 级 ROI、edge 与 realized PnL 关系 |
+| 机会/决策窗 | `fact_signal_candidates` | `decision_entry_price`、`yes_spread` / `no_spread`、`best_entry_price`、`live_fill_price`、`slippage_vs_paper`、`counterfactual_pnl` |
+| 原始盘口 | orderbook snapshot + token map + `decision_ts` | 决策时 `best_ask` / depth / capacity；必须保证 `snapshot_ts <= decision_ts` |
+
+硬约束：
+
+- `best_ask` 未物化进 `fact_trades` 或 `fact_signal_candidates` 时，不得在报告中写“fact 表直接有 best_ask”。
+- raw orderbook join 必须按 token map 对齐 `(condition_id, bracket, outcome)`，并且只取 `snapshot_ts <= decision_ts` 的最近盘口；禁止用 latest snapshot 回填历史决策。
+- `counterfactual_pnl_best` 只能作为全天最优诊断上限，不得当作主绩效或 live 决策依据。
+- 成交样本和未成交机会必须并排报告，避免把 fill selection bias 当 alpha。
+
+#### 选择性 WebSocket 增量盘口（硬规定）
+
+- raw `book` / `snapshot` 是完整状态基准，`price_change` 是 delta。必须按 token 与 event/receive clock
+  从最近有效基准确定性重建；单条 frame/JSONL 不是 orderbook snapshot。
+- 重建状态的 identity 必须可回溯 baseline raw ref、delta 区间/hash、token map、producer build、
+  selector/capture-policy version、subscription set 与 gap/reconnect 状态。不得用当前 `latest` REST 快照回填历史 delta。
+- hot strip、时间窗、event burst、暂停城市与未订阅 bracket 造成选择性 missingness。无 WS 消息不等于盘口
+  无变化；报告必须按 rollout/capture manifest 的 policy-valid 窗口分层，完整 ladder 分母仍由 PIT REST ladder 提供。
+- frame/message 是 transport grain，不是独立训练样本或交易机会。必须映射到预注册 checkpoint/time-bin/
+  first-event/state-transition grain，并先在 `target_date` 内等权；不得按消息活跃度无意重加权。
+- quote add/cancel/replace 不是 trade print、成交量或 queue position。无真实 print/order lifecycle 时，只能评价
+  quote-state/markout，不得声称 order-flow、fill 或 maker execution alpha。
+
+### weather.db（原始规范化表，仅 fact_trades / fact_signal_candidates builder 使用）
+
+- 路径：`runtime/weather.db`
+- 日常刷新：`scripts/ops/start_weather_canonical_refresh_tmux.sh`（production-declared live orders/fills 的 bounded one-shot）；全量派生层重算仅在明确需要时使用 `scripts/weather_dashboard/run_stack.sh --rebuild`
+- 覆盖时间：取决于镜像同步时间，详见 `WEATHER_DATA_PIPELINE.md`
+- **直接读原始表的唯一授权场景**：`build_weather_fact_trades.py` 和 `build_weather_signal_candidates.py`（两个 builder）；其他代码禁止绕过这两张底表自己 JOIN 多表算 PnL
+
+关键表结构：`signals` / `plans` / `orders` / `fills` / `settlements` / `runs` / `strategy_config`
+
+### snapshot replay 脚本（机会反事实 — 标准问题改走 fact_signal_candidates）
+
+以下两个脚本分析的是**候选信号 replay**（如果当时按快照价格入场会怎样），不是 DB 里的实际 fills：
+
+| 脚本 | 数据源 | 说明 |
+|---|---|---|
+| `scripts/analysis/city_selection/weather_city_pool_contribution_analysis.py` | `paper_snapshots/*.json` + `cache/pm_history/*.json` | 候选信号 × 当前城市池的反事实 replay |
+| `scripts/analysis/execution_quality/weather_window_capture_performance.py` | 同上 | 时间窗口捕获率 A/B 对比 |
+
+这两个脚本的 `pnl_usd=(payout - entry_price) * shares` 是 snapshot 级假设入场，不是成交层 PnL，**不需要** fact_trades。
+
+> **口径更新（2026-05-29）**：城市/方向/模型反事实 alpha、成交率、滑点、漏掉的赢家这类**标准机会粒度问题，
+> 现在一律走已物化的 `fact_signal_candidates`，不要再写一次性脚本扫 raw JSON**。
+> 上面两个脚本只保留给本表未覆盖的研究维度（如多窗口 A/B、城市池假设重组）；
+> 新增标准机会分析以 `fact_signal_candidates` 为准。
+
+### Dashboard API（controller-managed）
+
+- Base URL：`http://localhost:8000`
+- 状态/计划：`.venv/bin/python scripts/ops/weather_production_ctl.py health|plan`；启停只能走已登记 controller contract，不直接运行 uvicorn 或 `run_stack --api-only`
+- 常用 endpoints：
+  - `GET /api/runs` — 所有 run 列表
+  - `GET /api/runs/{run_id}/summary` — 单 run 绩效摘要
+  - `GET /api/compare?run_ids=A,B` — 多 run 对比
+  - `GET /api/live/signals` — 最新信号
+  - `GET /api/live/orders` — 最新订单
+
+### 镜像产物（`runtime/weather_edge_v1/market_data/research/`）
+
+| 文件 | 用途 |
+|---|---|
+| `t24_paper_ledger_summary.json` | 全量 paper ledger 绩效摘要；顶层键：`overall / by_date / by_city / by_pool / by_side / by_model / by_pool_side / by_pool_model / unsettled` |
+| `t24_paper_ledger_trades.csv` | 逐笔 ledger，含 city、city_pool、order_side、fill_price、plan_price、fill_qty、pnl_usd、settled、target_date |
+| `t24_paper_snapshot_replay_summary.json` | snapshot replay 绩效摘要（与 ledger 同结构） |
+| `t24_paper_snapshot_replay_trades.csv` | snapshot replay 逐笔 |
+| `t24_snapshot_replay_equity_curve.csv` | 资金曲线（date, cumulative_pnl） |
+
+`overall` 对象的字段：`n / wins / win_rate / cost_usd / pnl_usd / roi`
+
+### 历史 N100 raw（恢复边界）
+
+N100 不是当前生产 truth，不在分析合同中提供 SSH、密钥或固定远端路径。当前窗口先读 production contract 解析出的
+Mac raw；只有明确的历史恢复/补数任务才通过 `weather-fact-rebuild` 使用 N100 镜像，并记录 remote identity、覆盖起止、
+同步时间和已知缺口。不得把 N100 raw、旧 WSL 路径或 repo-local 历史 runtime 静默替代当前 Mac 数据。
+
+---
+
+## §2 核心指标定义
+
+> 参考实现：N100 `scripts/analysis/settle_t24_paper.py`（产出 `t24_paper_ledger_summary.json`）
+
+### 2.1 PnL
+
+**已结算 PnL（settled PnL）— 直接读 fact_trades**
+
+```sql
+-- 正确做法：直接读预算好的列，不要自己实现公式
+SELECT
+    fill_id,
+    city, city_pool, side, bracket, target_date,
+    fill_price, plan_price, fill_qty, fees_usd,
+    final_yes          AS settlement_yes_price,
+    pnl_usd_at_fill,   -- 基于实际成交价
+    pnl_usd_at_plan    -- 基于计划价（衡量滑点影响）
+FROM fact_trades
+WHERE settlement_status = 'settled'
+```
+
+**公式说明（仅供理解，禁止在消费者代码里重新实现）**
+
+```
+BUY_YES profit = (final_yes - fill_price) × fill_qty - fees
+BUY_NO  profit = ((1 - final_yes) - fill_price) × fill_qty - fees
+```
+
+> ⚠️  BUY_NO 公式勘误（2026-05-29 修正）：  
+> 旧（错误）：`fill_price - final_yes`  
+> 正确：`(1 - final_yes) - fill_price`  
+> 原理：`fills.filled_price` 对 BUY_NO 存的是 NO token 自身价，不是 YES 等效价。  
+> 用 651 笔 N100 生产已结算 BUY_NO 对账验证，8/8 命中此公式。  
+> **唯一授权实现**：`scripts/etl/build_weather_fact_trades.py`
+
+**未结算 PnL（unsettled PnL）**
+
+报告里必须单独列出，标注 `[UNSETTLED]`，三种估值并列：
+
+| 估值 | 说明 | 来源 |
+|---|---|---|
+| mid | 当前盘口 mid price | 最新 snapshot CSV 或 API |
+| bid | 当前买一价 | 最新 snapshot CSV 或 API |
+| last_fill | 最近一笔成交价 | `fills.filled_price` |
+
+未结算估值**不计入"已结算 PnL"总览**，仅供参考。
+
+**报告必须同时列**：`pnl_usd_at_fill`（实际成交价）和 `pnl_usd_at_plan`（计划价），以及 `fill_qty`。
+
+### 2.2 Win Rate
+
+```sql
+-- 在已结算集合上计算，按 pnl_usd_at_fill > 0 判断胜负
+-- 数据源：fact_trades WHERE settlement_status = 'settled'
+
+-- 按订单数
+SELECT
+  COUNT(*) FILTER (WHERE pnl_usd_at_fill > 0)  AS wins_by_count,
+  COUNT(*)                                      AS total_count,
+  ROUND(
+    1.0 * COUNT(*) FILTER (WHERE pnl_usd_at_fill > 0) / COUNT(*), 4
+  ) AS win_rate_by_count
+FROM fact_trades
+WHERE settlement_status = 'settled'
+
+-- 按 notional（fill_price × fill_qty）
+SELECT
+  SUM(fill_price * fill_qty) FILTER (WHERE pnl_usd_at_fill > 0)  AS win_notional,
+  SUM(fill_price * fill_qty)                                       AS total_notional,
+  ROUND(
+    SUM(fill_price * fill_qty) FILTER (WHERE pnl_usd_at_fill > 0)
+    / SUM(fill_price * fill_qty), 4
+  ) AS win_rate_by_notional
+FROM fact_trades
+WHERE settlement_status = 'settled'
+```
+
+报告**必须同时列两套**（by_count 和 by_notional）。
+
+**含未结算版本**：未结算订单按 mid 估值 > 0 视为 tentative win，标注 `[含未结算]`。
+
+### 2.3 ROI / Sharpe-like
+
+```
+ROI           = total_pnl_usd / total_cost_usd
+total_cost_usd = SUM(filled_price × filled_shares)
+
+avg_daily_pnl  = SUM(daily_pnl) / n_trading_days
+std_daily_pnl  = STDDEV(daily_pnl)
+sharpe_like    = avg_daily_pnl / std_daily_pnl   -- 未年化，仅供参考
+```
+
+---
+
+## §3 时间规约
+
+### 双时区
+
+报告里涉及时间的列**必须同时显示**：
+- **北京时间** (`Asia/Shanghai`)：所有 UTC 时间戳转北京时间展示
+- **当地时间**：按城市 timezone 表（见下）
+
+### 城市 timezone 表
+
+| City | IANA timezone |
+|---|---|
+| Amsterdam | Europe/Amsterdam |
+| Ankara | Europe/Istanbul |
+| Atlanta | America/New_York |
+| Austin | America/Chicago |
+| Beijing | Asia/Shanghai |
+| BuenosAires | America/Argentina/Buenos_Aires |
+| Busan | Asia/Seoul |
+| CapeTown | Africa/Johannesburg |
+| Chengdu | Asia/Shanghai |
+| Chicago | America/Chicago |
+| Chongqing | Asia/Shanghai |
+| Dallas | America/Chicago |
+| Denver | America/Denver |
+| Guangzhou | Asia/Shanghai |
+| Helsinki | Europe/Helsinki |
+| HongKong | Asia/Hong_Kong |
+| Houston | America/Chicago |
+| Istanbul | Europe/Istanbul |
+| Jakarta | Asia/Jakarta |
+| Jeddah | Asia/Riyadh |
+| Karachi | Asia/Karachi |
+| KualaLumpur | Asia/Kuala_Lumpur |
+| LA | America/Los_Angeles |
+| Lagos | Africa/Lagos |
+| London | Europe/London |
+| Lucknow | Asia/Kolkata |
+| Madrid | Europe/Madrid |
+| Manila | Asia/Manila |
+| MexicoCity | America/Mexico_City |
+| Miami | America/New_York |
+| Milan | Europe/Rome |
+| Moscow | Europe/Moscow |
+| Munich | Europe/Berlin |
+| NYC | America/New_York |
+| PanamaCity | America/Panama |
+| Paris | Europe/Paris |
+| SanFrancisco | America/Los_Angeles |
+| SaoPaulo | America/Sao_Paulo |
+| Seattle | America/Los_Angeles |
+| Seoul | Asia/Seoul |
+| Shanghai | Asia/Shanghai |
+| Shenzhen | Asia/Shanghai |
+| Singapore | Asia/Singapore |
+| Taipei | Asia/Taipei |
+| TelAviv | Asia/Jerusalem |
+| Tokyo | Asia/Tokyo |
+| Warsaw | Europe/Warsaw |
+| Wellington | Pacific/Auckland |
+| Wuhan | Asia/Shanghai |
+
+### 跨日订单归属
+
+**以 `orders.created_at_utc`（下单时间戳）所在北京时间日期为准。**  
+结算日期在 `signals.target_date`；两者可能不同——报告中两列都列出。
+
+---
+
+## §4 策略身份
+
+- **策略唯一标识 = `strategy_id`**（对应 `runs.config_id` → `strategy_config.config_id`）
+- sizing 参数改动（`notional` / `sizing_mode`）**不改变** strategy_id；改动体现在 `strategy_config.params` 字段的 `code_version` / `sizing_mode` 子键
+- A/B 对比切片使用 `strategy_config.params` 里的 `code_version` × `sizing_mode` 子键，不使用 strategy_id
+
+---
+
+## §5 切片维度白名单
+
+分析报告只能使用以下切片，**新切片必须先 PR 进本文件再使用**。
+
+所有切片直接 `GROUP BY fact_trades.<列名>`，不需要回到原始表 JOIN：
+
+| 切片键 | `fact_trades` 列名 | 说明 |
+|---|---|---|
+| by_date | `target_date` | 目标日期（北京时间日） |
+| by_city | `city` | 城市名 |
+| by_model | `model_version` | 预测模型（ecmwf / gfs 等） |
+| by_side | `side` | BUY_YES / BUY_NO |
+| by_pool | `city_pool` | t1_trading / t2_research |
+| by_pool_side | `city_pool, side` | 组合切片 |
+| by_pool_model | `city_pool, model_version` | 组合切片 |
+| by_trade_class | `trade_class` | live_real / paper / snapshot_replay 等 |
+| by_strategy | `strategy_id` | 策略版本 |
+
+---
+
+## §6 默认城市池
+
+### T1 交易池（`city_pool = 't1_trading'`）
+
+默认分析范围。**城市归属以 `weather.db` 里 `signals.city_pool = 't1_trading'` 字段为准**，本列表仅供参考：
+
+Amsterdam, Ankara, Atlanta, Austin, Beijing, BuenosAires, Busan, CapeTown,
+Chengdu, Chicago, Chongqing, Dallas, Denver, Guangzhou, Helsinki, HongKong,
+Houston, Istanbul, Jakarta, Jeddah, Karachi, KualaLumpur, LA, Lagos,
+London, Lucknow, Madrid, Manila, MexicoCity, Miami, Milan, Moscow,
+Munich, NYC, PanamaCity, Paris, SanFrancisco, SaoPaulo, Seattle, Seoul,
+Shanghai, Shenzhen, Singapore, Taipei, TelAviv, Tokyo, Warsaw, Wellington, Wuhan
+
+> 城市池调整后以 DB 数据为准，无需更新本列表。
+
+### 其他池
+
+- `t2_research`：T2 研究池，非默认分析范围。使用时需在 prompt 里显式指定 `city_pool=t2_research`
+- 混合分析：在报告"对比设定"段注明 pool 范围
+
+---
+
+## §7 报告模板字段顺序
+
+| 模式 | 模板文件 | 触发 skill |
+|---|---|---|
+| M1 绩效切片 | `docs/analysis/templates/performance.md` | weather-strategy-performance |
+| M3 A/B 对比 | `docs/analysis/templates/performance-compare.md` | weather-strategy-performance |
+| M2 单日血缘 | `docs/analysis/templates/lineage.md` | weather-strategy-lineage |
+| M4 持仓敞口 | `docs/analysis/templates/exposure.md` | weather-strategy-exposure |
+| M5 新机制 / 概率 / 快源 / PIT 研究 | `docs/analysis/templates/research.md` | weather-strategy-research |
+
+**输出路径规约**：`docs/analysis/YYYY-MM/YYYY-MM-DD-<mode>-<topic>.md`  
+每份报告产出后必须 git commit。
+
+---
+
+## §8 待定项（遇到再补）
+
+以下口径分歧暂未钉死，实际分析遇到时在此补充并 PR：
+
+- **滑点扣减**：`plan_price` vs `fill_price` 差值当前两列并列展示，不单独作为成本项扣除
+- **重复计数处理**：同一笔单同时出现在 ledger CSV + DB fills 的去重逻辑
+- **部分成交**：`fills.status = 'partial'` 的订单如何计入 win_rate 分母

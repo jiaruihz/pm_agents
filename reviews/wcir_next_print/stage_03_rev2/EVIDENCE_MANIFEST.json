@@ -1,0 +1,78 @@
+{
+  "entries": [
+    {
+      "path": "CITY_GATES.json",
+      "sha256": "1ae482ab5783b2e132bf59a7b7920011be8d12eb852fea60975a37bac4e90142",
+      "size_bytes": 9405
+    },
+    {
+      "path": "EX_POST_ENVELOPE_MANIFEST.json",
+      "sha256": "01cdaf45805d2e8fb8976df69450b3d30f9834299a04082a33bb24d4a034a8d5",
+      "size_bytes": 357
+    },
+    {
+      "path": "FORECAST_BASELINE_INPUT_MANIFEST.json",
+      "sha256": "02dc5e06c735a195006d909644cdfe05d7e78e21b237b4608ca98cb858e2b766",
+      "size_bytes": 428115
+    },
+    {
+      "path": "FULL_TWO_SIDED_ORACLE_CONTRACT.md",
+      "sha256": "194fc475a77f3b54a762bd88c0eedaf4e6ae5c4dbff9fb0dd17d0c84a32b56b1",
+      "size_bytes": 2376
+    },
+    {
+      "path": "GPT_PRO_REVIEW_PACKET_STAGE_03_REV2.md",
+      "sha256": "099a2be533baf9228156ae6eb4cf0bc4ee079b28d00302467ecb9b8d11a547ae",
+      "size_bytes": 2460
+    },
+    {
+      "path": "INDEPENDENT_PNL_RECALCULATION.json",
+      "sha256": "b001efef3f998d710a66528f5d36f9b79513789761349f859a9eff19e32f8be4",
+      "size_bytes": 51588
+    },
+    {
+      "path": "MATCHED_BASELINES_AND_ROW_INTERSECTION.json",
+      "sha256": "30153787b1de60bb3e9b0eb1b0fa0682c2eedebcc5eaabbeacad9fe06cc490e8",
+      "size_bytes": 1421
+    },
+    {
+      "path": "REACTION_INFERENCE_AND_CONCENTRATION.json",
+      "sha256": "52ff4dd75603f31aab03a6e27f263d969a17e16d30cb199944685295a2b13325",
+      "size_bytes": 16088
+    },
+    {
+      "path": "TWO_SIDED_PRIMARY_ORACLE_RESULTS.json",
+      "sha256": "e45fc81f5d95fdcf4150c09c6a7b2703cff6be35719746e0e87471db2c72adc1",
+      "size_bytes": 669
+    },
+    {
+      "path": "evidence/EX_POST_ENVELOPE_ROWS.jsonl.gz",
+      "sha256": "9390cada704901355db0c43b5e26a1305185c1d09e07e8ec85ad2b5cfc621c39",
+      "size_bytes": 39308
+    },
+    {
+      "path": "evidence/FROZEN_FORECAST_BASELINE_ROWS.jsonl.gz",
+      "sha256": "b96c4f05b1e459be342e29660d4cbc99825c90169a64561daa56c7203e484e94",
+      "size_bytes": 62525
+    },
+    {
+      "path": "evidence/MATCHED_BASELINE_ROWS.jsonl.gz",
+      "sha256": "81ca0d88d46d027a8848f1e7f50b64aac52397a274d397c11ae31214b15b5703",
+      "size_bytes": 70758
+    },
+    {
+      "path": "evidence/PRIMARY_ORACLE_ROWS.jsonl.gz",
+      "sha256": "e3c8db8d4e5ac75eff298dff3ebb9f3b6cc3ee14112e274d019640f6065b08c4",
+      "size_bytes": 117285
+    },
+    {
+      "path": "evidence/REACTION_WINDOW_ROWS.jsonl.gz",
+      "sha256": "69ffb11322f9715b12235fdb52fc8fa6aaff273d85a85bf081eec3534e86cb78",
+      "size_bytes": 42491
+    }
+  ],
+  "entry_count": 14,
+  "entry_set_sha256": "1e3f0142e7fbac77e0e24c0268259ecb734b955f79add7b198e1a099582ab7b4",
+  "root": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03_rev2",
+  "unmanifested_extra_files_allowed": false
+}

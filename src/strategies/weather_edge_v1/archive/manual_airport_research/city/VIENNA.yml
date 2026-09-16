@@ -1,0 +1,86 @@
+identity:
+  city_key: vienna
+  display_name: Vienna
+  market_unit: C
+  timezone: Europe/Vienna
+
+station:
+  station_name: Vienna International Airport
+  station_code: LOWW
+  iata_code: VIE
+  object_type: airport
+  settlement_scope: Only the Vienna International Airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values for Vienna-style airport temperature contracts.
+  station_match_rule: Must match Vienna International Airport Station / LOWW. Do not substitute a Vienna city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: LOWW
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not resolve from city pages or provisional history.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: LOWW
+    role: trading_anchor
+    use_for: Record target-day high, peak timing, and whether the basin airport path is warming cleanly.
+    do_not_use_for: Do not treat the displayed forecast integer as a guaranteed settlement bucket.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain same-stack market consensus.
+      do_not_use_for: Do not replace LOWW with a generic Vienna page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check wind, visibility, and cloud.
+    - family: checkwx
+      page_type: metar_taf
+      location_object: airport
+      use_for: Check the current airport observation.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and peak timing.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: A Vienna city page is not the LOWW airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Urban pages can diverge from the airport object.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only to explain market noise.
+
+operator_notes:
+  summary: Vienna is a useful extension city because the airport object is clean and the daily range often behaves more linearly than mountain-sensitive markets. It still needs respect for basin inversions and cloud on transition days.
+  why_this_station: LOWW is a clean airport settlement object with broad weather-site coverage and a stable airport identity.
+  main_risks:
+    - Basin inversion delaying the warm-up.
+    - Cloud and light wind flattening the top bucket.
+    - Vienna city pages overstating urban warmth.
+  common_wrong_anchor:
+    - Generic Vienna city pages instead of LOWW.
+    - Central Europe summaries without a station match.
+  usage_order:
+    - Open Polymarket rules and confirm LOWW plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check airport observation pages if the day looks borderline.
+    - Use city pages only as market-noise diagnostics.

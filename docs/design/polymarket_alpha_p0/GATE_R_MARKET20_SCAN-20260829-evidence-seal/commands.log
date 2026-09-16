@@ -1,0 +1,14 @@
+# Current Gamma read-only capture (performed through the existing controlled executor)
+ALPHA_RUN_ROOT=/private/tmp/polymarket-alpha-pilot/market20-20260829-current PYTHONPATH=. .venv/bin/python /private/tmp/polymarket-alpha-market20-fetch.py
+
+# Candidate-stage finalize; executed twice with fixed clocks to prove idempotent replay
+ALPHA_RUN_ROOT=/private/tmp/polymarket-alpha-pilot/market20-20260829-current PYTHONPATH=. .venv/bin/python /private/tmp/polymarket-alpha-market20-finalize.py
+ALPHA_RUN_ROOT=/private/tmp/polymarket-alpha-pilot/market20-20260829-current PYTHONPATH=. .venv/bin/python /private/tmp/polymarket-alpha-market20-finalize.py
+
+# Final database audit
+sqlite3 -batch /private/tmp/polymarket-alpha-pilot/market20-20260829-current/alpha-final.db <count query for recall/candidate/book/research/decision/prediction tables>
+
+# Focused verification
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha/test_operational_gamma_executor_op_02.py tests/polymarket_alpha/test_operational_gamma_ingest.py tests/polymarket_alpha/test_multi_recall_pipeline.py tests/polymarket_alpha/test_glm_semantic_triage.py
+
+Result: 71 passed in 1.41s

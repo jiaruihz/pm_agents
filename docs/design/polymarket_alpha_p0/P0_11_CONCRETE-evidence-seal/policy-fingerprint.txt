@@ -1,0 +1,5 @@
+policy_record_id=read_only_policy:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+policy_sha256=97d5d27d0e2305bb0ebfa5e63d7d93b74304649bfc1808f8ba3bd0a797c05051
+endpoint_count=2
+max_redirects=0
+allowed_environment_keys=['SSL_CERT_FILE']

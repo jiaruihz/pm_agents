@@ -1,0 +1,4 @@
+city,active_dates,first_crosses,next_report_labeled,next_report_hits,next_report_precision,eventual_hits,eventual_precision,books_available,books_at_or_below_cap,books_executable_size,settled_tradeable_books,settled_tradeable_wins,settled_tradeable_gross_pnl_per_one_share,settled_tradeable_gross_roi,median_source_detect_lag_min,median_lead_to_next_metar_detect_min
+Ankara,4,6,6,5,0.8333,6,1.0,2,1,2,1,1,0.41,0.6949,19.22,5.45
+Istanbul,4,8,8,3,0.375,6,0.75,7,2,7,2,0,-0.4,-1.0,16.61,9.39
+TelAviv,4,4,4,4,1.0,4,1.0,1,0,1,0,0,0,,13.77,12.68

@@ -1,0 +1,11 @@
+{
+  "policy": {
+    "emit_candidates": true,
+    "emit_intents": true,
+    "minimum_edge": 0.02,
+    "max_selected_per_checkpoint": 1,
+    "minimum_depth": 10.0,
+    "execution_profile": "research_record_only_v1",
+    "sizing_profile": "zero_notional_v1"
+  }
+}

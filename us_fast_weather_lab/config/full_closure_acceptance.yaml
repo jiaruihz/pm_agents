@@ -1,0 +1,57 @@
+version: US_FAST_WEATHER_FULL_CLOSURE_V1
+terminal_dispositions:
+  - CLOSE_WITH_PROVEN_FAST_SOURCE_STACK
+  - CLOSE_COMPETITOR_CLAIM_NOT_REPRODUCIBLE_OR_MISLEADING
+  - CLOSE_EXHAUSTED_NO_VIABLE_SOURCE_ABANDON
+forbidden_final_dispositions:
+  - BLOCKED_BY_ACCESS
+  - INSUFFICIENT_EVIDENCE
+  - SMOKE_COMPLETE
+  - NEXT_STAGE_REQUIRED
+  - ACCEPT_WITH_BLOCKING_FIXES
+measurement_classes:
+  - METAR_TRANSPORT
+  - DIRECT_SENSOR
+  - COMPETITOR_VISIBLE
+vantages:
+  - US_EAST
+  - ASIA_SG_OR_MY
+same_metar_acceptance:
+  minimum_paired_semantic_versions: 500
+  minimum_capture_coverage: 0.99
+  minimum_median_lead_seconds_vs_best_baseline: 15
+  minimum_win_rate: 0.70
+  correction_update_retention: 1.0
+  replay_identity: 1.0
+direct_sensor_reporting:
+  minimum_matched_later_metars_where_available: 500
+  mandatory_metrics:
+    - lead_distribution
+    - rounded_temperature_agreement
+    - settlement_bucket_agreement
+    - false_threshold_cross_rate
+    - missingness
+    - station_specific_failures
+  mandatory_negative_controls:
+    - ATLANTA_2026_07_17_OMO_FALSE_CROSS
+commercial_sweep:
+  minimum_relevant_vendors_researched: 12
+  minimum_direct_contacts_or_trials: 6
+  minimum_live_trial_feeds_unless_explicitly_unavailable: 3
+exhaustion_requirements:
+  direct_phone_inventory_and_measurement: true
+  direct_vhf_datis_assessment: true
+  noaaport_saus99_spus99_real_path: true
+  idd_three_upstream_or_paid_paths: true
+  wis2_actionable_decode_and_multibroker: true
+  faa_scds_catalog_and_subscription_attempt: true
+  madis_and_synoptic_measured: true
+  all_five_wmscr_providers_contacted: true
+  competitor_legitimate_observation: true
+  two_vantage_final_bakeoff: true
+operating_boundary:
+  zero_notional: true
+  no_live_orders: true
+  no_policy_change: true
+  no_unauthorized_access: true
+  append_only_raw_evidence: true

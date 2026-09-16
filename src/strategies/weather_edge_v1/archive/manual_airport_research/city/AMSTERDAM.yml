@@ -1,0 +1,86 @@
+identity:
+  city_key: amsterdam
+  display_name: Amsterdam
+  market_unit: C
+  timezone: Europe/Amsterdam
+
+station:
+  station_name: Amsterdam Schiphol Airport
+  station_code: EHAM
+  iata_code: AMS
+  object_type: airport
+  settlement_scope: Only the Schiphol airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values for Amsterdam-style airport temperature contracts.
+  station_match_rule: Must match Amsterdam Schiphol Airport Station / EHAM. Do not substitute a generic Amsterdam city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: EHAM
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not resolve from city pages or provisional history.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: EHAM
+    role: trading_anchor
+    use_for: Record target-day high, likely peak timing, and whether the marine airport path is stable.
+    do_not_use_for: Do not treat the forecast integer as a guaranteed settlement bucket.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain broader market consensus inside the TWC stack.
+      do_not_use_for: Do not replace the same-station WU anchor with a generic Amsterdam page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check wind, low cloud, and airport observations.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and cloud-limited path.
+    - family: meteoblue
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check trend and uncertainty.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: Amsterdam city pages are not the EHAM airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Urban pages can diverge from the airport object.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only to explain noise, not to price the contract.
+
+operator_notes:
+  summary: Amsterdam is useful when you want a marine airport market with strong data coverage and fewer violent continental jumps. The main risk is cloud and wind capping the high, not extreme intraday spikes.
+  why_this_station: Schiphol is a major airport object with broad same-location coverage and a clean airport identity across weather sites.
+  main_risks:
+    - Low cloud suppressing the warm side of the range.
+    - Wind keeping the top bucket muted.
+    - City pages overstating urban warmth versus the airport.
+  common_wrong_anchor:
+    - Generic Amsterdam city pages instead of EHAM.
+    - Metro pages that hide the airport object.
+  usage_order:
+    - Open Polymarket rules and confirm EHAM plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check airport support pages for disagreement in low-cloud setups.
+    - Use city pages only to gauge market noise.

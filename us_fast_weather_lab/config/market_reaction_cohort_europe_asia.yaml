@@ -1,0 +1,34 @@
+contract_version: US_FAST_WEATHER_MARKET_REACTION_COHORT_EUROPE_ASIA_V1
+cohort_id: europe_asia_core_v1
+reaction_targets:
+  - {city: Helsinki, source_station: EFHK, market_station: EFHK, role: primary, basis_status: station_aligned, region: Europe, comparison_class: station_aligned, market_unit: C}
+  - {city: Tokyo, source_station: RJTT, market_station: RJTT, role: primary, basis_status: station_aligned, region: Asia, comparison_class: station_aligned, market_unit: C}
+  - {city: Amsterdam, source_station: EHAM, market_station: EHAM, role: knmi_semantics_control, basis_status: settlement_semantics_control, region: Europe, comparison_class: knmi_semantics, market_unit: C}
+  - {city: Busan, source_station: RKPK, market_station: RKPK, role: amos_basis_control, basis_status: amos_basis_control, region: Asia, comparison_class: amos_basis, market_unit: C}
+  - {city: Seoul, source_station: RKSI, market_station: RKSI, role: amos_basis_control, basis_status: amos_basis_control, region: Asia, comparison_class: amos_basis, market_unit: C}
+  - {city: Singapore, source_station: WSSS, market_station: WSSS, role: cross_station_control, basis_status: mss_s24_cross_station_comparator, region: Asia, comparison_class: mss_s24_cross_station, market_unit: C}
+observation_only:
+  - {city: Ankara, source_station: LTAC, role: observation_only, basis_status: source_availability_only, region: Europe, comparison_class: observation_only, market_unit: C}
+  - {city: Istanbul, source_station: LTFM, role: observation_only, basis_status: source_availability_only, region: Europe, comparison_class: observation_only, market_unit: C}
+  - {city: London, source_station: EGLC, role: observation_only, basis_status: source_availability_only, region: Europe, comparison_class: observation_only, market_unit: C}
+  - {city: Madrid, source_station: LEMD, role: observation_only, basis_status: source_availability_only, region: Europe, comparison_class: observation_only, market_unit: C}
+  - {city: Milan, source_station: LIMC, role: observation_only, basis_status: source_availability_only, region: Europe, comparison_class: observation_only, market_unit: C}
+  - {city: Moscow, source_station: UUWW, role: observation_only, basis_status: source_availability_only, region: Europe, comparison_class: observation_only, market_unit: C}
+  - {city: Munich, source_station: EDDM, role: observation_only, basis_status: source_availability_only, region: Europe, comparison_class: observation_only, market_unit: C}
+  - {city: Paris, source_station: LFPB, role: observation_only, basis_status: source_availability_only, region: Europe, comparison_class: observation_only, market_unit: C}
+  - {city: Warsaw, source_station: EPWA, role: observation_only, basis_status: source_availability_only, region: Europe, comparison_class: observation_only, market_unit: C}
+  - {city: HongKong, source_station: VHHH, role: observation_only, basis_status: source_market_station_mismatch, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: Shenzhen, source_station: ZGSZ, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: TelAviv, source_station: LLBG, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: Beijing, source_station: ZBAA, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: Chengdu, source_station: ZUUU, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: Chongqing, source_station: ZUCK, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: Guangzhou, source_station: ZGGG, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: Jeddah, source_station: OEJN, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: Karachi, source_station: OPKC, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: KualaLumpur, source_station: WMKK, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: Lucknow, source_station: VILK, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: Manila, source_station: RPLL, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: Shanghai, source_station: ZSPD, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: Taipei, source_station: RCSS, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}
+  - {city: Wuhan, source_station: ZHHH, role: observation_only, basis_status: source_availability_only, region: Asia, comparison_class: observation_only, market_unit: C}

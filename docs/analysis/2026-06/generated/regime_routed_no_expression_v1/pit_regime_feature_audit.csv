@@ -1,0 +1,7 @@
+regime_label,live_inputs,feature_timing,uses_future_observation,uses_settlement,notes
+day_regime,"forecast_max_native,running_native,unit",forecast chosen as-of decision snapshot; running max to decision hour only,False,False,implemented via forecast_gap_to_running_native; safe if forecast source is PIT
+intraday_state,"temp_trend_1h_f,temp_trend_3h_f,decline_native,minutes_since_running_max,decision_hour_local,unit",IEM/METAR as-of decision snapshot with 90 minute tolerance; trend looks backward 1h/3h,False,False,safe for live only after same as-of observation cache is available before the decision
+moisture_cloud_regime,"relative_humidity_pct,sky_cover_code,dewpoint_depression_f",IEM/METAR as-of decision snapshot with 90 minute tolerance,False,False,"safe if live observation feed has these fields; otherwise must be missing/unknown, not backfilled"
+wind_regime,wind_speed_kt,IEM/METAR as-of decision snapshot with 90 minute tolerance,False,False,safe if live observation feed has wind before the decision
+running_max_state,"minutes_since_running_max,decline_native,unit",current/running max only from observations up to decision snapshot,False,False,safe; depends on observation freshness and cadence
+realized_context,"final_max_native,final_winning_bracket,current_bracket_held,d1_hit,d2_hit,target_hit",known only after target date settlement/final observations,True,True,not allowed for live regime identification; payoff/calibration only

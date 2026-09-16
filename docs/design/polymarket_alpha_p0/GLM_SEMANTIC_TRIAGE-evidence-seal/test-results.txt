@@ -1,0 +1,21 @@
+Focused and Wave-0
+command: .venv/bin/pytest -q tests/polymarket_alpha/test_glm_semantic_triage.py tests/polymarket_alpha/test_security_wave0.py
+result: 40 passed in 0.16s
+
+Full Alpha regression
+command: env PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha
+result: 655 passed in 12.66s
+
+Database projection
+SemanticTriageDecision|3
+SemanticTriageReceipt|1
+
+Isolation scan
+patterns: 3867798|3886788|676804|bestBid|bestAsk|outcomePrices|lastTradePrice|polymarket.com|gamma-api|clob
+targets: final projection.json and prompt.txt
+result: no matches
+
+Secret-pattern scan
+patterns: ANTHROPIC_AUTH_TOKEN|ANTHROPIC_API_KEY|ZHIPU_API_KEY|BIGMODEL_API_KEY|sk-<token>
+target: pilot-artifacts
+result: no matches

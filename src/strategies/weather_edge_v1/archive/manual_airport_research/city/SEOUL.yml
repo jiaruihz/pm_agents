@@ -1,0 +1,86 @@
+identity:
+  city_key: seoul
+  display_name: Seoul
+  market_unit: C
+  timezone: Asia/Seoul
+
+station:
+  station_name: Incheon International Airport
+  station_code: RKSI
+  iata_code: ICN
+  object_type: airport
+  settlement_scope: Seoul temperature markets in this setup resolve to the Incheon airport station, not to a generic Seoul city reading.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values, matching Seoul weather-market rules.
+  station_match_rule: Must match Incheon International Airport Station / RKSI. Do not substitute a Seoul city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: RKSI
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not treat provisional history as final settlement.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: RKSI
+    role: trading_anchor
+    use_for: Record target-day high, peak timing, and whether the coastal airport path is warming or cooling.
+    do_not_use_for: Do not treat the displayed forecast integer as a guaranteed settlement call.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain market consensus inside the TWC stack.
+      do_not_use_for: Do not replace RKSI with a Seoul city page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check wind, haze, cloud, and airport observations.
+    - family: checkwx
+      page_type: metar_taf
+      location_object: airport
+      use_for: Check current airport observation and whether the intraday ramp is on track.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and midday-to-afternoon path.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: A Seoul city page is not the RKSI airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Urban pages can differ from the airport thermal path.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only to explain market drift, not to price the contract.
+
+operator_notes:
+  summary: Seoul markets should be treated as RKSI airport contracts. Same-station WU Hourly is the main anchor, while airport observation pages matter because haze, wind, and coastal moderation can move the peak by one to two buckets.
+  why_this_station: Incheon is the settlement object used by Seoul weather markets in this repo and is the clean airport-based reference across data vendors.
+  main_risks:
+    - Coastal moderation clipping the warm side of the range.
+    - Haze or low cloud delaying the daytime peak.
+    - Market participants anchoring to Seoul city pages instead of RKSI.
+  common_wrong_anchor:
+    - Seoul city forecast pages with no RKSI match.
+    - Generic Korea weather pages that ignore the airport object.
+  usage_order:
+    - Open Polymarket rules and confirm RKSI plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check CheckWX or another airport observation source for current ramp confirmation.
+    - Use city pages only as wrong-anchor diagnostics.

@@ -1,0 +1,50 @@
+{
+  "fixture_kind": "multi_anchor_mismatch",
+  "note": "source/book bracket leads PIT official running-max bracket",
+  "raw_ref": {
+    "line_numbers": [
+      193
+    ],
+    "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/active_bracket_books/2026-08-01.jsonl",
+    "source_file_sha256_at_census": "1c29a186d7196c89cfb3194c8c736a7842127f69ae01530b3ac0286f997c254b"
+  },
+  "record_schema_fingerprint": "3d4ab23242fb389675e61fe7bac56066543f8b72369c75f968575e77f9854ed4",
+  "records": {
+    "book": {
+      "book_fetched_at_utc": "2026-07-31T22:37:04.015580+00:00",
+      "book_status": "ok",
+      "city": "Tokyo",
+      "condition_id": "0x2dd3f6e44fc801c9d2a79eeada28f1cde3016a6ab665eeefe35083de4aab619a",
+      "outcome": "no",
+      "reference_market_value": 29,
+      "relative_offset": 0,
+      "schema_version": "fast_source_active_bracket_book_v1",
+      "source": "jma_amedas",
+      "summary": {
+        "ask_size": null,
+        "best_ask": null,
+        "best_bid": 0.999,
+        "bid_size": 8.0,
+        "spread": null,
+        "tick_size": 0.001
+      },
+      "target_date": "2026-08-01",
+      "token_id": "28605251341357843175356060948338961132648617941086723164304743793806700788650"
+    },
+    "official": {
+      "city": "Tokyo",
+      "current_temp_c": 28.0,
+      "fetched_at_utc": "2026-07-31T22:33:21.764485+00:00",
+      "last_obs_utc": "2026-07-31T22:00:00+00:00",
+      "running_max_c": 28.0,
+      "schema_version": "weather_data_feed_observation_cache_v1",
+      "source": "aviationweather_metar",
+      "station": "RJTT",
+      "status": "ok",
+      "target_date": "2026-08-01"
+    },
+    "official_anchor": 28,
+    "source_or_book_anchor": 29
+  },
+  "schema_version": "weather_city_intraday_phase0_fixture_v1"
+}

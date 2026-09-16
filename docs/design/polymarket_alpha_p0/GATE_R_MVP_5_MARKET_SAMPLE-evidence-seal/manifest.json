@@ -1,0 +1,35 @@
+{
+  "schema": "polymarket_alpha_gate_r_mvp_5_market_sample_seal_v1",
+  "run_date": "2026-08-28",
+  "execution": "NO_ORDER",
+  "disposition": "PARTIAL_SUCCESS_STOPPED_AT_BLIND_PACKET_FROZEN",
+  "market_count": 5,
+  "gamma_event_count": 5,
+  "gamma_nested_market_count": 24,
+  "gamma_raw_sha256": "9085fbb8dd018ef6d54df011b23f7536ca5b7fa38db73391dfc757f3e1522f0e",
+  "semantic_triage": {
+    "attempts": 5,
+    "advance": 5,
+    "reported_model": "glm-4.7",
+    "input_tokens": 5199,
+    "cache_read_input_tokens": 1984,
+    "output_tokens": 3874,
+    "provider_reported_cost_usd": 0.123837,
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+  },
+  "blind_prompt_leakage_scan": "PASS_5_OF_5",
+  "gpt_pro_results_received": 0,
+  "formal_books_requested": 0,
+  "prediction_records_written": 0,
+  "official_gate_r_wp6": "NOT_EXECUTED",
+  "read_only_operational_pilot": "NOT_APPROVED",
+  "live_order": "STRICTLY_OUT_OF_SCOPE",
+  "scratch_alpha_databases_preserved": false,
+  "scratch_alpha_database_policy": "excluded; immutable JSON/text run evidence preserved",
+  "verification": {
+    "alpha_tests_passed": 724,
+    "alpha_tests_failed": 3,
+    "failure_class": "PRE_EXISTING_MANAGED_ENVIRONMENT_SANDBOX_EXEC_LIMITATION"
+  }
+}

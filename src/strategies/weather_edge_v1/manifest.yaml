@@ -1,0 +1,13 @@
+strategy_key: weather_edge_v1
+strategy_name: 天气概率 Edge 策略
+strategy_group: weather
+strategy_family: directional
+domain: pmm
+is_active: true
+runner_module: src.strategies.pmm.main
+strategy_module: src.strategies.weather_edge_v1.pmm_adapter:WeatherEdgeV1Strategy
+description: Weather strategy shared execution compatibility pack; production instances and model identity are resolved from production.yaml and the strategy registry.
+meta:
+  signal_source: production-contract
+  style: compatibility-pack
+  live_default: disabled

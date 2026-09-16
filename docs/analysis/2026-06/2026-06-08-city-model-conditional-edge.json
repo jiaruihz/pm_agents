@@ -1,0 +1,2878 @@
+{
+  "generated_at_utc": "2026-06-08T15:39:13.629442+00:00",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "parameters": {
+    "train_frac": 0.7,
+    "min_train_rows": 10,
+    "min_train_days": 4,
+    "min_holdout_rows": 5,
+    "bucket_size": 0.1,
+    "bootstrap_iters": 1000,
+    "seed": 20260608
+  },
+  "data_snapshot": {
+    "max_fact_trades_built_at_utc": "2026-06-08T01:32:33.618777+00:00",
+    "max_fact_signal_candidates_built_at_utc": "2026-06-08T01:32:49.788100+00:00",
+    "fact_signal_candidates_rows": 23893,
+    "eligible_rows": 7841,
+    "decision_window_missing_rows": 10437,
+    "usable_rows": 854,
+    "usable_dates": 24
+  },
+  "split": {
+    "train_frac": 0.7,
+    "train_dates": 16,
+    "holdout_dates": 8,
+    "cutoff_first_holdout_date": "2026-05-30",
+    "min_date": "2026-05-12",
+    "max_date": "2026-06-06",
+    "train_rows": 518,
+    "holdout_rows": 336
+  },
+  "overview_by_model": [
+    {
+      "n": 426,
+      "active_dates": 24,
+      "cities": 14,
+      "cost_usd": 214.19050000000001,
+      "pnl_usd": 68.095,
+      "roi": 0.31791792819942993,
+      "win_rate": 0.5187793427230047,
+      "model_brier": 0.2196649035680751,
+      "market_brier": 0.18797303579812208,
+      "brier_delta_market_minus_model": -0.03169186776995305,
+      "live_fill_rate": 0.45774647887323944,
+      "paper_order_rate": 0.8450704225352113,
+      "model_version": "gfs"
+    },
+    {
+      "n": 428,
+      "active_dates": 24,
+      "cities": 14,
+      "cost_usd": 223.0375,
+      "pnl_usd": -30.374999999999996,
+      "roi": -0.1361878607857423,
+      "win_rate": 0.514018691588785,
+      "model_brier": 0.24293817948598131,
+      "market_brier": 0.1933406851635514,
+      "brier_delta_market_minus_model": -0.049597494322429894,
+      "live_fill_rate": 0.5023364485981309,
+      "paper_order_rate": 0.8271028037383178,
+      "model_version": "ecmwf"
+    }
+  ],
+  "overview_by_side": [
+    {
+      "n": 311,
+      "active_dates": 24,
+      "cities": 26,
+      "cost_usd": 75.3195,
+      "pnl_usd": 36.805,
+      "roi": 0.48865167718851027,
+      "win_rate": 0.2540192926045016,
+      "model_brier": 0.200047081414791,
+      "market_brier": 0.17577866479099677,
+      "brier_delta_market_minus_model": -0.024268416623794208,
+      "live_fill_rate": 0.3183279742765273,
+      "paper_order_rate": 0.7620578778135049,
+      "side": "BUY_YES"
+    },
+    {
+      "n": 543,
+      "active_dates": 24,
+      "cities": 26,
+      "cost_usd": 361.9085,
+      "pnl_usd": 0.9150000000000024,
+      "roi": 0.0025282633593850445,
+      "win_rate": 0.6666666666666666,
+      "model_brier": 0.24924520703499078,
+      "market_brier": 0.19918814318600367,
+      "brier_delta_market_minus_model": -0.05005706384898711,
+      "live_fill_rate": 0.572744014732965,
+      "paper_order_rate": 0.8784530386740331,
+      "side": "BUY_NO"
+    }
+  ],
+  "candidate_table": [
+    {
+      "key": "Warsaw|ecmwf|BUY_YES",
+      "city": "Warsaw",
+      "model_version": "ecmwf",
+      "side": "BUY_YES",
+      "selected_on_train": true,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 12,
+        "active_dates": 11,
+        "cities": 1,
+        "cost_usd": 3.715,
+        "pnl_usd": 22.85,
+        "roi": 6.150740242261104,
+        "win_rate": 0.5,
+        "model_brier": 0.27473670333333333,
+        "market_brier": 0.2780604166666667,
+        "brier_delta_market_minus_model": 0.003323713333333389,
+        "live_fill_rate": 0.3333333333333333,
+        "paper_order_rate": 0.8333333333333334,
+        "roi_ci95_cluster_by_event_date": [
+          -2.289636991796702,
+          13.847684660485287
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.07550655472902096,
+          0.09029018964583342
+        ],
+        "matched_baseline_roi": 2.597534482536989,
+        "excess_roi_vs_matched_baseline": 3.5532057597241153
+      },
+      "holdout": {
+        "n": 10,
+        "active_dates": 6,
+        "cities": 1,
+        "cost_usd": 2.342,
+        "pnl_usd": 6.58,
+        "roi": 2.8095644748078565,
+        "win_rate": 0.3,
+        "model_brier": 0.16634238999999998,
+        "market_brier": 0.18329765,
+        "brier_delta_market_minus_model": 0.01695526000000002,
+        "live_fill_rate": 0.6,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -5.853142271574243,
+          11.574973031283712
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.06148396870833332,
+          0.06621636345535718
+        ],
+        "matched_baseline_roi": -1.750966005296748,
+        "excess_roi_vs_matched_baseline": 4.560530480104605
+      }
+    },
+    {
+      "key": "Madrid|ecmwf|BUY_NO",
+      "city": "Madrid",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": true,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 14,
+        "active_dates": 10,
+        "cities": 1,
+        "cost_usd": 8.16,
+        "pnl_usd": 8.400000000000002,
+        "roi": 1.0294117647058827,
+        "win_rate": 0.6428571428571429,
+        "model_brier": 0.21917579357142855,
+        "market_brier": 0.2324892857142857,
+        "brier_delta_market_minus_model": 0.01331349214285714,
+        "live_fill_rate": 0.2857142857142857,
+        "paper_order_rate": 0.9285714285714286,
+        "roi_ci95_cluster_by_event_date": [
+          -2.7648612183783943,
+          4.852322512359489
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.056282414681818195,
+          0.07327121140384614
+        ],
+        "matched_baseline_roi": 0.5525465964858749,
+        "excess_roi_vs_matched_baseline": 0.4768651682200078
+      },
+      "holdout": {
+        "n": 9,
+        "active_dates": 7,
+        "cities": 1,
+        "cost_usd": 5.275,
+        "pnl_usd": 17.25,
+        "roi": 3.2701421800947865,
+        "win_rate": 0.7777777777777778,
+        "model_brier": 0.12210145888888888,
+        "market_brier": 0.18423055555555554,
+        "brier_delta_market_minus_model": 0.06212909666666665,
+        "live_fill_rate": 0.8888888888888888,
+        "paper_order_rate": 0.8888888888888888,
+        "roi_ci95_cluster_by_event_date": [
+          0.33954335112036477,
+          8.041237113402062
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          0.012852884349999968,
+          0.14376102846031744
+        ],
+        "matched_baseline_roi": 0.06618707213974592,
+        "excess_roi_vs_matched_baseline": 3.2039551079550406
+      }
+    },
+    {
+      "key": "Warsaw|ecmwf|BUY_NO",
+      "city": "Warsaw",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": true,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 18,
+        "active_dates": 14,
+        "cities": 1,
+        "cost_usd": 12.195,
+        "pnl_usd": 8.05,
+        "roi": 0.6601066010660107,
+        "win_rate": 0.7222222222222222,
+        "model_brier": 0.18527783166666667,
+        "market_brier": 0.20621527777777782,
+        "brier_delta_market_minus_model": 0.020937446111111133,
+        "live_fill_rate": 0.3888888888888889,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -2.904656319290465,
+          3.605586854052552
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.036891158899999985,
+          0.06580714199801588
+        ],
+        "matched_baseline_roi": -0.1215744277626708,
+        "excess_roi_vs_matched_baseline": 0.7816810288286815
+      },
+      "holdout": {
+        "n": 12,
+        "active_dates": 7,
+        "cities": 1,
+        "cost_usd": 8.1755,
+        "pnl_usd": 8.244999999999997,
+        "roi": 1.0085010091125923,
+        "win_rate": 0.75,
+        "model_brier": 0.23129737333333333,
+        "market_brier": 0.21561627083333335,
+        "brier_delta_market_minus_model": -0.015681102499999978,
+        "live_fill_rate": 0.6666666666666666,
+        "paper_order_rate": 0.9166666666666666,
+        "roi_ci95_cluster_by_event_date": [
+          -2.1644496892073204,
+          4.2836737608913005
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.09474166869999995,
+          0.058394787753571445
+        ],
+        "matched_baseline_roi": 0.15298874040852997,
+        "excess_roi_vs_matched_baseline": 0.8555122687040624
+      }
+    },
+    {
+      "key": "NYC|gfs|BUY_YES",
+      "city": "NYC",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": true,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 20,
+        "active_dates": 13,
+        "cities": 1,
+        "cost_usd": 4.671,
+        "pnl_usd": 13.29,
+        "roi": 2.8452151573538855,
+        "win_rate": 0.3,
+        "model_brier": 0.1909989055,
+        "market_brier": 0.216180175,
+        "brier_delta_market_minus_model": 0.025181269500000002,
+        "live_fill_rate": 0.15,
+        "paper_order_rate": 0.75,
+        "roi_ci95_cluster_by_event_date": [
+          -4.359237030501735,
+          9.868309739015844
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.042501112200892865,
+          0.08869151340513833
+        ],
+        "matched_baseline_roi": 2.597534482536989,
+        "excess_roi_vs_matched_baseline": 0.24768067481689648
+      },
+      "holdout": {
+        "n": 13,
+        "active_dates": 7,
+        "cities": 1,
+        "cost_usd": 2.823,
+        "pnl_usd": -18.23,
+        "roi": -6.457669146298264,
+        "win_rate": 0.07692307692307693,
+        "model_brier": 0.1607154376923077,
+        "market_brier": 0.08512499999999999,
+        "brier_delta_market_minus_model": -0.0755904376923077,
+        "live_fill_rate": 0.46153846153846156,
+        "paper_order_rate": 0.6153846153846154,
+        "roi_ci95_cluster_by_event_date": [
+          -10.000000000000002,
+          -1.2612875036411306
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.1180318396818182,
+          -0.04177051000000001
+        ],
+        "matched_baseline_roi": -1.232069582295795,
+        "excess_roi_vs_matched_baseline": -5.2255995640024695
+      }
+    },
+    {
+      "key": "Tokyo|gfs|BUY_YES",
+      "city": "Tokyo",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": true,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 12,
+        "active_dates": 7,
+        "cities": 1,
+        "cost_usd": 1.404,
+        "pnl_usd": 15.96,
+        "roi": 11.367521367521368,
+        "win_rate": 0.25,
+        "model_brier": 0.1589930325,
+        "market_brier": 0.17687695833333336,
+        "brier_delta_market_minus_model": 0.017883925833333352,
+        "live_fill_rate": 0.08333333333333333,
+        "paper_order_rate": 0.9166666666666666,
+        "roi_ci95_cluster_by_event_date": [
+          -3.910328231228373,
+          39.12059591395492
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.052726705609374994,
+          0.1696832222222223
+        ],
+        "matched_baseline_roi": 4.8061164577642765,
+        "excess_roi_vs_matched_baseline": 6.5614049097570915
+      },
+      "holdout": {
+        "n": 2,
+        "active_dates": 2,
+        "cities": 1,
+        "cost_usd": 0.32299999999999995,
+        "pnl_usd": -3.2299999999999995,
+        "roi": -10.0,
+        "win_rate": 0.0,
+        "model_brier": 0.04808116,
+        "market_brier": 0.041334499999999996,
+        "brier_delta_market_minus_model": -0.006746660000000003,
+        "live_fill_rate": 0.0,
+        "paper_order_rate": 0.5,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          -10.0
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.01096596,
+          -0.0025273600000000063
+        ],
+        "matched_baseline_roi": -1.2229373902867173,
+        "excess_roi_vs_matched_baseline": -8.777062609713283
+      }
+    },
+    {
+      "key": "Chengdu|ecmwf|BUY_YES",
+      "city": "Chengdu",
+      "model_version": "ecmwf",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 8,
+        "active_dates": 2,
+        "cities": 1,
+        "cost_usd": 0.891,
+        "pnl_usd": 11.09,
+        "roi": 12.446689113355779,
+        "win_rate": 0.25,
+        "model_brier": 0.11154514874999999,
+        "market_brier": 0.1481588125,
+        "brier_delta_market_minus_model": 0.036613663750000004,
+        "live_fill_rate": 0.0,
+        "paper_order_rate": 0.75,
+        "roi_ci95_cluster_by_event_date": [
+          8.656716417910447,
+          18.169014084507044
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.014488342857142858,
+          0.39432771000000005
+        ],
+        "matched_baseline_roi": 2.8673218278030657,
+        "excess_roi_vs_matched_baseline": 9.579367285552713
+      },
+      "holdout": {
+        "n": 2,
+        "active_dates": 1,
+        "cities": 1,
+        "cost_usd": 0.1695,
+        "pnl_usd": 8.305,
+        "roi": 48.99705014749262,
+        "win_rate": 0.5,
+        "model_brier": 0.26402550500000005,
+        "market_brier": 0.37023512499999994,
+        "brier_delta_market_minus_model": 0.10620961999999991,
+        "live_fill_rate": 0.0,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          48.99705014749262,
+          48.99705014749262
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          0.10620961999999991,
+          0.10620961999999991
+        ],
+        "matched_baseline_roi": -1.3382416630576006,
+        "excess_roi_vs_matched_baseline": 50.335291810550224
+      }
+    },
+    {
+      "key": "Madrid|ecmwf|BUY_YES",
+      "city": "Madrid",
+      "model_version": "ecmwf",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 8,
+        "active_dates": 6,
+        "cities": 1,
+        "cost_usd": 2.185,
+        "pnl_usd": -1.8500000000000008,
+        "roi": -0.8466819221967966,
+        "win_rate": 0.25,
+        "model_brier": 0.2066777075,
+        "market_brier": 0.166884375,
+        "brier_delta_market_minus_model": -0.039793332500000014,
+        "live_fill_rate": 0.25,
+        "paper_order_rate": 0.5,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          11.696720572250406
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.11095471285714287,
+          0.030381354999999978
+        ],
+        "matched_baseline_roi": 2.367464518950877,
+        "excess_roi_vs_matched_baseline": -3.2141464411476734
+      },
+      "holdout": {
+        "n": 4,
+        "active_dates": 4,
+        "cities": 1,
+        "cost_usd": 1.41,
+        "pnl_usd": 25.9,
+        "roi": 18.368794326241133,
+        "win_rate": 1.0,
+        "model_brier": 0.3204388525,
+        "market_brier": 0.426625,
+        "brier_delta_market_minus_model": 0.1061861475,
+        "live_fill_rate": 0.5,
+        "paper_order_rate": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          14.242424242424244,
+          29.215686274509803
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          0.004716194999999923,
+          0.2680597575000001
+        ],
+        "matched_baseline_roi": -1.222714089451992,
+        "excess_roi_vs_matched_baseline": 19.591508415693124
+      }
+    },
+    {
+      "key": "Munich|ecmwf|BUY_YES",
+      "city": "Munich",
+      "model_version": "ecmwf",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 5,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 0.6245,
+        "pnl_usd": -6.245,
+        "roi": -10.0,
+        "win_rate": 0.0,
+        "model_brier": 0.110031882,
+        "market_brier": 0.02386625,
+        "brier_delta_market_minus_model": -0.086165632,
+        "live_fill_rate": 0.0,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.000000000000002,
+          -9.999999999999998
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.11200476,
+          -0.0669608
+        ],
+        "matched_baseline_roi": 4.8061164577642765,
+        "excess_roi_vs_matched_baseline": -14.806116457764276
+      },
+      "holdout": {
+        "n": 5,
+        "active_dates": 4,
+        "cities": 1,
+        "cost_usd": 1.46,
+        "pnl_usd": 5.4,
+        "roi": 3.6986301369863015,
+        "win_rate": 0.4,
+        "model_brier": 0.23775228200000004,
+        "market_brier": 0.24914,
+        "brier_delta_market_minus_model": 0.011387717999999974,
+        "live_fill_rate": 0.4,
+        "paper_order_rate": 0.6,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          22.78688524590164
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.017947936666666674,
+          0.06278247749999998
+        ],
+        "matched_baseline_roi": -1.6181401094053292,
+        "excess_roi_vs_matched_baseline": 5.316770246391631
+      }
+    },
+    {
+      "key": "London|ecmwf|BUY_YES",
+      "city": "London",
+      "model_version": "ecmwf",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 20,
+        "active_dates": 11,
+        "cities": 1,
+        "cost_usd": 5.0395,
+        "pnl_usd": -0.39499999999999874,
+        "roi": -0.07838079174521256,
+        "win_rate": 0.25,
+        "model_brier": 0.1886715035,
+        "market_brier": 0.14397603750000001,
+        "brier_delta_market_minus_model": -0.04469546599999999,
+        "live_fill_rate": 0.2,
+        "paper_order_rate": 0.85,
+        "roi_ci95_cluster_by_event_date": [
+          -6.274414011530538,
+          5.945466549946888
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.09922237215624999,
+          0.025206836382352937
+        ],
+        "matched_baseline_roi": 2.597534482536989,
+        "excess_roi_vs_matched_baseline": -2.6759152742822017
+      },
+      "holdout": {
+        "n": 8,
+        "active_dates": 6,
+        "cities": 1,
+        "cost_usd": 2.47,
+        "pnl_usd": 5.300000000000001,
+        "roi": 2.145748987854251,
+        "win_rate": 0.375,
+        "model_brier": 0.23554251625,
+        "market_brier": 0.28188125,
+        "brier_delta_market_minus_model": 0.04633873375000003,
+        "live_fill_rate": 0.75,
+        "paper_order_rate": 0.625,
+        "roi_ci95_cluster_by_event_date": [
+          -5.919398062255206,
+          9.370460048426152
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.0717092804107143,
+          0.11972703300000005
+        ],
+        "matched_baseline_roi": -1.222714089451992,
+        "excess_roi_vs_matched_baseline": 3.368463077306243
+      }
+    },
+    {
+      "key": "London|ecmwf|BUY_NO",
+      "city": "London",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 23,
+        "active_dates": 13,
+        "cities": 1,
+        "cost_usd": 16.4965,
+        "pnl_usd": -4.964999999999998,
+        "roi": -0.3009729336525928,
+        "win_rate": 0.6956521739130435,
+        "model_brier": 0.26218366173913044,
+        "market_brier": 0.20337927173913045,
+        "brier_delta_market_minus_model": -0.058804389999999984,
+        "live_fill_rate": 0.4782608695652174,
+        "paper_order_rate": 0.8260869565217391,
+        "roi_ci95_cluster_by_event_date": [
+          -1.8614144615050527,
+          1.3232763502862313
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.13972744848097823,
+          0.004147088044960473
+        ],
+        "matched_baseline_roi": 0.01727368901984643,
+        "excess_roi_vs_matched_baseline": -0.31824662267243925
+      },
+      "holdout": {
+        "n": 12,
+        "active_dates": 8,
+        "cities": 1,
+        "cost_usd": 7.725,
+        "pnl_usd": 22.75,
+        "roi": 2.944983818770227,
+        "win_rate": 0.8333333333333334,
+        "model_brier": 0.19200624249999998,
+        "market_brier": 0.16912708333333334,
+        "brier_delta_market_minus_model": -0.022879159166666645,
+        "live_fill_rate": 0.75,
+        "paper_order_rate": 0.75,
+        "roi_ci95_cluster_by_event_date": [
+          -0.5450321261032928,
+          5.434083601286173
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.13442188567499994,
+          0.06949452603846154
+        ],
+        "matched_baseline_roi": 0.26674081535033306,
+        "excess_roi_vs_matched_baseline": 2.678243003419894
+      }
+    },
+    {
+      "key": "Seattle|gfs|BUY_NO",
+      "city": "Seattle",
+      "model_version": "gfs",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 6,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 4.67,
+        "pnl_usd": 13.3,
+        "roi": 2.84796573875803,
+        "win_rate": 1.0,
+        "model_brier": 0.02904485,
+        "market_brier": 0.06104166666666667,
+        "brier_delta_market_minus_model": 0.03199681666666667,
+        "live_fill_rate": 0.5,
+        "paper_order_rate": 0.5,
+        "roi_ci95_cluster_by_event_date": [
+          1.834319526627219,
+          4.388489208633094
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          0.023514240000000002,
+          0.04610944
+        ],
+        "matched_baseline_roi": 0.16959627826487583,
+        "excess_roi_vs_matched_baseline": 2.6783694604931543
+      },
+      "holdout": {
+        "n": 6,
+        "active_dates": 4,
+        "cities": 1,
+        "cost_usd": 3.26,
+        "pnl_usd": 7.3999999999999995,
+        "roi": 2.2699386503067482,
+        "win_rate": 0.6666666666666666,
+        "model_brier": 0.33114046333333336,
+        "market_brier": 0.18805833333333333,
+        "brier_delta_market_minus_model": -0.14308213,
+        "live_fill_rate": 0.8333333333333334,
+        "paper_order_rate": 0.8333333333333334,
+        "roi_ci95_cluster_by_event_date": [
+          -4.301994301994302,
+          6.260162601626017
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.45609842999999994,
+          0.05640037000000001
+        ],
+        "matched_baseline_roi": 0.013874645593291823,
+        "excess_roi_vs_matched_baseline": 2.2560640047134566
+      }
+    },
+    {
+      "key": "Lucknow|ecmwf|BUY_NO",
+      "city": "Lucknow",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 4,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 1.676,
+        "pnl_usd": -6.759999999999999,
+        "roi": -4.033412887828161,
+        "win_rate": 0.25,
+        "model_brier": 0.6226282750000001,
+        "market_brier": 0.22188650000000001,
+        "brier_delta_market_minus_model": -0.400741775,
+        "live_fill_rate": 0.25,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          -3.6507936507936503
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.999879,
+          -0.03223786999999999
+        ],
+        "matched_baseline_roi": -0.36170970126776375,
+        "excess_roi_vs_matched_baseline": -3.6717031865603977
+      },
+      "holdout": {
+        "n": 4,
+        "active_dates": 4,
+        "cities": 1,
+        "cost_usd": 1.59,
+        "pnl_usd": 4.099999999999999,
+        "roi": 2.578616352201257,
+        "win_rate": 0.5,
+        "model_brier": 0.37093493750000006,
+        "market_brier": 0.0709875,
+        "brier_delta_market_minus_model": -0.2999474375000001,
+        "live_fill_rate": 0.75,
+        "paper_order_rate": 0.75,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          5.151515151515151
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.671231125,
+          0.07133624999999999
+        ],
+        "matched_baseline_roi": 0.750623920138222,
+        "excess_roi_vs_matched_baseline": 1.8279924320630347
+      }
+    },
+    {
+      "key": "Shanghai|gfs|BUY_YES",
+      "city": "Shanghai",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 9,
+        "active_dates": 5,
+        "cities": 1,
+        "cost_usd": 1.379,
+        "pnl_usd": -13.79,
+        "roi": -10.0,
+        "win_rate": 0.0,
+        "model_brier": 0.10146489444444445,
+        "market_brier": 0.03349922222222222,
+        "brier_delta_market_minus_model": -0.06796567222222222,
+        "live_fill_rate": 0.1111111111111111,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.000000000000002,
+          -9.999999999999998
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.07498728833333333,
+          -0.05389537787500003
+        ],
+        "matched_baseline_roi": 2.8673218278030657,
+        "excess_roi_vs_matched_baseline": -12.867321827803066
+      },
+      "holdout": {
+        "n": 4,
+        "active_dates": 4,
+        "cities": 1,
+        "cost_usd": 1.055,
+        "pnl_usd": -0.5500000000000003,
+        "roi": -0.5213270142180098,
+        "win_rate": 0.25,
+        "model_brier": 0.18343768500000002,
+        "market_brier": 0.13879375,
+        "brier_delta_market_minus_model": -0.044643935000000017,
+        "live_fill_rate": 0.5,
+        "paper_order_rate": 0.25,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          12.900763358778624
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.0751592925,
+          -0.011658607500000062
+        ],
+        "matched_baseline_roi": -2.174661554112215,
+        "excess_roi_vs_matched_baseline": 1.6533345398942054
+      }
+    },
+    {
+      "key": "Tokyo|gfs|BUY_NO",
+      "city": "Tokyo",
+      "model_version": "gfs",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 17,
+        "active_dates": 12,
+        "cities": 1,
+        "cost_usd": 10.735,
+        "pnl_usd": 22.65,
+        "roi": 2.109920819748486,
+        "win_rate": 0.7647058823529411,
+        "model_brier": 0.2110693788235294,
+        "market_brier": 0.170175,
+        "brier_delta_market_minus_model": -0.04089437882352942,
+        "live_fill_rate": 0.7058823529411765,
+        "paper_order_rate": 0.9411764705882353,
+        "roi_ci95_cluster_by_event_date": [
+          0.11727835734318015,
+          4.652590595986822
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.13277185454485296,
+          0.048919464218749986
+        ],
+        "matched_baseline_roi": 0.09172197049836203,
+        "excess_roi_vs_matched_baseline": 2.0181988492501244
+      },
+      "holdout": {
+        "n": 7,
+        "active_dates": 6,
+        "cities": 1,
+        "cost_usd": 4.44,
+        "pnl_usd": 5.6,
+        "roi": 1.261261261261261,
+        "win_rate": 0.7142857142857143,
+        "model_brier": 0.2637868142857143,
+        "market_brier": 0.2166142857142857,
+        "brier_delta_market_minus_model": -0.04717252857142858,
+        "live_fill_rate": 1.0,
+        "paper_order_rate": 0.8571428571428571,
+        "roi_ci95_cluster_by_event_date": [
+          -5.117758294653601,
+          6.096579476861168
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.27007059966666663,
+          0.0992263775
+        ],
+        "matched_baseline_roi": 0.26674081535033306,
+        "excess_roi_vs_matched_baseline": 0.994520445910928
+      }
+    },
+    {
+      "key": "Shanghai|gfs|BUY_NO",
+      "city": "Shanghai",
+      "model_version": "gfs",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 15,
+        "active_dates": 8,
+        "cities": 1,
+        "cost_usd": 11.161,
+        "pnl_usd": 8.389999999999997,
+        "roi": 0.7517247558462501,
+        "win_rate": 0.8,
+        "model_brier": 0.17828153266666666,
+        "market_brier": 0.15684073333333334,
+        "brier_delta_market_minus_model": -0.02144079933333334,
+        "live_fill_rate": 0.26666666666666666,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -1.1842424335019308,
+          3.1904000609036576
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.07097419078896104,
+          0.04781554445833328
+        ],
+        "matched_baseline_roi": 0.16959627826487583,
+        "excess_roi_vs_matched_baseline": 0.5821284775813742
+      },
+      "holdout": {
+        "n": 9,
+        "active_dates": 6,
+        "cities": 1,
+        "cost_usd": 6.355,
+        "pnl_usd": 6.449999999999999,
+        "roi": 1.0149488591660107,
+        "win_rate": 0.7777777777777778,
+        "model_brier": 0.12929947888888893,
+        "market_brier": 0.1346527777777778,
+        "brier_delta_market_minus_model": 0.005353298888888878,
+        "live_fill_rate": 0.7777777777777778,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -1.598389355742297,
+          4.447884416924665
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.0575092681818182,
+          0.08498648285714286
+        ],
+        "matched_baseline_roi": 0.15298874040852997,
+        "excess_roi_vs_matched_baseline": 0.8619601187574808
+      }
+    },
+    {
+      "key": "Miami|gfs|BUY_YES",
+      "city": "Miami",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 25,
+        "active_dates": 14,
+        "cities": 1,
+        "cost_usd": 6.2305,
+        "pnl_usd": 17.695,
+        "roi": 2.840060990289704,
+        "win_rate": 0.32,
+        "model_brier": 0.2558183376,
+        "market_brier": 0.24259305,
+        "brier_delta_market_minus_model": -0.013225287599999998,
+        "live_fill_rate": 0.28,
+        "paper_order_rate": 0.8,
+        "roi_ci95_cluster_by_event_date": [
+          -3.2161298066811783,
+          10.666091911712565
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.09175171966304348,
+          0.06322988647649572
+        ],
+        "matched_baseline_roi": 2.2065842315344897,
+        "excess_roi_vs_matched_baseline": 0.6334767587552141
+      },
+      "holdout": {
+        "n": 11,
+        "active_dates": 7,
+        "cities": 1,
+        "cost_usd": 3.2885,
+        "pnl_usd": -2.885,
+        "roi": -0.8772996807054888,
+        "win_rate": 0.2727272727272727,
+        "model_brier": 0.23269174,
+        "market_brier": 0.1649842954545455,
+        "brier_delta_market_minus_model": -0.06770744454545453,
+        "live_fill_rate": 0.5454545454545454,
+        "paper_order_rate": 0.7272727272727273,
+        "roi_ci95_cluster_by_event_date": [
+          -9.999999999999998,
+          6.214025131738954
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.21329350375,
+          0.034186040714285715
+        ],
+        "matched_baseline_roi": -1.3820963050737909,
+        "excess_roi_vs_matched_baseline": 0.5047966243683021
+      }
+    },
+    {
+      "key": "LA|gfs|BUY_YES",
+      "city": "LA",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 16,
+        "active_dates": 11,
+        "cities": 1,
+        "cost_usd": 4.4705,
+        "pnl_usd": 5.295,
+        "roi": 1.1844312716698355,
+        "win_rate": 0.3125,
+        "model_brier": 0.24105792312500002,
+        "market_brier": 0.22879623437500002,
+        "brier_delta_market_minus_model": -0.012261688749999996,
+        "live_fill_rate": 0.25,
+        "paper_order_rate": 0.9375,
+        "roi_ci95_cluster_by_event_date": [
+          -5.325118401054596,
+          8.504726140767419
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.11345590813636364,
+          0.09138611898692812
+        ],
+        "matched_baseline_roi": 2.564567918469915,
+        "excess_roi_vs_matched_baseline": -1.3801366468000795
+      },
+      "holdout": {
+        "n": 11,
+        "active_dates": 7,
+        "cities": 1,
+        "cost_usd": 4.494,
+        "pnl_usd": -4.940000000000002,
+        "roi": -1.0992434356920344,
+        "win_rate": 0.36363636363636365,
+        "model_brier": 0.2268228427272727,
+        "market_brier": 0.23133963636363636,
+        "brier_delta_market_minus_model": 0.004516793636363626,
+        "live_fill_rate": 0.6363636363636364,
+        "paper_order_rate": 0.8181818181818182,
+        "roi_ci95_cluster_by_event_date": [
+          -7.0683538200512865,
+          5.20912547528517
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.10311499096363638,
+          0.10676506197222217
+        ],
+        "matched_baseline_roi": -1.6005913183711866,
+        "excess_roi_vs_matched_baseline": 0.5013478826791522
+      }
+    },
+    {
+      "key": "Karachi|ecmwf|BUY_YES",
+      "city": "Karachi",
+      "model_version": "ecmwf",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 3,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 0.95,
+        "pnl_usd": 0.5000000000000009,
+        "roi": 0.5263157894736852,
+        "win_rate": 0.3333333333333333,
+        "model_brier": 0.44525059666666666,
+        "market_brier": 0.21401666666666666,
+        "brier_delta_market_minus_model": -0.23123392999999995,
+        "live_fill_rate": 0.3333333333333333,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          18.985507246376816
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.6670634899999999,
+          0.42273651000000007
+        ],
+        "matched_baseline_roi": 0.22223130865005214,
+        "excess_roi_vs_matched_baseline": 0.30408448082363304
+      },
+      "holdout": {
+        "n": 3,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 0.995,
+        "pnl_usd": 0.050000000000000266,
+        "roi": 0.0502512562814073,
+        "win_rate": 0.3333333333333333,
+        "model_brier": 0.5168242533333333,
+        "market_brier": 0.26874166666666666,
+        "brier_delta_market_minus_model": -0.24808258666666663,
+        "live_fill_rate": 0.6666666666666666,
+        "paper_order_rate": 0.6666666666666666,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          27.037037037037035
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.51404756,
+          0.03135275999999998
+        ],
+        "matched_baseline_roi": -0.2400936951005271,
+        "excess_roi_vs_matched_baseline": 0.2903449513819344
+      }
+    },
+    {
+      "key": "Munich|ecmwf|BUY_NO",
+      "city": "Munich",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 5,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 3.04,
+        "pnl_usd": -10.4,
+        "roi": -3.4210526315789473,
+        "win_rate": 0.4,
+        "model_brier": 0.45227474,
+        "market_brier": 0.24289,
+        "brier_delta_market_minus_model": -0.20938473999999996,
+        "live_fill_rate": 0.4,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          -1.52542372881356
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.34367024999999995,
+          -0.15197174499999994
+        ],
+        "matched_baseline_roi": -0.19771824663630033,
+        "excess_roi_vs_matched_baseline": -3.223334384942647
+      },
+      "holdout": {
+        "n": 11,
+        "active_dates": 8,
+        "cities": 1,
+        "cost_usd": 6.66,
+        "pnl_usd": 3.3999999999999972,
+        "roi": 0.5105105105105101,
+        "win_rate": 0.6363636363636364,
+        "model_brier": 0.2132270427272727,
+        "market_brier": 0.1967818181818182,
+        "brier_delta_market_minus_model": -0.01644522454545454,
+        "live_fill_rate": 0.7272727272727273,
+        "paper_order_rate": 0.6363636363636364,
+        "roi_ci95_cluster_by_event_date": [
+          -3.715632364493323,
+          4.186930091185407
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.06962361193181814,
+          0.03671784799999996
+        ],
+        "matched_baseline_roi": 0.26674081535033306,
+        "excess_roi_vs_matched_baseline": 0.24376969516017705
+      }
+    },
+    {
+      "key": "Moscow|ecmwf|BUY_NO",
+      "city": "Moscow",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 9,
+        "active_dates": 4,
+        "cities": 1,
+        "cost_usd": 6.725,
+        "pnl_usd": -7.25,
+        "roi": -1.0780669144981414,
+        "win_rate": 0.6666666666666666,
+        "model_brier": 0.25847203555555553,
+        "market_brier": 0.2368416666666667,
+        "brier_delta_market_minus_model": -0.021630368888888883,
+        "live_fill_rate": 0.4444444444444444,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -3.4102141680395386,
+          2.096774193548387
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.13893726857142857,
+          0.05849562217142831
+        ],
+        "matched_baseline_roi": 0.11517944900899871,
+        "excess_roi_vs_matched_baseline": -1.1932463635071402
+      },
+      "holdout": {
+        "n": 17,
+        "active_dates": 8,
+        "cities": 1,
+        "cost_usd": 11.8855,
+        "pnl_usd": 1.1449999999999998,
+        "roi": 0.09633587143998988,
+        "win_rate": 0.7058823529411765,
+        "model_brier": 0.2735790758823529,
+        "market_brier": 0.22563325,
+        "brier_delta_market_minus_model": -0.04794582588235292,
+        "live_fill_rate": 0.8235294117647058,
+        "paper_order_rate": 0.8235294117647058,
+        "roi_ci95_cluster_by_event_date": [
+          -1.4289788158609453,
+          2.2366101572942476
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.09435363381562498,
+          0.0062031895902777846
+        ],
+        "matched_baseline_roi": 0.1587942015620047,
+        "excess_roi_vs_matched_baseline": -0.06245833012201481
+      }
+    },
+    {
+      "key": "NYC|gfs|BUY_NO",
+      "city": "NYC",
+      "model_version": "gfs",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 31,
+        "active_dates": 14,
+        "cities": 1,
+        "cost_usd": 22.1595,
+        "pnl_usd": 28.405,
+        "roi": 1.281843001872786,
+        "win_rate": 0.8064516129032258,
+        "model_brier": 0.15085743193548387,
+        "market_brier": 0.14235552419354838,
+        "brier_delta_market_minus_model": -0.008501907741935485,
+        "live_fill_rate": 0.2903225806451613,
+        "paper_order_rate": 0.8064516129032258,
+        "roi_ci95_cluster_by_event_date": [
+          0.06068584264122239,
+          2.6372557577823788
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.05921011665833332,
+          0.036830942394480516
+        ],
+        "matched_baseline_roi": 0.10418795626723741,
+        "excess_roi_vs_matched_baseline": 1.1776550456055486
+      },
+      "holdout": {
+        "n": 17,
+        "active_dates": 8,
+        "cities": 1,
+        "cost_usd": 11.14,
+        "pnl_usd": -1.3999999999999968,
+        "roi": -0.12567324955116668,
+        "win_rate": 0.6470588235294118,
+        "model_brier": 0.26919066117647056,
+        "market_brier": 0.16978235294117647,
+        "brier_delta_market_minus_model": -0.09940830823529413,
+        "live_fill_rate": 0.6470588235294118,
+        "paper_order_rate": 0.8823529411764706,
+        "roi_ci95_cluster_by_event_date": [
+          -1.8481026193144945,
+          2.190407955617477
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.16400907796907896,
+          -0.02446347456250004
+        ],
+        "matched_baseline_roi": -0.024657361030129738,
+        "excess_roi_vs_matched_baseline": -0.10101588852103695
+      }
+    },
+    {
+      "key": "BuenosAires|ecmwf|BUY_NO",
+      "city": "BuenosAires",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 7,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 4.91,
+        "pnl_usd": -9.099999999999998,
+        "roi": -1.8533604887983701,
+        "win_rate": 0.5714285714285714,
+        "model_brier": 0.2840986085714286,
+        "market_brier": 0.22144285714285714,
+        "brier_delta_market_minus_model": -0.06265575142857147,
+        "live_fill_rate": 0.2857142857142857,
+        "paper_order_rate": 0.5714285714285714,
+        "roi_ci95_cluster_by_event_date": [
+          -3.174061433447099,
+          -0.2912621359223295
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.14338822500000004,
+          0.002610063333333329
+        ],
+        "matched_baseline_roi": 0.3660158354531381,
+        "excess_roi_vs_matched_baseline": -2.2193763242515083
+      },
+      "holdout": {
+        "n": 9,
+        "active_dates": 6,
+        "cities": 1,
+        "cost_usd": 6.185,
+        "pnl_usd": -1.8499999999999996,
+        "roi": -0.2991107518189167,
+        "win_rate": 0.6666666666666666,
+        "model_brier": 0.25186440666666665,
+        "market_brier": 0.21023611111111112,
+        "brier_delta_market_minus_model": -0.04162829555555555,
+        "live_fill_rate": 0.8888888888888888,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -4.993742177722154,
+          3.2828900502436538
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.128613825,
+          0.04773863875
+        ],
+        "matched_baseline_roi": 0.15298874040852997,
+        "excess_roi_vs_matched_baseline": -0.4520994922274467
+      }
+    },
+    {
+      "key": "Miami|gfs|BUY_NO",
+      "city": "Miami",
+      "model_version": "gfs",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 27,
+        "active_dates": 15,
+        "cities": 1,
+        "cost_usd": 17.537,
+        "pnl_usd": 4.63,
+        "roi": 0.2640132291726065,
+        "win_rate": 0.6666666666666666,
+        "model_brier": 0.2586138188888889,
+        "market_brier": 0.22720922222222223,
+        "brier_delta_market_minus_model": -0.03140459666666665,
+        "live_fill_rate": 0.4444444444444444,
+        "paper_order_rate": 0.8518518518518519,
+        "roi_ci95_cluster_by_event_date": [
+          -1.8687198783897943,
+          2.1424095597508557
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.10424668799592589,
+          0.040502035500000005
+        ],
+        "matched_baseline_roi": 0.17083756150686302,
+        "excess_roi_vs_matched_baseline": 0.09317566766574348
+      },
+      "holdout": {
+        "n": 12,
+        "active_dates": 7,
+        "cities": 1,
+        "cost_usd": 7.385,
+        "pnl_usd": -3.850000000000001,
+        "roi": -0.5213270142180096,
+        "win_rate": 0.5833333333333334,
+        "model_brier": 0.2766580933333333,
+        "market_brier": 0.18871041666666666,
+        "brier_delta_market_minus_model": -0.08794767666666665,
+        "live_fill_rate": 0.5833333333333334,
+        "paper_order_rate": 0.9166666666666666,
+        "roi_ci95_cluster_by_event_date": [
+          -3.370144221233672,
+          3.2277519912898964
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.24651045727272727,
+          0.056403006363636383
+        ],
+        "matched_baseline_roi": 0.06618707213974592,
+        "excess_roi_vs_matched_baseline": -0.5875140863577556
+      }
+    },
+    {
+      "key": "Manila|gfs|BUY_NO",
+      "city": "Manila",
+      "model_version": "gfs",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 3,
+        "active_dates": 2,
+        "cities": 1,
+        "cost_usd": 2.075,
+        "pnl_usd": -0.7499999999999996,
+        "roi": -0.3614457831325299,
+        "win_rate": 0.6666666666666666,
+        "model_brier": 0.18214103,
+        "market_brier": 0.16924166666666665,
+        "brier_delta_market_minus_model": -0.012899363333333323,
+        "live_fill_rate": 0.6666666666666666,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -2.673992673992674,
+          4.084507042253522
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.04445263999999998,
+          0.05020718999999999
+        ],
+        "matched_baseline_roi": 0.6695118698319551,
+        "excess_roi_vs_matched_baseline": -1.030957652964485
+      },
+      "holdout": {
+        "n": 11,
+        "active_dates": 7,
+        "cities": 1,
+        "cost_usd": 7.26,
+        "pnl_usd": -2.5999999999999996,
+        "roi": -0.35812672176308535,
+        "win_rate": 0.6363636363636364,
+        "model_brier": 0.2647319927272727,
+        "market_brier": 0.21862727272727273,
+        "brier_delta_market_minus_model": -0.04610471999999998,
+        "live_fill_rate": 0.9090909090909091,
+        "paper_order_rate": 0.8181818181818182,
+        "roi_ci95_cluster_by_event_date": [
+          -3.4471344856689976,
+          2.7493599310479837
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.13050966853030302,
+          0.036962314272727274
+        ],
+        "matched_baseline_roi": 0.26674081535033306,
+        "excess_roi_vs_matched_baseline": -0.6248675371134185
+      }
+    },
+    {
+      "key": "Chengdu|ecmwf|BUY_NO",
+      "city": "Chengdu",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 14,
+        "active_dates": 2,
+        "cities": 1,
+        "cost_usd": 12.452,
+        "pnl_usd": 5.479999999999999,
+        "roi": 0.44008994539029866,
+        "win_rate": 0.9285714285714286,
+        "model_brier": 0.07541229857142857,
+        "market_brier": 0.07094196428571428,
+        "brier_delta_market_minus_model": -0.004470334285714287,
+        "live_fill_rate": 0.07142857142857142,
+        "paper_order_rate": 0.5714285714285714,
+        "roi_ci95_cluster_by_event_date": [
+          -0.056676941433827274,
+          2.5260960334029225
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.016150050000000003,
+          0.03835528999999999
+        ],
+        "matched_baseline_roi": -0.00012096627863366275,
+        "excess_roi_vs_matched_baseline": 0.44021091166893234
+      },
+      "holdout": {
+        "n": 7,
+        "active_dates": 7,
+        "cities": 1,
+        "cost_usd": 5.06,
+        "pnl_usd": -0.5999999999999988,
+        "roi": -0.11857707509881399,
+        "win_rate": 0.7142857142857143,
+        "model_brier": 0.17577284285714284,
+        "market_brier": 0.20269285714285717,
+        "brier_delta_market_minus_model": 0.026920014285714302,
+        "live_fill_rate": 1.0,
+        "paper_order_rate": 0.8571428571428571,
+        "roi_ci95_cluster_by_event_date": [
+          -4.203395861928724,
+          3.8613861386138617
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.015706798392857112,
+          0.05995942142857143
+        ],
+        "matched_baseline_roi": 0.6857410779513909,
+        "excess_roi_vs_matched_baseline": -0.8043181530502049
+      }
+    },
+    {
+      "key": "Istanbul|ecmwf|BUY_YES",
+      "city": "Istanbul",
+      "model_version": "ecmwf",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 3,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 1.245,
+        "pnl_usd": 7.549999999999999,
+        "roi": 6.064257028112449,
+        "win_rate": 0.6666666666666666,
+        "model_brier": 0.17360649666666664,
+        "market_brier": 0.2612083333333333,
+        "brier_delta_market_minus_model": 0.08760183666666665,
+        "live_fill_rate": 0.3333333333333333,
+        "paper_order_rate": 0.3333333333333333,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          30.0
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.09396016,
+          0.24474231000000002
+        ],
+        "matched_baseline_roi": 2.6249770917754387,
+        "excess_roi_vs_matched_baseline": 3.43927993633701
+      },
+      "holdout": {
+        "n": 7,
+        "active_dates": 6,
+        "cities": 1,
+        "cost_usd": 2.505,
+        "pnl_usd": -5.05,
+        "roi": -2.0159680638722555,
+        "win_rate": 0.2857142857142857,
+        "model_brier": 0.17194695142857142,
+        "market_brier": 0.10348214285714284,
+        "brier_delta_market_minus_model": -0.06846480857142857,
+        "live_fill_rate": 0.5714285714285714,
+        "paper_order_rate": 0.7142857142857143,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          5.267175572519085
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.11314054674999999,
+          -0.02379979125000001
+        ],
+        "matched_baseline_roi": -1.0183777808484178,
+        "excess_roi_vs_matched_baseline": -0.9975902830238377
+      }
+    },
+    {
+      "key": "LA|gfs|BUY_NO",
+      "city": "LA",
+      "model_version": "gfs",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 27,
+        "active_dates": 14,
+        "cities": 1,
+        "cost_usd": 17.937,
+        "pnl_usd": 0.6299999999999977,
+        "roi": 0.0351229302558955,
+        "win_rate": 0.6666666666666666,
+        "model_brier": 0.27802916518518517,
+        "market_brier": 0.2487632962962963,
+        "brier_delta_market_minus_model": -0.029265868888888907,
+        "live_fill_rate": 0.4074074074074074,
+        "paper_order_rate": 0.8888888888888888,
+        "roi_ci95_cluster_by_event_date": [
+          -2.1678796358782897,
+          1.9749455899865533
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.10601771477797207,
+          0.031854617856060585
+        ],
+        "matched_baseline_roi": 0.10418795626723741,
+        "excess_roi_vs_matched_baseline": -0.0690650260113419
+      },
+      "holdout": {
+        "n": 12,
+        "active_dates": 8,
+        "cities": 1,
+        "cost_usd": 7.785,
+        "pnl_usd": -7.85,
+        "roi": -1.00834938985228,
+        "win_rate": 0.5833333333333334,
+        "model_brier": 0.25370795,
+        "market_brier": 0.22055625,
+        "brier_delta_market_minus_model": -0.03315170000000001,
+        "live_fill_rate": 0.5833333333333334,
+        "paper_order_rate": 0.8333333333333334,
+        "roi_ci95_cluster_by_event_date": [
+          -3.3694662569705245,
+          2.066592674805771
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.09217331998214287,
+          0.04161039849999997
+        ],
+        "matched_baseline_roi": 0.06618707213974592,
+        "excess_roi_vs_matched_baseline": -1.074536461992026
+      }
+    },
+    {
+      "key": "BuenosAires|ecmwf|BUY_YES",
+      "city": "BuenosAires",
+      "model_version": "ecmwf",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 5,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 1.135,
+        "pnl_usd": -1.3500000000000003,
+        "roi": -1.1894273127753308,
+        "win_rate": 0.2,
+        "model_brier": 0.167103356,
+        "market_brier": 0.09590499999999999,
+        "brier_delta_market_minus_model": -0.07119835600000002,
+        "live_fill_rate": 0.4,
+        "paper_order_rate": 0.8,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          6.393442622950819
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.10977486000000002,
+          -0.0074135600000000065
+        ],
+        "matched_baseline_roi": 3.019805886530419,
+        "excess_roi_vs_matched_baseline": -4.20923319930575
+      },
+      "holdout": {
+        "n": 5,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 1.3345,
+        "pnl_usd": -3.3449999999999998,
+        "roi": -2.5065567628325214,
+        "win_rate": 0.2,
+        "model_brier": 0.210969236,
+        "market_brier": 0.13977205,
+        "brier_delta_market_minus_model": -0.071197186,
+        "live_fill_rate": 0.2,
+        "paper_order_rate": 0.6,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          6.680567139282736
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.07632472,
+          -0.057249209999999995
+        ],
+        "matched_baseline_roi": -1.3432948172682448,
+        "excess_roi_vs_matched_baseline": -1.1632619455642765
+      }
+    },
+    {
+      "key": "Guangzhou|gfs|BUY_NO",
+      "city": "Guangzhou",
+      "model_version": "gfs",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 4,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 2.715,
+        "pnl_usd": -7.149999999999999,
+        "roi": -2.633517495395948,
+        "win_rate": 0.5,
+        "model_brier": 0.39092190499999996,
+        "market_brier": 0.30064375,
+        "brier_delta_market_minus_model": -0.09027815499999998,
+        "live_fill_rate": 0.75,
+        "paper_order_rate": 0.75,
+        "roi_ci95_cluster_by_event_date": [
+          -9.999999999999998,
+          5.748031496062992
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.2211852499999999,
+          0.08055474999999998
+        ],
+        "matched_baseline_roi": 0.6695118698319551,
+        "excess_roi_vs_matched_baseline": -3.3030293652279035
+      },
+      "holdout": {
+        "n": 8,
+        "active_dates": 6,
+        "cities": 1,
+        "cost_usd": 5.5649999999999995,
+        "pnl_usd": -5.649999999999997,
+        "roi": -1.0152740341419582,
+        "win_rate": 0.625,
+        "model_brier": 0.30522443125,
+        "market_brier": 0.254046875,
+        "brier_delta_market_minus_model": -0.051177556249999985,
+        "live_fill_rate": 1.0,
+        "paper_order_rate": 0.75,
+        "roi_ci95_cluster_by_event_date": [
+          -5.963673057517658,
+          3.264554163596168
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.19399029499999998,
+          0.042309647293181825
+        ],
+        "matched_baseline_roi": 0.15298874040852997,
+        "excess_roi_vs_matched_baseline": -1.168262774550488
+      }
+    },
+    {
+      "key": "Istanbul|ecmwf|BUY_NO",
+      "city": "Istanbul",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 8,
+        "active_dates": 4,
+        "cities": 1,
+        "cost_usd": 5.6850000000000005,
+        "pnl_usd": 3.1499999999999995,
+        "roi": 0.5540897097625328,
+        "win_rate": 0.75,
+        "model_brier": 0.21239392375,
+        "market_brier": 0.109509375,
+        "brier_delta_market_minus_model": -0.10288454875,
+        "live_fill_rate": 0.375,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -4.3342776203966,
+          2.7551020408163263
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.35276800333333336,
+          0.047045524000000005
+        ],
+        "matched_baseline_roi": 0.08916717251089991,
+        "excess_roi_vs_matched_baseline": 0.4649225372516329
+      },
+      "holdout": {
+        "n": 7,
+        "active_dates": 6,
+        "cities": 1,
+        "cost_usd": 4.51,
+        "pnl_usd": -5.1,
+        "roi": -1.130820399113082,
+        "win_rate": 0.5714285714285714,
+        "model_brier": 0.2773829214285714,
+        "market_brier": 0.18672142857142857,
+        "brier_delta_market_minus_model": -0.09066149285714284,
+        "live_fill_rate": 0.7142857142857143,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -5.268200949225397,
+          2.7713920817369093
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.2248890185714285,
+          0.015082465000000022
+        ],
+        "matched_baseline_roi": 0.23529548600207031,
+        "excess_roi_vs_matched_baseline": -1.3661158851151525
+      }
+    },
+    {
+      "key": "Ankara|ecmwf|BUY_NO",
+      "city": "Ankara",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 10,
+        "active_dates": 4,
+        "cities": 1,
+        "cost_usd": 7.073,
+        "pnl_usd": -0.7299999999999993,
+        "roi": -0.10320938781280917,
+        "win_rate": 0.7,
+        "model_brier": 0.206866952,
+        "market_brier": 0.1551159,
+        "brier_delta_market_minus_model": -0.051751051999999985,
+        "live_fill_rate": 0.6,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -1.7127071823204418,
+          2.8794848206071757
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.14471181111111112,
+          0.038462648888888916
+        ],
+        "matched_baseline_roi": 0.01727368901984643,
+        "excess_roi_vs_matched_baseline": -0.12048307683265559
+      },
+      "holdout": {
+        "n": 14,
+        "active_dates": 8,
+        "cities": 1,
+        "cost_usd": 9.135,
+        "pnl_usd": -11.35,
+        "roi": -1.2424740010946906,
+        "win_rate": 0.5714285714285714,
+        "model_brier": 0.32885867500000004,
+        "market_brier": 0.2164982142857143,
+        "brier_delta_market_minus_model": -0.11236046071428571,
+        "live_fill_rate": 0.8571428571428571,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -3.443425240018185,
+          1.5941355365504868
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.21714838448809523,
+          -0.011115838173076929
+        ],
+        "matched_baseline_roi": 0.15298874040852997,
+        "excess_roi_vs_matched_baseline": -1.3954627415032206
+      }
+    },
+    {
+      "key": "Amsterdam|ecmwf|BUY_NO",
+      "city": "Amsterdam",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 2,
+        "active_dates": 1,
+        "cities": 1,
+        "cost_usd": 1.5305,
+        "pnl_usd": 4.6949999999999985,
+        "roi": 3.067624959163671,
+        "win_rate": 1.0,
+        "model_brier": 0.0034145449999999997,
+        "market_brier": 0.06618512500000001,
+        "brier_delta_market_minus_model": 0.06277058,
+        "live_fill_rate": 0.5,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          3.067624959163671,
+          3.067624959163671
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          0.06277058,
+          0.06277058
+        ],
+        "matched_baseline_roi": -0.35103589305000465,
+        "excess_roi_vs_matched_baseline": 3.4186608522136757
+      },
+      "holdout": {
+        "n": 7,
+        "active_dates": 5,
+        "cities": 1,
+        "cost_usd": 4.68,
+        "pnl_usd": -6.799999999999999,
+        "roi": -1.452991452991453,
+        "win_rate": 0.5714285714285714,
+        "model_brier": 0.29971888571428573,
+        "market_brier": 0.2252,
+        "brier_delta_market_minus_model": -0.0745188857142857,
+        "live_fill_rate": 0.42857142857142855,
+        "paper_order_rate": 0.8571428571428571,
+        "roi_ci95_cluster_by_event_date": [
+          -4.528043775649794,
+          1.961722488038278
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.15754159857142852,
+          0.02047104499999999
+        ],
+        "matched_baseline_roi": 0.26674081535033306,
+        "excess_roi_vs_matched_baseline": -1.719732268341786
+      }
+    },
+    {
+      "key": "Karachi|ecmwf|BUY_NO",
+      "city": "Karachi",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 7,
+        "active_dates": 4,
+        "cities": 1,
+        "cost_usd": 4.59,
+        "pnl_usd": -5.9,
+        "roi": -1.2854030501089326,
+        "win_rate": 0.5714285714285714,
+        "model_brier": 0.33800066428571424,
+        "market_brier": 0.24081428571428568,
+        "brier_delta_market_minus_model": -0.09718637857142857,
+        "live_fill_rate": 0.7142857142857143,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -6.9604863221884505,
+          2.7388535031847137
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.300236802,
+          0.04576071499999999
+        ],
+        "matched_baseline_roi": -0.49772412008501143,
+        "excess_roi_vs_matched_baseline": -0.7876789300239212
+      },
+      "holdout": {
+        "n": 15,
+        "active_dates": 8,
+        "cities": 1,
+        "cost_usd": 9.59,
+        "pnl_usd": -15.9,
+        "roi": -1.6579770594369134,
+        "win_rate": 0.5333333333333333,
+        "model_brier": 0.327190628,
+        "market_brier": 0.2827533333333333,
+        "brier_delta_market_minus_model": -0.04443729466666665,
+        "live_fill_rate": 0.9333333333333333,
+        "paper_order_rate": 0.8666666666666667,
+        "roi_ci95_cluster_by_event_date": [
+          -3.8318200913622205,
+          0.8699685906675552
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.12340061430631866,
+          0.028776251066666664
+        ],
+        "matched_baseline_roi": 0.26674081535033306,
+        "excess_roi_vs_matched_baseline": -1.9247178747872464
+      }
+    },
+    {
+      "key": "Moscow|ecmwf|BUY_YES",
+      "city": "Moscow",
+      "model_version": "ecmwf",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 3,
+        "active_dates": 1,
+        "cities": 1,
+        "cost_usd": 0.65,
+        "pnl_usd": -6.5,
+        "roi": -10.0,
+        "win_rate": 0.0,
+        "model_brier": 0.14400823000000001,
+        "market_brier": 0.04918333333333333,
+        "brier_delta_market_minus_model": -0.09482489666666667,
+        "live_fill_rate": 0.0,
+        "paper_order_rate": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          -10.0
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.09482489666666667,
+          -0.09482489666666667
+        ],
+        "matched_baseline_roi": 3.6861313868613137,
+        "excess_roi_vs_matched_baseline": -13.686131386861314
+      },
+      "holdout": {
+        "n": 7,
+        "active_dates": 5,
+        "cities": 1,
+        "cost_usd": 1.5905,
+        "pnl_usd": -5.904999999999999,
+        "roi": -3.7126689720213766,
+        "win_rate": 0.14285714285714285,
+        "model_brier": 0.17967850714285713,
+        "market_brier": 0.16401217857142855,
+        "brier_delta_market_minus_model": -0.01566632857142859,
+        "live_fill_rate": 0.5714285714285714,
+        "paper_order_rate": 0.8571428571428571,
+        "roi_ci95_cluster_by_event_date": [
+          -10.000000000000002,
+          4.554283706798305
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.10041326954999999,
+          0.05279891999999997
+        ],
+        "matched_baseline_roi": -1.750966005296748,
+        "excess_roi_vs_matched_baseline": -1.9617029667246286
+      }
+    },
+    {
+      "key": "Jeddah|ecmwf|BUY_NO",
+      "city": "Jeddah",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 7,
+        "active_dates": 4,
+        "cities": 1,
+        "cost_usd": 5.32,
+        "pnl_usd": -23.200000000000003,
+        "roi": -4.360902255639098,
+        "win_rate": 0.42857142857142855,
+        "model_brier": 0.46030887142857146,
+        "market_brier": 0.3706785714285714,
+        "brier_delta_market_minus_model": -0.08963030000000001,
+        "live_fill_rate": 0.42857142857142855,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -7.267759562841531,
+          -3.333333333333334
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.15316623599999998,
+          -0.05236223000000003
+        ],
+        "matched_baseline_roi": -0.11718882467214732,
+        "excess_roi_vs_matched_baseline": -4.243713430966951
+      },
+      "holdout": {
+        "n": 9,
+        "active_dates": 7,
+        "cities": 1,
+        "cost_usd": 6.31,
+        "pnl_usd": -13.099999999999998,
+        "roi": -2.0760697305863705,
+        "win_rate": 0.5555555555555556,
+        "model_brier": 0.3756045288888889,
+        "market_brier": 0.28633333333333333,
+        "brier_delta_market_minus_model": -0.08927119555555554,
+        "live_fill_rate": 0.8888888888888888,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -6.9054674136650975,
+          2.6012601260126016
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.22665036571428562,
+          0.00703682424999998
+        ],
+        "matched_baseline_roi": 0.5634965173472419,
+        "excess_roi_vs_matched_baseline": -2.6395662479336126
+      }
+    },
+    {
+      "key": "Singapore|gfs|BUY_NO",
+      "city": "Singapore",
+      "model_version": "gfs",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 3,
+        "active_dates": 2,
+        "cities": 1,
+        "cost_usd": 1.92,
+        "pnl_usd": 0.8000000000000003,
+        "roi": 0.4166666666666668,
+        "win_rate": 0.6666666666666666,
+        "model_brier": 0.12990647999999996,
+        "market_brier": 0.19721666666666662,
+        "brier_delta_market_minus_model": 0.06731018666666667,
+        "live_fill_rate": 0.3333333333333333,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          4.869888475836431
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.03346655999999998,
+          0.11769856000000001
+        ],
+        "matched_baseline_roi": -1.3909824454305681,
+        "excess_roi_vs_matched_baseline": 1.807649112097235
+      },
+      "holdout": {
+        "n": 5,
+        "active_dates": 4,
+        "cities": 1,
+        "cost_usd": 3.2,
+        "pnl_usd": -12.0,
+        "roi": -3.75,
+        "win_rate": 0.4,
+        "model_brier": 0.283968542,
+        "market_brier": 0.23581,
+        "brier_delta_market_minus_model": -0.048158542,
+        "live_fill_rate": 1.0,
+        "paper_order_rate": 0.8,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          0.6382978723404252
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.11194284499999999,
+          -0.005635673333333341
+        ],
+        "matched_baseline_roi": 0.06618707213974592,
+        "excess_roi_vs_matched_baseline": -3.816187072139746
+      }
+    },
+    {
+      "key": "Lucknow|ecmwf|BUY_YES",
+      "city": "Lucknow",
+      "model_version": "ecmwf",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 1,
+        "active_dates": 1,
+        "cities": 1,
+        "cost_usd": 0.375,
+        "pnl_usd": -3.75,
+        "roi": -10.0,
+        "win_rate": 0.0,
+        "model_brier": 0.20802721000000002,
+        "market_brier": 0.140625,
+        "brier_delta_market_minus_model": -0.06740221000000002,
+        "live_fill_rate": 1.0,
+        "paper_order_rate": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          -10.0
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.06740221000000002,
+          -0.06740221000000002
+        ],
+        "matched_baseline_roi": -0.4347826086956519,
+        "excess_roi_vs_matched_baseline": -9.565217391304348
+      },
+      "holdout": {
+        "n": 1,
+        "active_dates": 1,
+        "cities": 1,
+        "cost_usd": 0.385,
+        "pnl_usd": -3.85,
+        "roi": -10.0,
+        "win_rate": 0.0,
+        "model_brier": 0.21325924,
+        "market_brier": 0.148225,
+        "brier_delta_market_minus_model": -0.06503424,
+        "live_fill_rate": 1.0,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          -10.0
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.06503424,
+          -0.06503424
+        ],
+        "matched_baseline_roi": -2.6165205353022607,
+        "excess_roi_vs_matched_baseline": -7.383479464697739
+      }
+    },
+    {
+      "key": "Seattle|gfs|BUY_YES",
+      "city": "Seattle",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 4,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 1.01,
+        "pnl_usd": 19.9,
+        "roi": 19.7029702970297,
+        "win_rate": 0.75,
+        "model_brier": 0.31371162500000005,
+        "market_brier": 0.37491250000000004,
+        "brier_delta_market_minus_model": 0.061200875000000016,
+        "live_fill_rate": 0.25,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          14.691358024691361,
+          25.714285714285708
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          0.037696900000000096,
+          0.12864950999999986
+        ],
+        "matched_baseline_roi": 2.0540019286403086,
+        "excess_roi_vs_matched_baseline": 17.648968368389394
+      },
+      "holdout": {
+        "n": 1,
+        "active_dates": 1,
+        "cities": 1,
+        "cost_usd": 0.325,
+        "pnl_usd": -3.25,
+        "roi": -10.0,
+        "win_rate": 0.0,
+        "model_brier": 0.18679683999999996,
+        "market_brier": 0.10562500000000001,
+        "brier_delta_market_minus_model": -0.08117183999999995,
+        "live_fill_rate": 1.0,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          -10.0
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.08117183999999995,
+          -0.08117183999999995
+        ],
+        "matched_baseline_roi": -2.6165205353022607,
+        "excess_roi_vs_matched_baseline": -7.383479464697739
+      }
+    },
+    {
+      "key": "Amsterdam|ecmwf|BUY_YES",
+      "city": "Amsterdam",
+      "model_version": "ecmwf",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": false,
+      "train": {
+        "n": 3,
+        "active_dates": 2,
+        "cities": 1,
+        "cost_usd": 0.615,
+        "pnl_usd": 3.8500000000000005,
+        "roi": 6.260162601626017,
+        "win_rate": 0.3333333333333333,
+        "model_brier": 0.19284633666666665,
+        "market_brier": 0.147875,
+        "brier_delta_market_minus_model": -0.04497133666666667,
+        "live_fill_rate": 0.3333333333333333,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          9.41747572815534
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.07514724,
+          -0.029883385
+        ],
+        "matched_baseline_roi": -0.3883699276124111,
+        "excess_roi_vs_matched_baseline": 6.648532529238428
+      },
+      "holdout": {
+        "n": 5,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 1.354,
+        "pnl_usd": -13.54,
+        "roi": -9.999999999999998,
+        "win_rate": 0.0,
+        "model_brier": 0.16009721999999998,
+        "market_brier": 0.0888792,
+        "brier_delta_market_minus_model": -0.07121801999999998,
+        "live_fill_rate": 0.6,
+        "paper_order_rate": 0.8,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          -9.999999999999998
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.12425588999999998,
+          -0.04073039999999996
+        ],
+        "matched_baseline_roi": -1.3432948172682448,
+        "excess_roi_vs_matched_baseline": -8.656705182731754
+      }
+    },
+    {
+      "key": "Manila|gfs|BUY_YES",
+      "city": "Manila",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 2,
+        "active_dates": 2,
+        "cities": 1,
+        "cost_usd": 0.36,
+        "pnl_usd": -3.6,
+        "roi": -10.0,
+        "win_rate": 0.0,
+        "model_brier": 0.12253133,
+        "market_brier": 0.0373,
+        "brier_delta_market_minus_model": -0.08523133,
+        "live_fill_rate": 0.5,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          -10.0
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.10388240999999998,
+          -0.06658025000000002
+        ],
+        "matched_baseline_roi": 3.6861313868613137,
+        "excess_roi_vs_matched_baseline": -13.686131386861314
+      },
+      "holdout": {
+        "n": 3,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 0.675,
+        "pnl_usd": -6.75,
+        "roi": -10.0,
+        "win_rate": 0.0,
+        "model_brier": 0.12481907666666665,
+        "market_brier": 0.056824999999999994,
+        "brier_delta_market_minus_model": -0.06799407666666667,
+        "live_fill_rate": 0.6666666666666666,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.000000000000002,
+          -10.0
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.08257781,
+          -0.04204701
+        ],
+        "matched_baseline_roi": -0.7039634919293501,
+        "excess_roi_vs_matched_baseline": -9.29603650807065
+      }
+    },
+    {
+      "key": "Singapore|gfs|BUY_YES",
+      "city": "Singapore",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 3,
+        "active_dates": 2,
+        "cities": 1,
+        "cost_usd": 0.5145,
+        "pnl_usd": 14.855,
+        "roi": 28.87269193391643,
+        "win_rate": 0.6666666666666666,
+        "model_brier": 0.27229838666666667,
+        "market_brier": 0.44219674999999997,
+        "brier_delta_market_minus_model": 0.16989836333333339,
+        "live_fill_rate": 0.0,
+        "paper_order_rate": 0.6666666666666666,
+        "roi_ci95_cluster_by_event_date": [
+          10.833333333333334,
+          279.8550724637681
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.009888999999999953,
+          0.52947309
+        ],
+        "matched_baseline_roi": 1.2317484088356423,
+        "excess_roi_vs_matched_baseline": 27.640943525080786
+      },
+      "holdout": {
+        "n": 2,
+        "active_dates": 2,
+        "cities": 1,
+        "cost_usd": 0.395,
+        "pnl_usd": -3.95,
+        "roi": -10.0,
+        "win_rate": 0.0,
+        "model_brier": 0.126437125,
+        "market_brier": 0.0423125,
+        "brier_delta_market_minus_model": -0.08412462500000001,
+        "live_fill_rate": 0.0,
+        "paper_order_rate": 0.5,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          -10.0
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.15621249,
+          -0.012036760000000007
+        ],
+        "matched_baseline_roi": -0.7039634919293501,
+        "excess_roi_vs_matched_baseline": -9.29603650807065
+      }
+    },
+    {
+      "key": "Austin|gfs|BUY_NO",
+      "city": "Austin",
+      "model_version": "gfs",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 11,
+        "active_dates": 6,
+        "cities": 1,
+        "cost_usd": 7.28,
+        "pnl_usd": -2.7999999999999994,
+        "roi": -0.3846153846153845,
+        "win_rate": 0.6363636363636364,
+        "model_brier": 0.2375770572727273,
+        "market_brier": 0.18023636363636364,
+        "brier_delta_market_minus_model": -0.057340693636363654,
+        "live_fill_rate": 0.6363636363636364,
+        "paper_order_rate": 0.9090909090909091,
+        "roi_ci95_cluster_by_event_date": [
+          -3.3719966859983432,
+          2.4611670593108452
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.15152971443939398,
+          0.03453485999999998
+        ],
+        "matched_baseline_roi": 0.6093760360718785,
+        "excess_roi_vs_matched_baseline": -0.9939914206872631
+      },
+      "holdout": {
+        "n": 0,
+        "active_dates": 0,
+        "matched_baseline_roi": null,
+        "excess_roi_vs_matched_baseline": null
+      }
+    },
+    {
+      "key": "Austin|gfs|BUY_YES",
+      "city": "Austin",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 6,
+        "active_dates": 5,
+        "cities": 1,
+        "cost_usd": 1.675,
+        "pnl_usd": 3.249999999999999,
+        "roi": 1.940298507462686,
+        "win_rate": 0.3333333333333333,
+        "model_brier": 0.2093142583333333,
+        "market_brier": 0.17729583333333332,
+        "brier_delta_market_minus_model": -0.03201842500000001,
+        "live_fill_rate": 0.5,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          9.841269841269838
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.138158768,
+          0.1127582783333333
+        ],
+        "matched_baseline_roi": 3.019805886530419,
+        "excess_roi_vs_matched_baseline": -1.0795073790677332
+      },
+      "holdout": {
+        "n": 0,
+        "active_dates": 0,
+        "matched_baseline_roi": null,
+        "excess_roi_vs_matched_baseline": null
+      }
+    },
+    {
+      "key": "Beijing|ecmwf|BUY_NO",
+      "city": "Beijing",
+      "model_version": "ecmwf",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 15,
+        "active_dates": 9,
+        "cities": 1,
+        "cost_usd": 8.425,
+        "pnl_usd": -14.249999999999998,
+        "roi": -1.6913946587537088,
+        "win_rate": 0.4666666666666667,
+        "model_brier": 0.4221710506666667,
+        "market_brier": 0.19204833333333332,
+        "brier_delta_market_minus_model": -0.23012271733333334,
+        "live_fill_rate": 0.3333333333333333,
+        "paper_order_rate": 0.9333333333333333,
+        "roi_ci95_cluster_by_event_date": [
+          -3.4598844988180577,
+          -0.1609406588935368
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.398292869409091,
+          -0.1131285060995066
+        ],
+        "matched_baseline_roi": 0.17814681684307815,
+        "excess_roi_vs_matched_baseline": -1.869541475596787
+      },
+      "holdout": {
+        "n": 0,
+        "active_dates": 0,
+        "matched_baseline_roi": null,
+        "excess_roi_vs_matched_baseline": null
+      }
+    },
+    {
+      "key": "Beijing|ecmwf|BUY_YES",
+      "city": "Beijing",
+      "model_version": "ecmwf",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 13,
+        "active_dates": 5,
+        "cities": 1,
+        "cost_usd": 1.239,
+        "pnl_usd": -2.3900000000000015,
+        "roi": -1.9289749798224385,
+        "win_rate": 0.07692307692307693,
+        "model_brier": 0.10488359000000001,
+        "market_brier": 0.07019230769230769,
+        "brier_delta_market_minus_model": -0.03469128230769232,
+        "live_fill_rate": 0.07692307692307693,
+        "paper_order_rate": 0.5384615384615384,
+        "roi_ci95_cluster_by_event_date": [
+          -10.000000000000002,
+          8.121413470250678
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.06258222933333334,
+          0.009779946903846082
+        ],
+        "matched_baseline_roi": 2.8673218278030657,
+        "excess_roi_vs_matched_baseline": -4.796296807625504
+      },
+      "holdout": {
+        "n": 0,
+        "active_dates": 0,
+        "matched_baseline_roi": null,
+        "excess_roi_vs_matched_baseline": null
+      }
+    },
+    {
+      "key": "Chengdu|gfs|BUY_YES",
+      "city": "Chengdu",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 2,
+        "active_dates": 1,
+        "cities": 1,
+        "cost_usd": 0.006999999999999999,
+        "pnl_usd": -0.07,
+        "roi": -10.000000000000002,
+        "win_rate": 0.0,
+        "model_brier": 0.027983185,
+        "market_brier": 1.3249999999999999e-05,
+        "brier_delta_market_minus_model": -0.027969935,
+        "live_fill_rate": 0.0,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.000000000000002,
+          -10.000000000000002
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.027969935,
+          -0.027969935
+        ],
+        "matched_baseline_roi": 14.3842965130456,
+        "excess_roi_vs_matched_baseline": -24.3842965130456
+      },
+      "holdout": {
+        "n": 0,
+        "active_dates": 0,
+        "matched_baseline_roi": null,
+        "excess_roi_vs_matched_baseline": null
+      }
+    },
+    {
+      "key": "Chicago|gfs|BUY_NO",
+      "city": "Chicago",
+      "model_version": "gfs",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 9,
+        "active_dates": 4,
+        "cities": 1,
+        "cost_usd": 5.8100000000000005,
+        "pnl_usd": 11.899999999999999,
+        "roi": 2.048192771084337,
+        "win_rate": 0.7777777777777778,
+        "model_brier": 0.1214654022222222,
+        "market_brier": 0.10282777777777777,
+        "brier_delta_market_minus_model": -0.018637624444444445,
+        "live_fill_rate": 0.3333333333333333,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -1.4621131270010677,
+          4.22475106685633
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.19971589875,
+          0.08334750599999999
+        ],
+        "matched_baseline_roi": -0.058643140599577884,
+        "excess_roi_vs_matched_baseline": 2.106835911683915
+      },
+      "holdout": {
+        "n": 0,
+        "active_dates": 0,
+        "matched_baseline_roi": null,
+        "excess_roi_vs_matched_baseline": null
+      }
+    },
+    {
+      "key": "Chicago|gfs|BUY_YES",
+      "city": "Chicago",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 5,
+        "active_dates": 3,
+        "cities": 1,
+        "cost_usd": 1.2005,
+        "pnl_usd": -2.0050000000000003,
+        "roi": -1.6701374427321953,
+        "win_rate": 0.2,
+        "model_brier": 0.264747996,
+        "market_brier": 0.31776905,
+        "brier_delta_market_minus_model": 0.05302105399999997,
+        "live_fill_rate": 0.0,
+        "paper_order_rate": 0.8,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          31.580041580041573
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.21138801000000018,
+          0.21160284
+        ],
+        "matched_baseline_roi": 2.4734938256205563,
+        "excess_roi_vs_matched_baseline": -4.143631268352752
+      },
+      "holdout": {
+        "n": 0,
+        "active_dates": 0,
+        "matched_baseline_roi": null,
+        "excess_roi_vs_matched_baseline": null
+      }
+    },
+    {
+      "key": "Karachi|gfs|BUY_YES",
+      "city": "Karachi",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 1,
+        "active_dates": 1,
+        "cities": 1,
+        "cost_usd": 0.175,
+        "pnl_usd": -1.75,
+        "roi": -10.0,
+        "win_rate": 0.0,
+        "model_brier": 0.40627875999999996,
+        "market_brier": 0.030624999999999996,
+        "brier_delta_market_minus_model": -0.37565375999999995,
+        "live_fill_rate": 1.0,
+        "paper_order_rate": 1.0,
+        "roi_ci95_cluster_by_event_date": [
+          -10.0,
+          -10.0
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.37565375999999995,
+          -0.37565375999999995
+        ],
+        "matched_baseline_roi": -0.2846594773146808,
+        "excess_roi_vs_matched_baseline": -9.715340522685318
+      },
+      "holdout": {
+        "n": 0,
+        "active_dates": 0,
+        "matched_baseline_roi": null,
+        "excess_roi_vs_matched_baseline": null
+      }
+    },
+    {
+      "key": "Paris|gfs|BUY_NO",
+      "city": "Paris",
+      "model_version": "gfs",
+      "side": "BUY_NO",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 27,
+        "active_dates": 15,
+        "cities": 1,
+        "cost_usd": 16.46,
+        "pnl_usd": -14.600000000000001,
+        "roi": -0.8869987849331714,
+        "win_rate": 0.5555555555555556,
+        "model_brier": 0.27704706148148145,
+        "market_brier": 0.22435555555555556,
+        "brier_delta_market_minus_model": -0.052691505925925905,
+        "live_fill_rate": 0.5555555555555556,
+        "paper_order_rate": 0.8888888888888888,
+        "roi_ci95_cluster_by_event_date": [
+          -2.8715487212561395,
+          1.050796248119309
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.11779025801181815,
+          0.014733098307539693
+        ],
+        "matched_baseline_roi": 0.45592857411187215,
+        "excess_roi_vs_matched_baseline": -1.3429273590450435
+      },
+      "holdout": {
+        "n": 0,
+        "active_dates": 0,
+        "matched_baseline_roi": null,
+        "excess_roi_vs_matched_baseline": null
+      }
+    },
+    {
+      "key": "Paris|gfs|BUY_YES",
+      "city": "Paris",
+      "model_version": "gfs",
+      "side": "BUY_YES",
+      "selected_on_train": false,
+      "low_holdout_sample": true,
+      "train": {
+        "n": 6,
+        "active_dates": 6,
+        "cities": 1,
+        "cost_usd": 0.6855,
+        "pnl_usd": -6.855,
+        "roi": -10.0,
+        "win_rate": 0.0,
+        "model_brier": 0.08304471166666667,
+        "market_brier": 0.017998791666666666,
+        "brier_delta_market_minus_model": -0.06504592,
+        "live_fill_rate": 0.0,
+        "paper_order_rate": 0.6666666666666666,
+        "roi_ci95_cluster_by_event_date": [
+          -10.000000000000002,
+          -9.999999999999998
+        ],
+        "brier_delta_ci95_cluster_by_event_date": [
+          -0.09460257333333333,
+          -0.03718675333333333
+        ],
+        "matched_baseline_roi": 4.8061164577642765,
+        "excess_roi_vs_matched_baseline": -14.806116457764276
+      },
+      "holdout": {
+        "n": 0,
+        "active_dates": 0,
+        "matched_baseline_roi": null,
+        "excess_roi_vs_matched_baseline": null
+      }
+    }
+  ],
+  "aggregate_selected": {
+    "selected_keys": [
+      "Madrid|ecmwf|BUY_NO",
+      "NYC|gfs|BUY_YES",
+      "Tokyo|gfs|BUY_YES",
+      "Warsaw|ecmwf|BUY_NO",
+      "Warsaw|ecmwf|BUY_YES"
+    ],
+    "selected_key_count": 5,
+    "selection_side_buckets": [
+      "BUY_NO|0.10-0.20",
+      "BUY_NO|0.20-0.30",
+      "BUY_NO|0.30-0.40",
+      "BUY_NO|0.40-0.50",
+      "BUY_NO|0.50-0.60",
+      "BUY_NO|0.60-0.70",
+      "BUY_YES|0.00-0.10",
+      "BUY_YES|0.10-0.20",
+      "BUY_YES|0.20-0.30",
+      "BUY_YES|0.30-0.40",
+      "BUY_YES|0.40-0.50"
+    ],
+    "train_selected": {
+      "n": 76,
+      "active_dates": 16,
+      "cities": 4,
+      "cost_usd": 30.145,
+      "pnl_usd": 68.55000000000001,
+      "roi": 2.274008956709239,
+      "win_rate": 0.4868421052631579,
+      "model_brier": 0.20300259236842103,
+      "market_brier": 0.22038917105263162,
+      "brier_delta_market_minus_model": 0.017386578684210542,
+      "live_fill_rate": 0.25,
+      "paper_order_rate": 0.881578947368421
+    },
+    "train_matched_baseline": {
+      "n": 483,
+      "active_dates": 16,
+      "cities": 26,
+      "cost_usd": 235.836,
+      "pnl_usd": 111.64,
+      "roi": 0.47337980630607707,
+      "win_rate": 0.5113871635610766,
+      "model_brier": 0.22792775850931676,
+      "market_brier": 0.19626756314699795,
+      "brier_delta_market_minus_model": -0.03166019536231884,
+      "live_fill_rate": 0.36438923395445133,
+      "paper_order_rate": 0.8799171842650103
+    },
+    "holdout_selected": {
+      "n": 46,
+      "active_dates": 8,
+      "cities": 4,
+      "cost_usd": 18.9385,
+      "pnl_usd": 10.614999999999997,
+      "roi": 0.5604984555271006,
+      "win_rate": 0.43478260869565216,
+      "model_brier": 0.1678993156521739,
+      "market_brier": 0.15799436413043477,
+      "brier_delta_market_minus_model": -0.009904951521739126,
+      "live_fill_rate": 0.6086956521739131,
+      "paper_order_rate": 0.8260869565217391,
+      "roi_ci95_cluster_by_event_date": [
+        -1.3591354773569695,
+        3.345001823678812
+      ],
+      "brier_delta_ci95_cluster_by_event_date": [
+        -0.03987939193181817,
+        0.016523647202188935
+      ]
+    },
+    "holdout_matched_baseline": {
+      "n": 324,
+      "active_dates": 8,
+      "cities": 22,
+      "cost_usd": 169.3685,
+      "pnl_usd": -43.685,
+      "roi": -0.25792871755964064,
+      "win_rate": 0.5092592592592593,
+      "model_brier": 0.2383609553703704,
+      "market_brier": 0.19765924922839506,
+      "brier_delta_market_minus_model": -0.040701706141975304,
+      "live_fill_rate": 0.7006172839506173,
+      "paper_order_rate": 0.8148148148148148
+    },
+    "holdout_excess_roi_vs_matched_baseline": {
+      "point": 0.8184271730867413,
+      "ci95_cluster_by_event_date": [
+        -1.1346711903747866,
+        2.9365795910271584
+      ]
+    },
+    "holdout_brier_delta_ci95_cluster_by_event_date": [
+      -0.03987939193181817,
+      0.016523647202188935
+    ],
+    "gates": {
+      "significance": "FAIL",
+      "baseline": "FAIL",
+      "forward": "FAIL",
+      "verdict": "inconclusive"
+    }
+  }
+}

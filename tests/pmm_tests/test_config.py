@@ -1,0 +1,112 @@
+"""Unit tests for PMM Config module."""
+
+import os
+import unittest
+from unittest.mock import patch
+from src.strategies.pmm.config import PMMConfig, MarketConfig
+from src.strategies.pmm.engine.tick_engine import tick_loop
+
+
+class TestMarketConfig(unittest.TestCase):
+    """Test cases for MarketConfig class."""
+    
+    def test_market_config_creation(self):
+        """Test MarketConfig creation with token IDs."""
+        token_ids = ["token1", "token2"]
+        market_config = MarketConfig(token_ids=token_ids, symbol="TEST")
+        
+        self.assertEqual(market_config.token_ids, token_ids)
+        self.assertEqual(market_config.symbol, "TEST")
+
+
+class TestPMMConfig(unittest.TestCase):
+    """Test cases for PMMConfig class."""
+    
+    def test_default_config_creation(self):
+        """Test PMMConfig creation with default values."""
+        config = PMMConfig()
+        
+        self.assertEqual(config.api_base_url, "http://localhost:8000")
+        self.assertEqual(config.tick_interval_sec, 2.0)
+        self.assertEqual(config.execution_mode, "paper")
+        self.assertEqual(config.strategy_key, "single_level_v1")
+        self.assertEqual(config.base_spread, 0.04)
+        self.assertEqual(config.max_position, 100.0)
+        
+    def test_effective_quote_levels_single_level(self):
+        """Test effective_quote_levels for single level strategy."""
+        config = PMMConfig(strategy_key="single_level_v1", quote_levels=3)
+        
+        self.assertEqual(config.effective_quote_levels(), 1)
+        
+    def test_effective_quote_levels_multi_level(self):
+        """Test effective_quote_levels for multi level strategy."""
+        config = PMMConfig(strategy_key="multi_level_v1", quote_levels=3)
+        
+        self.assertEqual(config.effective_quote_levels(), 3)
+        
+    def test_effective_quote_levels_multi_level_disabled(self):
+        """Test effective_quote_levels for multi level disabled."""
+        config = PMMConfig(strategy_key="single_level_v1", quote_levels=3, multi_level_quote_enabled=True)
+        
+        self.assertEqual(config.effective_quote_levels(), 3)
+        
+    @patch.dict(os.environ, {
+        'PM_API_BASE_URL': 'http://test.url',
+        'PMM_BASE_SPREAD': '0.05',
+        'PMM_MAX_POSITION': '200',
+        'PMM_TOKEN_IDS': 'token1,token2',
+        'PMM_SYMBOL': 'TEST',
+        'PMM_TELEGRAM_ENABLED': '1',
+        'PMM_TELEGRAM_BOT_TOKEN': 'bot-token',
+        'PMM_TELEGRAM_CHAT_ID': 'chat-id',
+        'PMM_TELEGRAM_REPORT_INTERVAL_SEC': '900',
+        'PMM_LIVE_MAKER_ONLY': '1',
+    })
+    def test_config_from_env(self):
+        """Test PMMConfig creation from environment variables."""
+        config = PMMConfig.from_env()
+        
+        self.assertEqual(config.api_base_url, 'http://test.url')
+        self.assertEqual(config.base_spread, 0.05)
+        self.assertEqual(config.max_position, 200.0)
+        self.assertEqual(config.market.token_ids, ['token1', 'token2'])
+        self.assertEqual(config.market.symbol, 'TEST')
+        self.assertTrue(config.telegram_enabled)
+        self.assertEqual(config.telegram_bot_token, 'bot-token')
+        self.assertEqual(config.telegram_chat_id, 'chat-id')
+        self.assertEqual(config.telegram_report_interval_sec, 900)
+        self.assertTrue(config.live_maker_only)
+
+    @patch.dict(os.environ, {"PMM_EXECUTION_MODE": "live"})
+    def test_live_execution_requires_exact_explicit_environment_variable(self):
+        config = PMMConfig.from_env()
+
+        self.assertEqual(config.execution_mode, "live")
+
+    @patch.dict(
+        os.environ,
+        {"PMM_EXEC_MODE": "live"},
+        clear=True,
+    )
+    def test_legacy_misspelled_execution_variable_cannot_enable_live(self):
+        config = PMMConfig.from_env()
+
+        self.assertEqual(config.execution_mode, "paper")
+
+    @patch.dict(os.environ, {"PMM_EXECUTION_MODE": " LIVE "}, clear=True)
+    def test_execution_mode_rejects_non_exact_live_opt_in(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported PMM_EXECUTION_MODE"):
+            PMMConfig.from_env()
+
+    def test_tick_loop_rejects_unknown_mode_before_initializing_clients(self):
+        config = PMMConfig(execution_mode="typo")
+
+        with self.assertRaisesRegex(ValueError, "Unsupported PMM_EXECUTION_MODE"):
+            import asyncio
+
+            asyncio.run(tick_loop(config))
+
+
+if __name__ == '__main__':
+    unittest.main()

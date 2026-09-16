@@ -1,0 +1,14 @@
+{
+  "schema_version": "late_window_residual_heating_done_summary_v2",
+  "report": "docs/analysis/2026-07/2026-07-07-late-window-residual-heating-done-v1.md",
+  "snapshot_files": 3467,
+  "raw_rows": 4341,
+  "book_rows": 4012,
+  "strict_rows": 692,
+  "first_cross_rows": 1005,
+  "settlement_rows": 29125,
+  "settled_complete_max_date": "2026-07-06",
+  "incomplete_dates": [],
+  "verdict": "Per-poll replay separates physical residual state from price. The available settled forward window remains too small for live promotion; conclusion=inconclusive_research_shadow_only and no live change.",
+  "contract_gates": "significance=FAIL/NA; baseline=FAIL/NA; forward=FAIL/NA because 2026-06-29..2026-07-06 support is small and unstable; conclusion=inconclusive."
+}

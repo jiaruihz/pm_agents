@@ -1,0 +1,20 @@
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha/test_gate_r_manual_handoff_wp4.py
+# 10 passed
+
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha/test_gate_r_routing_wp1.py tests/polymarket_alpha/test_gate_r_glm53_wp2.py tests/polymarket_alpha/test_gate_r_blind_plan_wp3.py tests/polymarket_alpha/test_gate_r_manual_handoff_wp4.py tests/polymarket_alpha/test_research_draft_p1.py tests/polymarket_alpha/test_research_importer_p0_08b.py tests/polymarket_alpha/test_research_handoff_pipeline.py tests/polymarket_alpha/test_contracts_p0_01.py tests/polymarket_alpha/test_contracts_p0_01r2.py --junitxml=docs/design/polymarket_alpha_p0/GATE_R_WP4-evidence-seal/test-results/focused.xml
+# 116 passed
+
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha --junitxml=docs/design/polymarket_alpha_p0/GATE_R_WP4-evidence-seal/test-results/full-alpha.xml
+# 711 passed, 3 known managed-environment failures
+
+cd docs/design/polymarket_alpha_p0 && shasum -a 256 -c GATE_R_DESIGN_MANIFEST.sha256
+# 10/10 OK
+
+.venv/bin/python -m py_compile src/polymarket_alpha/contracts/models.py src/polymarket_alpha/research/manual_handoff.py tests/polymarket_alpha/test_gate_r_manual_handoff_wp4.py
+# exit 0
+
+git diff --check -- <Gate R WP4 owned files>
+# exit 0
+
+rg -n "^(from|import) (requests|httpx|aiohttp|urllib|socket|websocket|subprocess|importlib|py_clob_client)|private.?key|signing|create_order|post_order" src/polymarket_alpha/research/manual_handoff.py src/polymarket_alpha/contracts/models.py
+# no matches; rg exit 1

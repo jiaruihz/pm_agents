@@ -1,0 +1,43 @@
+{
+  "schema_version": "tokyo_continuous_full_probability_candidate_v2",
+  "user_facing_version": "Tokyo V3",
+  "human_summary": "连续全概率模型：每个PIT checkpoint联合完整market ladder与天气路径，输出stay/+1/+2/+3+并同时评估YES和NO",
+  "model_id": "weather.city_intraday_probability.tokyo_continuous_full_probability",
+  "target": "end_of_day_remaining_rise_distribution",
+  "outcomes": ["stay", "plus_1", "plus_2", "plus_3plus"],
+  "checkpoint_grain": "every causal JMA 10-minute checkpoint",
+  "weather_artifact": {
+    "path": "docs/analysis/2026-07/generated/tokyo_continuous_ladder_forward_v3/models/coherent_multigrain_hgb_v3.joblib",
+    "sha256": "de77e4fb065a1a9812caf70cabed1b2e2184c6a5d546b27b59160a34add00e64",
+    "training_cutoff": "2026-07-15"
+  },
+  "market_anchor": {
+    "formula": "normalized geometric pool over the complete conditional market and weather distributions",
+    "market_temperature": 0.5,
+    "weather_weight": 0.5,
+    "selection_end": "2026-07-23",
+    "clean_forward_start": "2026-08-13"
+  },
+  "latest_temporal_validation": {
+    "window": ["2026-07-24", "2026-07-29"],
+    "rows": 126,
+    "target_dates": 6,
+    "v3_multiclass_brier": 0.07327705153619025,
+    "market_multiclass_brier": 0.09529715113246784,
+    "brier_delta_vs_market": -0.022020099596277588,
+    "brier_delta_ci": [-0.04207612127212653, -0.007420444771465792],
+    "trade_signals": 13,
+    "trade_wins": 11,
+    "trade_fee_adjusted_pnl_usd": 10.56855,
+    "trade_fee_adjusted_roi": 0.23786191987882463,
+    "role": "reused_temporal_validation_not_clean_forward"
+  },
+  "research_artifact": {
+    "path": "/Volumes/jrs-archive/pm_agents/research/artifact_store/active/tokyo_continuous_full_probability/fusion_20260813_v1",
+    "candidate_spec_sha256": "d9c6be38425347f0b91c572e132ca324760935c3c86e0c7ee8ddcfd1abb42196",
+    "summary_sha256": "c5e227d01da7e145efea0198764160375c7a6b215286088d8b1e5c4cf8861972"
+  },
+  "research_status": "shadow_candidate_clean_forward_required",
+  "deployment_status": "research_only_not_in_runtime",
+  "live_notional": 0.0
+}

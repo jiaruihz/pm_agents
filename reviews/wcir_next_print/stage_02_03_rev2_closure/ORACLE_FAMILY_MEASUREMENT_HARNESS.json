@@ -1,0 +1,27 @@
+{
+  "event_count": 841,
+  "ex_post_envelope_used_for_action": false,
+  "first_valid_fresh_after_source_entry_materialized": false,
+  "first_valid_missing_reason": "rev2 checkpoint matrix does not contain every state transition after source; contract frozen for future collector evidence",
+  "frozen_latency_entry_materialized": true,
+  "horizons_seconds": [
+    5,
+    15,
+    30,
+    60,
+    120
+  ],
+  "policy_count": 6,
+  "policy_or_city_horizon_selection_authorized": false,
+  "row_count": 50460,
+  "row_file": {
+    "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_03_rev2_closure/evidence/ORACLE_FAMILY_MEASUREMENT_ROWS.jsonl.gz",
+    "sha256": "f43e0853a9f498beadc2c07e39ee2cba8f57ca3436492316b01b83b9e0c3eecd",
+    "size_bytes": 339104
+  },
+  "sizes": [
+    1,
+    5
+  ],
+  "stage2_data_gate_closed": false
+}

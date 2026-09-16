@@ -1,0 +1,91 @@
+{
+  "generated_at_utc": "2026-06-24T10:15:17+00:00",
+  "target_metric": "current_bracket_no_forward_replay_v1",
+  "source_stats": {
+    "historical": {
+      "raw_rows": 4306,
+      "mechanism_rows": 4306,
+      "trade_base_rows": 499,
+      "date_min": "2026-05-20",
+      "date_max": "2026-06-20",
+      "forecast_stats": {
+        "rows": 1072,
+        "route_status": {
+          "calibration_best_available": 839,
+          "fallback_best_available_gfs_ecmwf": 205,
+          "fallback_gfs_true_prevday": 27,
+          "fallback_gfs_historical": 1
+        },
+        "route_model": {
+          "gfs": 573,
+          "ecmwf": 499
+        },
+        "date_min": "2026-05-20",
+        "date_max": "2026-06-20"
+      }
+    },
+    "forward": {
+      "mechanism_rows": 580,
+      "source_stats": {
+        "source_stats": {
+          "rows": 784,
+          "forecast_stats": {
+            "rows": 93,
+            "route_status": {
+              "fallback_gfs_true_prevday": 92,
+              "missing_all_forecasts": 1
+            },
+            "route_model": {
+              "gfs": 92,
+              "": 1
+            },
+            "date_min": "2026-06-21",
+            "date_max": "2026-06-23"
+          }
+        },
+        "mechanism_rows": 580
+      }
+    },
+    "rows": 4886,
+    "date_min": "2026-05-20",
+    "date_max": "2026-06-23",
+    "settled_rows": 4740,
+    "open_rows": 146
+  },
+  "frozen_protocol": {
+    "freeze_date": "2026-06-24",
+    "training_cutoff_date": "2026-06-22",
+    "base_notional_usd": 5.0,
+    "policies": {
+      "benchmark_full_size_base_p40": "full_multiplier",
+      "champion_trade_cap_soft_size": "trade_cap_multiplier",
+      "challenger_overconf_cap_soft_size": "overconf_combined_multiplier",
+      "diagnostic_principled_cap_soft_size": "principled_combined_multiplier"
+    },
+    "policy_roles": {
+      "benchmark_full_size_base_p40": "benchmark",
+      "champion_trade_cap_soft_size": "champion",
+      "challenger_overconf_cap_soft_size": "challenger",
+      "diagnostic_principled_cap_soft_size": "diagnostic"
+    }
+  },
+  "ledger": {
+    "rows": 9,
+    "settled_rows": 0,
+    "open_rows": 9,
+    "date_min": "2026-06-23",
+    "date_max": "2026-06-23"
+  },
+  "policy_totals": [],
+  "outputs": {
+    "protocol_json": "docs/analysis/2026-06/generated/current_bracket_no_forward_replay_v1/protocol_summary.json",
+    "candidate_ledger_csv": "docs/analysis/2026-06/generated/current_bracket_no_forward_replay_v1/frozen_forward_candidate_ledger.csv",
+    "daily_policy_summary_csv": "docs/analysis/2026-06/generated/current_bracket_no_forward_replay_v1/frozen_forward_daily_policy_summary.csv",
+    "markdown": "docs/analysis/2026-06/2026-06-24-current-bracket-no-forward-recording-protocol-v1.md"
+  },
+  "verdict": {
+    "status": "frozen_forward_ledger_started",
+    "live_ready": false,
+    "reason": "Scientific forward record is now frozen and recording via PIT replay; promotion requires new settled forward dates under unchanged policy."
+  }
+}

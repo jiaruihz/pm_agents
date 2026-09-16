@@ -1,0 +1,22 @@
+{
+  "files": [
+    {
+      "bytes": 7618,
+      "path": "/Users/deepsleep/projects/pm_agents/us_fast_weather_lab/sql/schema.sql",
+      "sha256": "ee4ff1a66aec8447c4cc220f11b60925fe9a7fb86befa2522f8116c474b3f491"
+    },
+    {
+      "bytes": 2183168,
+      "path": "runtime/us_fast_weather_lab_wis2_5m_20260828/evidence.sqlite3",
+      "sha256": "be450c4a64b632e42c21f641ad8a886b80c0d351b15ffb5bdd4cd10f762e8a82"
+    },
+    {
+      "bytes": 204,
+      "path": "us_fast_weather_lab/reports/STAGE0_EXECUTION_SUMMARY.md",
+      "sha256": "e5f717eb2ea0736dc0cc7acdfcb60e5dd6188d93e5a0e33ffe41c3eb13602657"
+    }
+  ],
+  "generated_at_ns": 1787917509645073000,
+  "stage": 0,
+  "status": "OBSERVED"
+}

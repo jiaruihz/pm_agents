@@ -1,0 +1,17 @@
+{
+  "files": [
+    {
+      "bytes": 1222,
+      "path": "us_fast_weather_lab/reports/source_health_24h.md",
+      "sha256": "214f11c2ebcd2dd44e56c5564a00ffdf72dea8b9b2feeafe5f1a82af65965668"
+    },
+    {
+      "bytes": 204,
+      "path": "us_fast_weather_lab/reports/STAGE2_EXECUTION_SUMMARY.md",
+      "sha256": "1b6a77bd7deef4aea53d209c5943887771991f55386ed90c63a6f7e80dcc5c3e"
+    }
+  ],
+  "generated_at_ns": 1787917509646086000,
+  "stage": 2,
+  "status": "OBSERVED"
+}

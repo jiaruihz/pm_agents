@@ -1,0 +1,608 @@
+from __future__ import annotations
+
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from types import SimpleNamespace
+
+from scripts.ops import production_reliability_supervisor as supervisor
+
+
+def result(returncode: int = 0, stdout: str = "", stderr: str = "") -> supervisor.CommandResult:
+    return supervisor.CommandResult(returncode, stdout, stderr, 0.01)
+
+
+def test_incident_debounce_and_resolution_preserve_impact_window() -> None:
+    start = datetime(2026, 8, 14, 1, 0, tzinfo=timezone.utc)
+    finding = supervisor.issue(
+        "weather.runtime.books",
+        "critical",
+        "stale",
+        component="weather-runtime",
+    )
+    state1, transitions1 = supervisor.update_incident_state({}, [finding], start)
+    assert transitions1 == []
+    assert state1["issues"][finding["key"]]["active"] is False
+
+    state2, transitions2 = supervisor.update_incident_state(
+        state1, [finding], start + timedelta(minutes=1)
+    )
+    assert [row["event"] for row in transitions2] == ["opened"]
+    assert state2["issues"][finding["key"]]["active"] is True
+
+    _, transitions3 = supervisor.update_incident_state(
+        state2, [], start + timedelta(minutes=2)
+    )
+    assert [row["event"] for row in transitions3] == ["resolved"]
+    assert transitions3[0]["impact_started_utc"] == supervisor.iso_utc(start)
+    assert transitions3[0]["impact_ended_utc"] == supervisor.iso_utc(
+        start + timedelta(minutes=2)
+    )
+
+
+def test_incident_resolution_preserves_open_time_runtime_context() -> None:
+    start = datetime(2026, 9, 3, 17, 32, tzinfo=timezone.utc)
+    finding = supervisor.issue(
+        "weather.runtime.live",
+        "critical",
+        "tmux_session_missing",
+        component="weather-runtime",
+    )
+    finding["runtime_context"] = {
+        "instance_id": "live",
+        "role": "strategy",
+        "execution_mode": "live",
+        "expected_live": True,
+        "desired_state": "running",
+    }
+    state1, _ = supervisor.update_incident_state({}, [finding], start)
+    state2, opened = supervisor.update_incident_state(
+        state1, [finding], start + timedelta(minutes=1)
+    )
+    _, resolved = supervisor.update_incident_state(
+        state2, [], start + timedelta(minutes=2)
+    )
+
+    assert opened[0]["runtime_context"]["desired_state"] == "running"
+    assert resolved[0]["runtime_context"]["expected_live"] is True
+    assert "可能造成漏单或执行中断" in supervisor.render_notification(resolved)
+
+
+def test_weather_health_classifies_live_and_safe_shadow() -> None:
+    payload = {
+        "status": "critical",
+        "manifest_status": "healthy",
+        "critical_manifest_findings": [],
+        "jrs_context_health": {"status": "healthy", "returncode": 0},
+        "data_feed_semantic_health": {"status": "healthy"},
+        "runtimes": [
+            {
+                "instance_id": "live-one",
+                "status": "critical",
+                "expected_live": True,
+                "role": "strategy",
+                "recovery_policy": "guarded_live",
+                "issues": ["health_artifact_stale"],
+            },
+            {
+                "instance_id": "shadow-one",
+                "status": "critical",
+                "expected_live": False,
+                "role": "shadow",
+                "recovery_policy": "safe",
+                "issues": ["health_artifact_stale"],
+            },
+        ],
+    }
+
+    def runner(command: list[str], cwd: Path | None, timeout: float) -> supervisor.CommandResult:
+        return result(stdout=json.dumps(payload))
+
+    health = supervisor.collect_weather(runner)
+    by_key = {row["key"]: row for row in health["findings"]}
+    assert by_key["weather.runtime.live-one"]["severity"] == "critical"
+    assert "repair" not in by_key["weather.runtime.live-one"]
+    assert by_key["weather.runtime.shadow-one"]["severity"] == "warning"
+    assert by_key["weather.runtime.shadow-one"]["repair"] == {
+        "kind": "weather_restart",
+        "target": "shadow-one",
+    }
+
+
+def test_weather_health_does_not_page_observed_jrs_failure_before_threshold() -> None:
+    payload = {
+        "status": "healthy",
+        "manifest_status": "healthy",
+        "critical_manifest_findings": [],
+        "jrs_context_health": {
+            "status": "observing",
+            "returncode": 1,
+            "failure_streak": 1,
+        },
+        "data_feed_semantic_health": {"status": "healthy"},
+        "runtimes": [
+            {
+                "instance_id": "feed",
+                "status": "healthy",
+                "expected_live": False,
+                "role": "data_feed",
+                "recovery_policy": "safe",
+                "issues": [],
+            }
+        ],
+    }
+
+    def runner(command: list[str], cwd: Path | None, timeout: float) -> supervisor.CommandResult:
+        return result(stdout=json.dumps(payload))
+
+    health = supervisor.collect_weather(runner)
+
+    assert health["status"] == "healthy"
+    assert health["findings"] == []
+
+
+def test_crypto_registry_and_data_freshness(tmp_path: Path) -> None:
+    crypto_root = tmp_path / "crypto"
+    runtime_root = tmp_path / "runtime"
+    raw_root = tmp_path / "raw"
+    (crypto_root / "configs").mkdir(parents=True)
+    runtime_root.mkdir()
+    collector_root = raw_root / "2026-08-14" / "session-btc"
+    collector_root.mkdir(parents=True)
+    eth_root = raw_root / "2026-08-14" / "session-eth"
+    eth_root.mkdir(parents=True)
+    registry = {
+        "profile_id": "test",
+        "services": [
+            {
+                "service_id": "one",
+                "lifecycle": "active",
+                "labels": ["com.cryptoquant.pm5mone"],
+            }
+        ],
+    }
+    (crypto_root / "configs/pm5m-runtime.json").write_text(json.dumps(registry))
+    (runtime_root / "settlement-service.status.json").write_text("{}")
+    (runtime_root / "future-context.status.json").write_text("{}")
+    (collector_root / "collector.status.json").write_text(
+        json.dumps({"symbol": "btc", "connected": True, "transport_warm": True})
+    )
+    (eth_root / "collector.status.json").write_text(
+        json.dumps({"symbol": "eth", "connected": True, "transport_warm": True})
+    )
+    now_epoch = max(path.stat().st_mtime for path in runtime_root.iterdir())
+
+    def runner(command: list[str], cwd: Path | None, timeout: float) -> supervisor.CommandResult:
+        return result(stdout="123\t0\tcom.cryptoquant.pm5mone\n")
+
+    health = supervisor.collect_crypto(
+        runner,
+        crypto_root=crypto_root,
+        runtime_root=runtime_root,
+        raw_root=raw_root,
+        now_epoch=now_epoch,
+    )
+    assert health["status"] == "healthy"
+    assert health["expected_labels"] == 1
+    assert health["running_labels"] == 1
+
+
+def test_crypto_collector_idle_between_capture_windows_is_healthy(tmp_path: Path) -> None:
+    crypto_root = tmp_path / "crypto"
+    runtime_root = tmp_path / "runtime"
+    raw_root = tmp_path / "raw"
+    (crypto_root / "configs").mkdir(parents=True)
+    runtime_root.mkdir()
+    # Keep one active service so the registry is considered valid.
+    (crypto_root / "configs/pm5m-runtime.json").write_text(
+        json.dumps(
+            {
+                "profile_id": "test",
+                "services": [
+                    {
+                        "service_id": "one",
+                        "lifecycle": "active",
+                        "labels": ["com.cryptoquant.pm5mone"],
+                    }
+                ],
+            }
+        )
+    )
+    (runtime_root / "settlement-service.status.json").write_text("{}")
+    (runtime_root / "future-context.status.json").write_text("{}")
+    for symbol in ("btc", "eth"):
+        collector = raw_root / "2026-08-14" / f"session-{symbol}"
+        collector.mkdir(parents=True)
+        (collector / "collector.status.json").write_text(
+            json.dumps(
+                {
+                    "symbol": symbol,
+                    "connected": False,
+                    "transport_warm": False,
+                    "idle_until_capture_window": True,
+                    "next_capture_window_seconds": 60,
+                }
+            )
+        )
+    now_epoch = max(path.stat().st_mtime for path in runtime_root.iterdir())
+
+    def runner(
+        command: list[str], cwd: Path | None, timeout: float
+    ) -> supervisor.CommandResult:
+        return result(stdout="123\t0\tcom.cryptoquant.pm5mone\n")
+
+    health = supervisor.collect_crypto(
+        runner,
+        crypto_root=crypto_root,
+        runtime_root=runtime_root,
+        raw_root=raw_root,
+        now_epoch=now_epoch,
+    )
+    assert health["status"] == "healthy"
+    assert all(
+        row["idle_until_capture_window"] is True for row in health["artifacts"][-2:]
+    )
+
+
+def test_collect_weather_ignores_only_its_bounded_worker_session() -> None:
+    payload = {
+        "status": "warning",
+        "manifest_status": "warning",
+        "critical_manifest_findings": [],
+        "critical_runtimes": [],
+        "extra_sessions": ["weather_reliability_worker_123_456"],
+        "jrs_context_health": {"status": "healthy"},
+        "data_feed_semantic_health": {"status": "healthy"},
+        "runtimes": [],
+    }
+
+    def runner(
+        command: list[str], cwd: Path | None, timeout: float
+    ) -> supervisor.CommandResult:
+        return result(stdout=json.dumps(payload))
+
+    health = supervisor.collect_weather(runner)
+    assert health["status"] == "healthy"
+    assert health["health"]["extra_sessions"] == []
+
+
+def test_outer_supervisor_collects_snapshot_through_jrs_worker(tmp_path: Path) -> None:
+    payload = {
+        "schema_version": "production_reliability_snapshot_v1",
+        "status": "healthy",
+        "findings": [],
+        "sections": {},
+    }
+    seen: list[str] = []
+
+    def runner(
+        command: list[str], cwd: Path | None, timeout: float
+    ) -> supervisor.CommandResult:
+        seen.extend(command)
+        return result(stdout=json.dumps(payload))
+
+    snapshot = supervisor.collect_snapshot_via_jrs(
+        crypto_root=tmp_path / "crypto",
+        crypto_runtime_root=tmp_path / "runtime",
+        crypto_raw_root=tmp_path / "raw",
+        maintain_weather_route=True,
+        runner=runner,
+    )
+    assert "--jrs-worker" in seen
+    assert "--maintain-weather-route" in seen
+    assert snapshot["status"] == "healthy"
+    assert snapshot["jrs_worker"]["returncode"] == 0
+
+
+def test_telegram_delivery_routes_are_deduplicated(monkeypatch) -> None:
+    class Route:
+        def __init__(self, route_key: str, proxy_url: str) -> None:
+            self.route_key = route_key
+            self.proxy_url = proxy_url
+
+    class Spec:
+        market_proxy_routes = (
+            Route("allblue", "http://127.0.0.1:7897"),
+            Route("stable", "http://127.0.0.1:7896"),
+        )
+        market_proxy_stable_upstream_url = "http://127.0.0.1:7897"
+
+    monkeypatch.setattr(supervisor, "load_production_spec", lambda: Spec())
+    assert supervisor.telegram_delivery_routes() == [
+        ("allblue", "http://127.0.0.1:7897"),
+        ("direct", None),
+    ]
+
+
+def test_telegram_notification_falls_back_to_next_route(monkeypatch) -> None:
+    attempts: list[str | None] = []
+
+    def send(message: str, *, proxy_url: str | None = None) -> dict:
+        attempts.append(proxy_url)
+        if proxy_url == "http://127.0.0.1:7897":
+            raise TimeoutError("first route unavailable")
+        return {"ok": True}
+
+    monkeypatch.setattr(
+        supervisor,
+        "telegram_delivery_routes",
+        lambda: [
+            ("allblue", "http://127.0.0.1:7897"),
+            ("stable_upstream", "http://127.0.0.1:7890"),
+        ],
+    )
+    monkeypatch.setattr(
+        "src.platform.notification.telegram.send_telegram_message_sync", send
+    )
+    result = supervisor.notify_telegram(
+        [{"event": "opened", "severity": "critical", "key": "test"}]
+    )
+    assert attempts == ["http://127.0.0.1:7897", "http://127.0.0.1:7890"]
+    assert result == {"status": "sent", "response_ok": True, "route": "stable_upstream"}
+
+
+def test_notification_is_human_readable_and_collapses_manifest_duplicate() -> None:
+    message = supervisor.render_notification(
+        [
+            {
+                "event": "opened",
+                "severity": "warning",
+                "key": "weather.manifest.degraded",
+                "detail": "manifest_status=warning findings=[]",
+                "impact_started_utc": "2026-08-14T07:04:38.931949Z",
+            },
+            {
+                "event": "opened",
+                "severity": "warning",
+                "key": "weather.runtime.polymarket_weather_proposal_reward_shadow_v1",
+                "detail": "tmux_session_missing,health_artifact_stale",
+                "impact_started_utc": "2026-08-14T07:04:38.931949Z",
+            },
+            {
+                "event": "repair_attempt",
+                "key": "weather.runtime.polymarket_weather_proposal_reward_shadow_v1",
+                "returncode": 2,
+                "target_status": "critical",
+                "target_issues": ["tmux_session_missing", "health_artifact_stale"],
+            },
+        ]
+    )
+    assert message.startswith("【生产告警｜WARNING｜自动恢复失败】")
+    assert "问题：天气 proposal reward 影子策略异常" in message
+    assert "进程会话不存在（进程已停止）" in message
+    assert "仅 shadow 研究实例，不会真实下单" in message
+    assert "2026-08-14 15:04:38（北京时间）" in message
+    assert "自动处理：失败（rc=2）" in message
+    assert "manifest_status" not in message
+
+
+def test_notification_marks_successful_target_recovery() -> None:
+    message = supervisor.render_notification(
+        [
+            {
+                "event": "opened",
+                "severity": "warning",
+                "key": "weather.runtime.polymarket_weather_proposal_reward_shadow_v1",
+                "detail": "tmux_session_missing",
+                "impact_started_utc": "2026-08-14T07:04:38Z",
+            },
+            {
+                "event": "repair_attempt",
+                "key": "weather.runtime.polymarket_weather_proposal_reward_shadow_v1",
+                "returncode": 0,
+                "target_status": "healthy",
+                "target_issues": [],
+            },
+        ]
+    )
+    assert message.startswith("【生产告警｜WARNING｜已执行自动恢复】")
+    assert "自动处理：重启已执行，目标即时后验正常" in message
+
+
+def test_target_health_overrides_global_controller_return_code() -> None:
+    message = supervisor.render_notification(
+        [
+            {
+                "event": "opened",
+                "severity": "warning",
+                "key": "weather.runtime.polymarket_weather_proposal_reward_shadow_v1",
+                "detail": "tmux_session_missing,health_artifact_stale",
+                "impact_started_utc": "2026-08-14T07:04:38Z",
+            },
+            {
+                "event": "repair_attempt",
+                "key": "weather.runtime.polymarket_weather_proposal_reward_shadow_v1",
+                "returncode": 2,
+                "target_status": "healthy",
+                "target_issues": [],
+            },
+        ]
+    )
+    assert message.startswith("【生产告警｜WARNING｜已执行自动恢复】")
+    assert "目标即时后验正常" in message
+    assert "controller 总体仍异常，rc=2" in message
+    assert "自动恢复失败" not in message
+
+
+def test_standalone_manifest_warning_is_translated() -> None:
+    message = supervisor.render_notification(
+        [
+            {
+                "event": "opened",
+                "severity": "warning",
+                "key": "weather.manifest.degraded",
+                "detail": "manifest_status=warning findings=[]",
+                "impact_started_utc": "2026-08-14T07:04:38Z",
+            }
+        ]
+    )
+    assert "问题：生产拓扑清单出现警告" in message
+    assert "生产拓扑清单处于警告状态" in message
+    assert "manifest_status=" not in message
+
+
+def test_resolved_paused_live_notification_does_not_claim_runtime_recovery(
+    monkeypatch,
+) -> None:
+    runtime = SimpleNamespace(
+        instance_id="paused_live",
+        role="strategy",
+        execution_mode="live",
+        expected_live=True,
+        desired_state="paused",
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "load_production_spec",
+        lambda: SimpleNamespace(managed_runtimes=(runtime,)),
+    )
+
+    message = supervisor.render_notification(
+        [
+            {
+                "event": "resolved",
+                "severity": "critical",
+                "key": "weather.runtime.paused_live",
+                "detail": "tmux_session_missing,health_artifact_missing",
+                "impact_started_utc": "2026-09-03T17:32:12Z",
+                "impact_ended_utc": "2026-09-03T17:41:31Z",
+            }
+        ]
+    )
+
+    assert message.startswith("【生产状态通知｜告警已关闭】")
+    assert "告警关闭：paused_live（策略执行）异常" in message
+    assert "已暂停的实盘能力实例；当前不会真实下单" in message
+    assert "不单独证明进程重启、订单提交、成交或资金损失" in message
+    assert "恢复：" not in message
+
+
+def test_running_live_notification_distinguishes_possible_from_actual_impact(
+    monkeypatch,
+) -> None:
+    runtime = SimpleNamespace(
+        instance_id="running_live",
+        role="strategy",
+        execution_mode="live",
+        expected_live=True,
+        desired_state="running",
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "load_production_spec",
+        lambda: SimpleNamespace(managed_runtimes=(runtime,)),
+    )
+
+    _friendly, scope = supervisor._runtime_display("running_live")
+
+    assert "可能造成漏单或执行中断" in scope
+    assert "不证明已下单、成交或资金损失" in scope
+
+
+def test_paused_non_live_and_unknown_runtime_fallbacks(monkeypatch) -> None:
+    paused_shadow = SimpleNamespace(
+        instance_id="paused_shadow",
+        role="shadow",
+        execution_mode="zero_notional_shadow",
+        expected_live=False,
+        desired_state="paused",
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "load_production_spec",
+        lambda: SimpleNamespace(managed_runtimes=(paused_shadow,)),
+    )
+    _friendly, scope = supervisor._runtime_display("paused_shadow")
+    assert "已暂停的非实盘实例" in scope
+    assert supervisor._runtime_display("unknown") == (
+        "运行实例 unknown",
+        "影响范围未知，请按实例标识排查",
+    )
+    monkeypatch.setattr(
+        supervisor, "load_production_spec", lambda: (_ for _ in ()).throw(ValueError("bad spec"))
+    )
+    assert supervisor._runtime_display("unknown")[1] == "影响范围未知，请按实例标识排查"
+
+
+def test_repair_only_notification_does_not_claim_incident_closed() -> None:
+    success = supervisor.render_notification(
+        [
+            {
+                "event": "repair_attempt",
+                "key": "weather.runtime.shadow",
+                "returncode": 0,
+                "target_status": "healthy",
+                "target_issues": [],
+            }
+        ]
+    )
+    failed = supervisor.render_notification(
+        [
+            {
+                "event": "repair_attempt",
+                "key": "weather.runtime.shadow",
+                "returncode": 2,
+                "target_status": "critical",
+                "target_issues": ["health_artifact_stale"],
+            }
+        ]
+    )
+    assert success.startswith("【生产处理通知｜自动处理结果】")
+    assert failed.startswith("【生产处理通知｜自动处理失败】")
+    assert "告警已关闭" not in success + failed
+
+
+def test_safe_repair_never_adds_live_confirmation(tmp_path: Path) -> None:
+    state = {
+        "issues": {
+            "weather.runtime.shadow": {
+                "key": "weather.runtime.shadow",
+                "active": True,
+                "repair": {"kind": "weather_restart", "target": "shadow"},
+                "repair_attempts": 0,
+                "last_repair_epoch": 0,
+                "first_seen_utc": "2026-08-14T00:00:00Z",
+            }
+        }
+    }
+    seen: list[str] = []
+
+    def runner(command: list[str], cwd: Path | None, timeout: float) -> supervisor.CommandResult:
+        seen.extend(command)
+        return result(stdout="{}")
+
+    action = supervisor.apply_one_safe_repair(
+        state, runtime_storage_ok=True, runner=runner, crypto_root=tmp_path
+    )
+    assert action is not None
+    assert "--confirm-live" not in seen
+    assert seen[seen.index("--instance") + 1] == "shadow"
+
+
+def test_safe_repair_is_blocked_when_jrs_is_unhealthy(tmp_path: Path) -> None:
+    state = {
+        "issues": {
+            "weather.runtime.shadow": {
+                "key": "weather.runtime.shadow",
+                "active": True,
+                "repair": {"kind": "weather_restart", "target": "shadow"},
+                "repair_attempts": 0,
+                "last_repair_epoch": 0,
+                "first_seen_utc": "2026-08-14T00:00:00Z",
+            }
+        }
+    }
+    called = False
+
+    def runner(command: list[str], cwd: Path | None, timeout: float) -> supervisor.CommandResult:
+        nonlocal called
+        called = True
+        return result()
+
+    assert (
+        supervisor.apply_one_safe_repair(
+            state, runtime_storage_ok=False, runner=runner, crypto_root=tmp_path
+        )
+        is None
+    )
+    assert called is False

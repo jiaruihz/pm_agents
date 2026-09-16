@@ -1,0 +1,58 @@
+[
+  {
+    "name": "aggressive",
+    "strategy_overrides": {
+      "base_spread": 0.015,
+      "min_profitability_spread": 0.005,
+      "deadband": 0.005,
+      "skew_factor": 0.03,
+      "join_epsilon": 0.0005,
+      "min_edge": 0.0005,
+      "inventory_sigmoid_k": 6.0,
+      "paper_fill_model": "optimistic",
+      "paper_queue_share": 0.4
+    }
+  },
+  {
+    "name": "conservative",
+    "strategy_overrides": {
+      "base_spread": 0.035,
+      "min_profitability_spread": 0.02,
+      "deadband": 0.02,
+      "skew_factor": 0.08,
+      "join_epsilon": 0.002,
+      "min_edge": 0.003,
+      "inventory_sigmoid_k": 2.0,
+      "paper_fill_model": "conservative",
+      "paper_queue_share": 0.15
+    }
+  },
+  {
+    "name": "balanced",
+    "strategy_overrides": {
+      "base_spread": 0.025,
+      "min_profitability_spread": 0.01,
+      "deadband": 0.01,
+      "skew_factor": 0.05,
+      "join_epsilon": 0.001,
+      "min_edge": 0.001,
+      "inventory_sigmoid_k": 4.0,
+      "paper_fill_model": "conservative",
+      "paper_queue_share": 0.25
+    }
+  },
+  {
+    "name": "high_freq",
+    "strategy_overrides": {
+      "base_spread": 0.01,
+      "min_profitability_spread": 0.003,
+      "deadband": 0.003,
+      "skew_factor": 0.02,
+      "join_epsilon": 0.0003,
+      "min_edge": 0.0003,
+      "inventory_sigmoid_k": 8.0,
+      "paper_fill_model": "optimistic",
+      "paper_queue_share": 0.5
+    }
+  }
+]

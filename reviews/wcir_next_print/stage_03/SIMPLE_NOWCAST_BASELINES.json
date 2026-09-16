@@ -1,0 +1,106 @@
+{
+  "by_city": {
+    "Amsterdam": {
+      "eligible_events": 87,
+      "forecast_only": {
+        "reason": "no PIT forecast identity frozen in this boundary",
+        "status": "unavailable"
+      },
+      "market_only": {
+        "reason": "no same-row pre-source two-sided executable book for full denominator",
+        "status": "unavailable"
+      },
+      "persistence_exact_rate": 0.13793103448275862,
+      "shuffled_time_exact_rate": 0.09195402298850575,
+      "slope_baseline": {
+        "reason": "one-row event grain has no preregistered slope window",
+        "status": "unavailable"
+      },
+      "source_rounded_exact_rate": 0.7931034482758621,
+      "source_rounded_within1_rate": 0.9770114942528736,
+      "target_dates": 16
+    },
+    "Busan": {
+      "eligible_events": 385,
+      "forecast_only": {
+        "reason": "no PIT forecast identity frozen in this boundary",
+        "status": "unavailable"
+      },
+      "market_only": {
+        "reason": "no same-row pre-source two-sided executable book for full denominator",
+        "status": "unavailable"
+      },
+      "persistence_exact_rate": 0.08051948051948052,
+      "shuffled_time_exact_rate": 0.15064935064935064,
+      "slope_baseline": {
+        "reason": "one-row event grain has no preregistered slope window",
+        "status": "unavailable"
+      },
+      "source_rounded_exact_rate": 0.7896103896103897,
+      "source_rounded_within1_rate": 0.9974025974025974,
+      "target_dates": 16
+    },
+    "Helsinki": {
+      "eligible_events": 59,
+      "forecast_only": {
+        "reason": "no PIT forecast identity frozen in this boundary",
+        "status": "unavailable"
+      },
+      "market_only": {
+        "reason": "no same-row pre-source two-sided executable book for full denominator",
+        "status": "unavailable"
+      },
+      "persistence_exact_rate": 0.13559322033898305,
+      "shuffled_time_exact_rate": 0.11864406779661017,
+      "slope_baseline": {
+        "reason": "one-row event grain has no preregistered slope window",
+        "status": "unavailable"
+      },
+      "source_rounded_exact_rate": 0.7627118644067796,
+      "source_rounded_within1_rate": 1.0,
+      "target_dates": 15
+    },
+    "Seoul": {
+      "eligible_events": 268,
+      "forecast_only": {
+        "reason": "no PIT forecast identity frozen in this boundary",
+        "status": "unavailable"
+      },
+      "market_only": {
+        "reason": "no same-row pre-source two-sided executable book for full denominator",
+        "status": "unavailable"
+      },
+      "persistence_exact_rate": 0.0708955223880597,
+      "shuffled_time_exact_rate": 0.16791044776119404,
+      "slope_baseline": {
+        "reason": "one-row event grain has no preregistered slope window",
+        "status": "unavailable"
+      },
+      "source_rounded_exact_rate": 0.8432835820895522,
+      "source_rounded_within1_rate": 1.0,
+      "target_dates": 14
+    },
+    "Tokyo": {
+      "eligible_events": 42,
+      "forecast_only": {
+        "reason": "no PIT forecast identity frozen in this boundary",
+        "status": "unavailable"
+      },
+      "market_only": {
+        "reason": "no same-row pre-source two-sided executable book for full denominator",
+        "status": "unavailable"
+      },
+      "persistence_exact_rate": 0.21428571428571427,
+      "shuffled_time_exact_rate": 0.09523809523809523,
+      "slope_baseline": {
+        "reason": "one-row event grain has no preregistered slope window",
+        "status": "unavailable"
+      },
+      "source_rounded_exact_rate": 0.6666666666666666,
+      "source_rounded_within1_rate": 1.0,
+      "target_dates": 14
+    }
+  },
+  "denominator": "distinct frozen fast-source event_id with linked next routine official print",
+  "negative_control_seed": 20260827
+}

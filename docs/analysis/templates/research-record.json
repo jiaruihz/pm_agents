@@ -1,0 +1,61 @@
+{
+  "domain": "weather",
+  "execution": {
+    "code_identity": "TODO: git SHA or immutable release identity",
+    "config_identity": "TODO: config hash or N/A with reason",
+    "config_locator": null,
+    "producer": "TODO: stable runner path",
+    "reproduce_command": "TODO: exact command"
+  },
+  "family": "replace_me",
+  "inputs": [],
+  "knowledge": {
+    "action": null,
+    "dated_snapshot": null,
+    "durable_conclusion": null,
+    "family_living_doc": "docs/analysis/model_vs_market.md",
+    "registry_or_index": "docs/WEATHER_STRATEGY_REGISTRY.md",
+    "superseded_record_ids": []
+  },
+  "lifecycle_status": "planned",
+  "method": {
+    "acceptance_gates": [
+      "TODO"
+    ],
+    "baselines": [
+      "TODO"
+    ],
+    "denominator_scope": "TODO",
+    "evidence_layers": [
+      "TODO"
+    ],
+    "fee_and_execution_basis": "TODO or N/A with reason",
+    "forward_policy": "TODO",
+    "grain": "TODO",
+    "label_contract": "TODO",
+    "pit_or_asof_policy": "TODO",
+    "primary_metrics": [
+      "TODO"
+    ]
+  },
+  "observed_at_utc": null,
+  "outputs": {
+    "artifact_manifest": null,
+    "artifact_root_contract": "production://research_artifact_root",
+    "canonical_machine_format": "none",
+    "compact_summary_locator": null
+  },
+  "question": {
+    "decision_target": "TODO: the decision this evidence may change",
+    "exclusions": [
+      "live behavior changes",
+      "unregistered variants"
+    ],
+    "hypothesis": "TODO: one falsifiable hypothesis",
+    "scope": "TODO: fixed universe, dates, cities, and sources"
+  },
+  "record_id": "research:weather:replace_me:replace_me",
+  "run_id": "replace_me",
+  "schema_version": "pm_agents_research_record_v1",
+  "skill": "weather-strategy-research"
+}

@@ -1,0 +1,312 @@
+import json
+from datetime import datetime, timezone
+
+import pytest
+
+from src.strategies.weather_city_probability_shadow.core import (
+    CONFIG_SCHEMA_VERSION,
+    OUTPUT_SCHEMA_FINGERPRINT,
+    OUTPUT_SCHEMA_VERSION,
+    CityScore,
+    ShadowRuntime,
+)
+
+
+def _config(output_dir, profiles):
+    return {
+        "schema_version": CONFIG_SCHEMA_VERSION,
+        "output_schema_version": OUTPUT_SCHEMA_VERSION,
+        "output_schema_fingerprint": OUTPUT_SCHEMA_FINGERPRINT,
+        "execution_mode": "zero_notional_shadow",
+        "orders_submitted": 0,
+        "output_dir": str(output_dir),
+        "profiles": profiles,
+    }
+
+
+class Adapter:
+    def score(self, profile, now):
+        return [CityScore(
+            city="Test", target_date="2026-07-31", decision_ts_utc=now.isoformat(),
+            source_obs_ts_utc="2026-07-31T10:00:00+00:00", current_bracket=20,
+            market_side="NO", market_probability=.5, market_entry_price=.5,
+            model_probability=.6, model_id="m1", feature_coverage=.5,
+            missing_features=["radiation"], features={"radiation": None},
+            market={"token_id":"paper"}, lineage={"source":"fixture"},
+        )]
+
+
+def test_zero_notional_runtime_is_deduplicated(tmp_path):
+    config = _config(tmp_path, [{"adapter":"fixture","city":"Test"}])
+    runtime = ShadowRuntime(config, {"fixture":Adapter()})
+    first = runtime.run_once(datetime(2026,7,31,10,tzinfo=timezone.utc))
+    second = runtime.run_once(datetime(2026,7,31,10,1,tzinfo=timezone.utc))
+    assert first["new_evaluations"] == 1 and first["new_paper_intents"] == 1
+    assert first["status"] == "ok"
+    assert second["new_evaluations"] == 0 and second["new_paper_intents"] == 0
+    evaluation = json.loads((tmp_path/"evaluations.jsonl").read_text().splitlines()[0])
+    intent = json.loads((tmp_path/"paper_intents.jsonl").read_text().splitlines()[0])
+    assert evaluation["orders_submitted"] == 0
+    assert evaluation["schema_version"] == OUTPUT_SCHEMA_VERSION
+    assert evaluation["schema_fingerprint"] == OUTPUT_SCHEMA_FINGERPRINT
+    assert evaluation["record_kind"] == "evaluation"
+    assert evaluation["runtime_identity"]["loaded_module_sha256"]
+    assert intent["notional_usd"] == 0 and intent["shares"] == 0
+    assert intent["record_kind"] == "paper_intent"
+
+
+def test_profile_epoch_identity_does_not_rewrite_or_suppress_legacy_row(tmp_path):
+    legacy = _config(tmp_path, [{"adapter": "fixture", "city": "Test"}])
+    first = ShadowRuntime(legacy, {"fixture": Adapter()}).run_once(
+        datetime(2026, 7, 31, 10, tzinfo=timezone.utc)
+    )
+    epoch_profile = {
+        "adapter": "fixture",
+        "city": "Test",
+        "profile_id": "test_clock_v2",
+        "evaluation_identity_version": "v2_profile_epoch",
+        "forward_epoch_id": "test_clock_v2_20260731",
+    }
+    epoch = _config(tmp_path, [epoch_profile])
+    second_runtime = ShadowRuntime(epoch, {"fixture": Adapter()})
+    second = second_runtime.run_once(
+        datetime(2026, 7, 31, 10, 1, tzinfo=timezone.utc)
+    )
+    third = second_runtime.run_once(
+        datetime(2026, 7, 31, 10, 2, tzinfo=timezone.utc)
+    )
+
+    assert first["new_evaluations"] == 1
+    assert second["new_evaluations"] == 1
+    assert third["new_evaluations"] == 0
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "evaluations.jsonl").read_text().splitlines()
+    ]
+    assert len(rows) == 2
+    assert rows[0]["evaluation_identity_version"] == "v1"
+    assert rows[1]["evaluation_identity_version"] == "v2_profile_epoch"
+    assert rows[1]["forward_epoch_id"] == "test_clock_v2_20260731"
+    assert rows[0]["evaluation_id"] != rows[1]["evaluation_id"]
+
+
+def test_profile_epoch_allows_not_ready_row_to_become_scored(tmp_path):
+    class RecoveringAdapter:
+        def score(self, profile, now):
+            ready = now.minute > 0
+            return [CityScore(
+                city="Test", target_date="2026-07-31",
+                decision_ts_utc=now.isoformat(),
+                source_obs_ts_utc="2026-07-31T10:00:00+00:00",
+                current_bracket=20, market_side="NO",
+                market_probability=.5 if ready else None,
+                market_entry_price=.5 if ready else None,
+                model_probability=.6 if ready else None,
+                model_id="m1", feature_coverage=1.0 if ready else 0.0,
+                missing_features=[] if ready else ["book"], features={},
+                market={}, lineage={"source": "fixture"},
+                evaluation_status="scored" if ready else "not_scorable",
+                not_scorable_reason=(
+                    None if ready else "checkpoint_evidence_not_yet_available"
+                ),
+            )]
+
+    profile = {
+        "adapter": "recovering",
+        "city": "Test",
+        "profile_id": "test_clock_v2",
+        "evaluation_identity_version": "v2_profile_epoch",
+        "forward_epoch_id": "test_clock_v2_20260731",
+    }
+    runtime = ShadowRuntime(
+        _config(tmp_path, [profile]), {"recovering": RecoveringAdapter()}
+    )
+
+    blocked = runtime.run_once(
+        datetime(2026, 7, 31, 10, 0, tzinfo=timezone.utc)
+    )
+    scored = runtime.run_once(
+        datetime(2026, 7, 31, 10, 1, tzinfo=timezone.utc)
+    )
+    duplicate = runtime.run_once(
+        datetime(2026, 7, 31, 10, 2, tzinfo=timezone.utc)
+    )
+
+    assert blocked["new_evaluations"] == 1
+    assert scored["new_evaluations"] == 1
+    assert duplicate["new_evaluations"] == 0
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "evaluations.jsonl").read_text().splitlines()
+    ]
+    assert [row["evaluation_status"] for row in rows] == [
+        "not_scorable",
+        "scored",
+    ]
+    assert rows[0]["evaluation_id"] != rows[1]["evaluation_id"]
+
+
+def test_nonzero_execution_configuration_is_rejected(tmp_path):
+    with pytest.raises(ValueError):
+        ShadowRuntime({
+            **_config(tmp_path, []),
+            "execution_mode": "live",
+            "orders_submitted": 1,
+        }, {})
+
+
+def test_adapter_error_marks_latest_summary_unhealthy(tmp_path):
+    class Broken:
+        def score(self, profile, now):
+            raise RuntimeError("fixture failure")
+
+    summary = ShadowRuntime(
+        _config(tmp_path, [{"adapter": "broken", "city": "Test"}]),
+        {"broken": Broken()},
+    ).run_once(datetime(2026, 7, 31, 10, tzinfo=timezone.utc))
+
+    assert summary["status"] == "error"
+    assert summary["errors"] == 1
+
+
+def test_weather_fee_formula():
+    assert ShadowRuntime.fee_per_share(.5) == pytest.approx(.0125)
+
+
+def test_five_share_depth_cost_controls_entry_instead_of_best_ask(tmp_path):
+    class ThinBestAsk:
+        def score(self, profile, now):
+            return [CityScore(
+                city="Helsinki", target_date="2026-08-04",
+                decision_ts_utc=now.isoformat(),
+                source_obs_ts_utc="2026-08-04T11:20:00+00:00",
+                current_bracket=21, market_side="NO", market_probability=.55,
+                market_entry_price=.55, model_probability=.59, model_id="bounded",
+                feature_coverage=1.0, missing_features=[], features={},
+                market={"raw": {"asks": [
+                    {"price": .55, "size": 1.0},
+                    {"price": .60, "size": 4.0},
+                ]}},
+                lineage={},
+            )]
+
+    config = _config(tmp_path, [{
+        "adapter": "thin", "city": "Helsinki", "edge_threshold": 0.0,
+        "selection_shares": 5.0,
+    }])
+    ShadowRuntime(config, {"thin": ThinBestAsk()}).run_once(
+        datetime(2026, 8, 4, 11, 21, tzinfo=timezone.utc)
+    )
+    row = json.loads((tmp_path / "evaluations.jsonl").read_text().splitlines()[0])
+    assert row["entry_vwap"] == pytest.approx(.59)
+    assert row["effective_cost_per_share"] > .59
+    assert row["would_enter"] is False
+
+
+def test_zero_edge_is_not_a_positive_ev_entry(tmp_path):
+    class ZeroEdge:
+        def score(self, profile, now):
+            price = .5
+            effective = price + ShadowRuntime.fee_per_share(price)
+            return [CityScore(
+                city="Test", target_date="2026-08-04",
+                decision_ts_utc=now.isoformat(), source_obs_ts_utc=now.isoformat(),
+                current_bracket=20, market_side="NO", market_probability=.5,
+                market_entry_price=price, model_probability=effective,
+                model_id="zero", feature_coverage=1.0, missing_features=[],
+                features={}, market={}, lineage={},
+            )]
+
+    ShadowRuntime(
+        _config(tmp_path, [{"adapter": "zero", "city": "Test"}]),
+        {"zero": ZeroEdge()},
+    ).run_once(datetime(2026, 8, 4, 12, tzinfo=timezone.utc))
+    row = json.loads((tmp_path / "evaluations.jsonl").read_text().splitlines()[0])
+    assert row["edge_after_fee"] == pytest.approx(0.0)
+    assert row["would_enter"] is False
+
+
+def test_not_scorable_checkpoint_is_journaled_without_intent_or_error(tmp_path):
+    class OneSided:
+        def score(self, profile, now):
+            return [CityScore(
+                city="Helsinki", target_date="2026-07-31",
+                decision_ts_utc=now.isoformat(),
+                source_obs_ts_utc="2026-07-31T13:10:00+00:00",
+                current_bracket=26, market_side="NO", market_probability=None,
+                market_entry_price=.001, model_probability=None, model_id="offset_v1",
+                feature_coverage=.9, missing_features=["weather_market_logit_gap"],
+                features={"weather_market_logit_gap": None},
+                market={"quote_state": "one_sided_near_binary"}, lineage={},
+                evaluation_status="not_scorable",
+                not_scorable_reason="one_sided_market_probability_interval",
+            )]
+
+    config = _config(tmp_path, [{"adapter":"one","city":"Helsinki"}])
+    summary = ShadowRuntime(config, {"one": OneSided()}).run_once(
+        datetime(2026, 7, 31, 13, 11, tzinfo=timezone.utc)
+    )
+    assert summary["evaluated"] == 1
+    assert summary["scored"] == 0
+    assert summary["not_scorable"] == 1
+    assert summary["errors"] == 0
+    assert summary["new_paper_intents"] == 0
+    row = json.loads((tmp_path / "evaluations.jsonl").read_text().splitlines()[0])
+    assert row["evaluation_status"] == "not_scorable"
+    assert row["edge_after_fee"] is None
+    assert row["would_enter"] is False
+
+
+def test_profile_threshold_and_bracket_scope_allow_only_one_side(tmp_path):
+    class BothSides:
+        def score(self, profile, now):
+            common = dict(
+                city="Tokyo", target_date="2026-08-01", decision_ts_utc=now.isoformat(),
+                source_obs_ts_utc="2026-08-01T01:00:00+00:00", current_bracket=34,
+                market_probability=.4, market_entry_price=.4, model_probability=.5,
+                model_id="v6", feature_coverage=1.0, missing_features=[], features={},
+                market={}, lineage={},
+            )
+            return [CityScore(market_side=side, **common) for side in ("YES", "NO")]
+
+    config = _config(tmp_path, [{
+        "adapter": "both", "city": "Tokyo", "edge_threshold": .05,
+        "position_scope": "city_date_bracket_model",
+    }])
+    summary = ShadowRuntime(config, {"both": BothSides()}).run_once(
+        datetime(2026, 8, 1, 1, tzinfo=timezone.utc)
+    )
+    assert summary["new_evaluations"] == 2
+    assert summary["new_paper_intents"] == 1
+    rows = [json.loads(line) for line in (tmp_path / "evaluations.jsonl").read_text().splitlines()]
+    assert all(row["edge_threshold"] == .05 and row["would_enter"] for row in rows)
+    intent = json.loads((tmp_path / "paper_intents.jsonl").read_text().splitlines()[0])
+    assert intent["position_key"] == "Tokyo|2026-08-01|34|v6"
+
+
+def test_profile_minimum_model_probability_is_part_of_selection_contract(tmp_path):
+    class PositiveEdgeLowConfidence:
+        def score(self, profile, now):
+            return [CityScore(
+                city="Amsterdam", target_date="2026-08-12",
+                decision_ts_utc=now.isoformat(), source_obs_ts_utc=now.isoformat(),
+                current_bracket=20, market_side="NO", market_probability=.40,
+                market_entry_price=.40, model_probability=.54, model_id="v3",
+                feature_coverage=1.0, missing_features=[], features={},
+                market={}, lineage={},
+            )]
+
+    config = _config(tmp_path, [{
+        "adapter": "low-confidence", "city": "Amsterdam",
+        "edge_threshold": .02, "min_model_probability": .55,
+    }])
+    summary = ShadowRuntime(
+        config, {"low-confidence": PositiveEdgeLowConfidence()}
+    ).run_once(datetime(2026, 8, 12, 12, tzinfo=timezone.utc))
+
+    assert summary["new_evaluations"] == 1
+    assert summary["new_paper_intents"] == 0
+    row = json.loads((tmp_path / "evaluations.jsonl").read_text().splitlines()[0])
+    assert row["edge_after_fee"] > .02
+    assert row["min_model_probability"] == .55
+    assert row["would_enter"] is False

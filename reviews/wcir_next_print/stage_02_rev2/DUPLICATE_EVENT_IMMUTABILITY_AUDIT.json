@@ -1,0 +1,33 @@
+{
+  "audit_scope": "frozen Stage 3 event keys in fast-source journal",
+  "duplicate_event_key_count": 0,
+  "duplicate_extra_serialization_count": 0,
+  "duplicates": [],
+  "immutable_fields": [
+    "event_key",
+    "city",
+    "target_date",
+    "source",
+    "source_kind",
+    "station",
+    "source_obs_ts_utc",
+    "source_detect_ts_utc",
+    "source_temp_c",
+    "source_round_c",
+    "latest_metar_report_ts_utc",
+    "latest_metar_round_c",
+    "metar_running_max_round_c",
+    "t_minus_1_no_bracket_c",
+    "market_id",
+    "condition_id",
+    "token_id"
+  ],
+  "matched_event_key_count": 841,
+  "overall_disposition": "PASS",
+  "payload_drift_count": 0,
+  "stage_00_candidate_audit": {
+    "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_00_rev2/DUPLICATE_CANDIDATE_IMMUTABILITY_AUDIT.json",
+    "sha256": "66fd5efa598c813789b849fda93cad43ba951d99092787acfd1d85be3b91b983",
+    "size_bytes": 393468
+  }
+}

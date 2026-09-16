@@ -1,0 +1,60 @@
+{
+  "generated_at_utc": "2026-07-23T16:35:01+00:00",
+  "status": "superseded_for_now_zero_notional_historical_artifact",
+  "frozen_policy_result": {
+    "selector": "frozen_v1",
+    "city_days": 144,
+    "dates": 30,
+    "cities": 29,
+    "wins": 137,
+    "losses": 7,
+    "win_rate": 0.9513888888888888,
+    "avg_effective_cost": 0.9125769708333331,
+    "avg_edge": 0.022732908588199135,
+    "roi": 0.042530021352734634,
+    "target_date_block_ci95": [
+      0.002959858728878825,
+      0.07737976985974532
+    ],
+    "signals_per_covered_date": 4.8,
+    "signals_p90_active_date": 8.100000000000001,
+    "signals_max_active_date": 10,
+    "worst_day_pnl_per_share": -0.7128200000000005
+  },
+  "cost_audit": {
+    "oof_rows": 2758,
+    "full_five_share_executable_rate": 1.0,
+    "rows_requiring_full_ladder_beyond_top": 81,
+    "selected_avg_slippage_cents_per_share": 0.00013458333333512168
+  },
+  "checkpoint_audit": {
+    "minute_30_share": 0.7657722987672226,
+    "minute_28_35_share": 0.8687454677302393,
+    "contract": "first successfully scored fresh book at or after local minute 30 in each local hour"
+  },
+  "selection_review": {
+    "chosen_model": "core",
+    "not_added": [
+      "legacy faded/path features: historical strict-high clock semantics were wrong and path-added did not improve core",
+      "clean exhaustion hard gates: semantically correct but no same-denominator proper-score improvement",
+      "CC ceiling/route merge: no incremental historical benefit",
+      "maker: no execution alpha credited in v1"
+    ],
+    "sensitivity_is_diagnostic_not_threshold_optimization": true
+  },
+  "artifact": {
+    "path": "src/strategies/weather_edge_v1/config/current_yes_core_carry_model_v1.json",
+    "hash": "fa422059692f87f8d90f13cc41dad3b5be7284684a747428b8d17ebf38fa590e",
+    "golden_rows": 12
+  },
+  "outputs": {
+    "script": "scripts/analysis/reheat_risk/research_current_yes_core_carry_freeze_pre_live_v4.py",
+    "json": "docs/analysis/2026-07/2026-07-23-current-yes-core-carry-freeze-pre-live-v4.json",
+    "report": "docs/analysis/2026-07/2026-07-23-current-yes-core-carry-freeze-pre-live-v4.md",
+    "oof_costed": "docs/analysis/2026-07/generated/current_yes_core_carry_freeze_pre_live_v4/oof_states_five_share_cost.csv",
+    "entries": "docs/analysis/2026-07/generated/current_yes_core_carry_freeze_pre_live_v4/frozen_policy_entries.csv",
+    "sensitivity": "docs/analysis/2026-07/generated/current_yes_core_carry_freeze_pre_live_v4/threshold_sensitivity.csv",
+    "golden": "docs/analysis/2026-07/generated/current_yes_core_carry_freeze_pre_live_v4/model_golden_rows.json"
+  },
+  "real_live_action": "none"
+}

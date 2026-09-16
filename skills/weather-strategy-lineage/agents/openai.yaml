@@ -1,0 +1,4 @@
+interface:
+  display_name: "Weather Lineage"
+  short_description: "Trace signals, orders, fills, fees, and settlement"
+  default_prompt: "Use $weather-strategy-lineage to trace controller-discovered raw runtime evidence first, then bridge to canonical fills, fees, and settlement without rebuilding unrelated data."

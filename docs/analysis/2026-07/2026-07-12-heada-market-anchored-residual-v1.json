@@ -1,0 +1,158 @@
+{
+  "generated_at": "2026-07-12",
+  "input": "docs/analysis/2026-07/generated/low_price_yes_source_quality_score_v2/candidate_rows.csv",
+  "method": {
+    "walk_forward": "expanding by target_date; train dates strictly before test date",
+    "first_oos_date": "2026-06-05",
+    "last_oos_date": "2026-07-07",
+    "min_train_rows": 150,
+    "regularization_C": 0.05,
+    "residual_trust_weight": 0.25,
+    "city_identity_used": false,
+    "threshold_optimization": false
+  },
+  "probability_metrics": {
+    "market_ask": {
+      "rows": 217,
+      "dates": 32,
+      "wins": 32,
+      "win_rate": 0.14746543778801843,
+      "mean_pred": 0.10004377880184333,
+      "brier": 0.12533096658986176,
+      "logloss": 0.41950422408037247,
+      "auc": 0.6079391891891892
+    },
+    "current_model_p_yes": {
+      "rows": 217,
+      "dates": 32,
+      "wins": 32,
+      "win_rate": 0.14746543778801843,
+      "mean_pred": 0.38281428571428566,
+      "brier": 0.1809979687096774,
+      "logloss": 0.5503645710841446,
+      "auc": 0.5760135135135135
+    },
+    "unshrunk_source_model_diagnostic": {
+      "rows": 217,
+      "dates": 32,
+      "wins": 32,
+      "win_rate": 0.14746543778801843,
+      "mean_pred": 0.17587496137088415,
+      "brier": 0.13998082734447725,
+      "logloss": 0.44704317281540695,
+      "auc": 0.6179054054054054
+    },
+    "market_75_source_residual_25": {
+      "rows": 217,
+      "dates": 32,
+      "wins": 32,
+      "win_rate": 0.14746543778801843,
+      "mean_pred": 0.11900157444410352,
+      "brier": 0.12481004302269054,
+      "logloss": 0.4142337511074177,
+      "auc": 0.6150337837837837
+    },
+    "market_75_source_overshoot_residual_25": {
+      "rows": 217,
+      "dates": 32,
+      "wins": 32,
+      "win_rate": 0.14746543778801843,
+      "mean_pred": 0.11950453923580703,
+      "brier": 0.12488796259312716,
+      "logloss": 0.414423659767053,
+      "auc": 0.6155405405405405
+    }
+  },
+  "brier_delta_vs_market": {
+    "market_75_source_residual_25": {
+      "delta": -0.0005209235671712166,
+      "ci_low": -0.0035563611903684043,
+      "ci_high": 0.0024219667227606354
+    },
+    "market_75_source_overshoot_residual_25": {
+      "delta": -0.00044300399673457864,
+      "ci_low": -0.003674736923400387,
+      "ci_high": 0.002749250949263916
+    }
+  },
+  "selection_metrics": {
+    "current_model_p_yes": {
+      "positive_residual": {
+        "rows": 217,
+        "dates": 32,
+        "wins": 32,
+        "win_rate": 0.14746543778801843,
+        "avg_ask": 0.10004377880184333,
+        "roi": 0.42978262914852927,
+        "ci_low": 0.008825867677992878,
+        "ci_high": 0.9165378492311042,
+        "losing_days": 10,
+        "max_daily_loss": -1.1959096875
+      },
+      "top1_positive_per_date": {
+        "rows": 32,
+        "dates": 32,
+        "wins": 5,
+        "win_rate": 0.15625,
+        "avg_ask": 0.089796875,
+        "roi": 0.6950874673742822,
+        "ci_low": -0.6576558337086391,
+        "ci_high": 2.142373189598565,
+        "losing_days": 27,
+        "max_daily_loss": -0.14083875
+      }
+    },
+    "market_75_source_residual_25": {
+      "positive_residual": {
+        "rows": 168,
+        "dates": 32,
+        "wins": 23,
+        "win_rate": 0.13690476190476192,
+        "avg_ask": 0.09702678571428572,
+        "roi": 0.36659376322812187,
+        "ci_low": -0.21680198086390048,
+        "ci_high": 1.0575760275039123,
+        "losing_days": 16,
+        "max_daily_loss": -0.968170025
+      },
+      "top1_positive_per_date": {
+        "rows": 32,
+        "dates": 32,
+        "wins": 8,
+        "win_rate": 0.25,
+        "avg_ask": 0.111140625,
+        "roi": 1.205858937860256,
+        "ci_low": -0.0760354795031544,
+        "ci_high": 2.6651642126937776,
+        "losing_days": 24,
+        "max_daily_loss": -0.20800000000000002
+      }
+    },
+    "market_75_source_overshoot_residual_25": {
+      "positive_residual": {
+        "rows": 162,
+        "dates": 32,
+        "wins": 23,
+        "win_rate": 0.1419753086419753,
+        "avg_ask": 0.09706172839506173,
+        "roi": 0.4183296505342151,
+        "ci_low": -0.19273840887816357,
+        "ci_high": 1.1384613756164343,
+        "losing_days": 16,
+        "max_daily_loss": -0.968170025
+      },
+      "top1_positive_per_date": {
+        "rows": 32,
+        "dates": 32,
+        "wins": 8,
+        "win_rate": 0.25,
+        "avg_ask": 0.11168750000000001,
+        "roi": 1.1949560296586457,
+        "ci_low": -0.06406428002538654,
+        "ci_high": 2.6637328885133513,
+        "losing_days": 24,
+        "max_daily_loss": -0.20800000000000002
+      }
+    }
+  }
+}

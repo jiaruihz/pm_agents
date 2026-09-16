@@ -1,0 +1,17 @@
+{
+  "files": [
+    {
+      "bytes": 199,
+      "path": "us_fast_weather_lab/reports/wis2_payload_inventory.md",
+      "sha256": "cb1b84dfb86514d8ba181c104028f4183ca1c0e9ec8c9bf63ebb3b3a090603bd"
+    },
+    {
+      "bytes": 250,
+      "path": "us_fast_weather_lab/reports/STAGE1_EXECUTION_SUMMARY.md",
+      "sha256": "c25fb9cdb99beacac5fe2f72e5ff8bc43a19c1afdf310b4caa78d796d697984b"
+    }
+  ],
+  "generated_at_ns": 1787917509645790000,
+  "stage": 1,
+  "status": "BLOCKED"
+}

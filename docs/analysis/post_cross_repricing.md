@@ -1,0 +1,329 @@
+# Post-Cross Repricing
+
+Status: current-reference
+Updated: 2026-06-25
+Source of truth: yes for the new post-cross repricing research task
+Used by: `WEATHER_LATENCY_ARB_OBSERVATION_MICROSTRUCTURE.md`, `market_structure_edge.md`
+
+## Question
+
+After an official/live-eligible observation first pushes a city running max from
+`T-1` to `T`, how does the market reprice nearby temperature brackets?
+
+This is separate from the low-latency `T-1 NO` taker bot. The crossed bracket is
+nearly deterministic and highly latency-sensitive. The research target here is
+the less deterministic repricing surface around it:
+
+- `T-1` bracket: just invalidated; should collapse.
+- `T` bracket: current new high; may be under- or over-adjusted.
+- `T+1` / `T+2`: tail continuation; may lag the new information.
+
+## Current Hypothesis
+
+There may be retail-accessible space in the **probability redistribution after a
+fresh running-max update**, even if the pure crossed-NO trade is too latency
+competitive.
+
+Candidate edges:
+
+1. **Underreaction on current `T YES`.** The city just reached `T`, but market
+   has not raised `T YES` enough given remaining heat is low.
+2. **Overreaction on current `T YES`.** Market spikes `T YES` after the fresh
+   print, but the day still has strong runway to break `T+1`.
+3. **Underreaction on `T+1 YES`.** Market kills `T-1` and raises `T`, but does
+   not update continuation probability enough.
+
+This is not risk-free. It must be evaluated as a probability/market-structure
+strategy with real executable prices and forward validation.
+
+## First Observations
+
+Small N100 orderbook-log samples around 2026-06-25 crossings showed:
+
+| Event | Crossed Bracket | Current / Tail Reaction |
+|---|---|---|
+| Manila 31 -> 32C | `31C YES` 0.115 -> 0.010 quickly | `32C YES` stayed around 0.485; `33C YES` moved only slightly. |
+| Singapore 30 -> 31C | `30C YES` 0.191 -> 0.003 quickly | `31C YES` 0.485 -> 0.775; `32C YES` mostly stable. |
+| Paris 39 -> 40C | `39C YES` 0.064 -> near zero | `40C YES` 0.450 -> 0.555; `41C YES` mostly stable. |
+| BuenosAires 8 -> 9C | `8C NO` remained buyable for minutes | current/tail repricing was muted. |
+
+Broad rough scan over recent crossing events:
+
+- crossed/previous bracket YES generally falls;
+- current bracket median YES change over 30-300s was near zero;
+- mean current-bracket YES change was positive because a minority of events
+  repriced sharply upward;
+- examples of large current-bracket repricing included Singapore, Paris, Busan,
+  Wuhan, Milan, Guangzhou, Warsaw, and Beijing;
+- examples of muted or negative current-bracket repricing included Busan early
+  ladder steps, Shanghai, CapeTown, Warsaw, and some low-probability tail states.
+
+The shape is heterogeneous, which is exactly why this deserves a separate
+research track instead of a hard rule.
+
+## Evidence Grain
+
+Primary raw inputs:
+
+- `runtime/weather_edge_v1/metar_cross_prev_no_shadow/opportunities.jsonl`
+- `runtime/weather_edge_v1/source_orderbook_timing/books.jsonl`
+
+Durable analysis script:
+
+```bash
+.venv/bin/python scripts/analysis/market_structure_edge/research_post_cross_repricing_v0.py \
+  --since 2026-06-24T23:00:00+00:00 \
+  --output-json docs/analysis/2026-06/generated/post_cross_repricing_v0/post_cross_repricing_v0.json \
+  --output-md docs/analysis/2026-06/generated/post_cross_repricing_v0/post_cross_repricing_v0.md
+```
+
+Run this on the machine that has fresh timing logs. Today that is N100, not the
+stale Mac mirror.
+
+## Required Denominator
+
+One row per:
+
+```text
+event_slug + source_report_ts_utc + city + relative_bracket
+```
+
+where `relative_bracket` is:
+
+- `prev_or_cross`
+- `current`
+- `next1`
+- `next2`
+
+For each row, record:
+
+- report timestamp
+- local crossing detection timestamp
+- source lag
+- label / bracket
+- YES mid and NO ask before report
+- YES mid and NO ask at fixed horizons after report, initially 30s, 90s, 180s, 300s
+- executable ask/size when strategy action would occur
+
+## Research Gates
+
+Before any live consideration:
+
+1. Use real YES/NO books. Do not infer NO price as `1 - yes_ask`.
+2. Use time-aligned orderbook snapshots; executable pricing must satisfy
+   `snapshot_ts_utc <= decision_ts_utc`.
+3. Separate labels:
+   - current `T` survives to settlement
+   - current `T` gets broken by `T+1`
+   - `T+1` eventually wins
+4. Compare against same-price baselines, not only raw ROI.
+5. Validate forward by date; do not use same-day exploratory thresholds as live
+   rules.
+
+## First Research Tasks
+
+1. Run `research_post_cross_repricing_v0.py` on current N100 logs and save the
+   generated JSON/Markdown output.
+2. Join repricing rows to final settlement once available.
+3. Split events by market reaction type:
+   - crossed bracket killed before our source
+   - crossed bracket killed after report but before our detection
+   - crossed bracket still tradable at our detection
+4. For current `T YES`, test whether large upward repricing is overdone when:
+   - there is still strong solar/runway remaining;
+   - the previous report was already near `T`;
+   - `T+1` tail did not reprice.
+5. For `T+1 YES`, test whether continuation is underpriced after high-momentum
+   crossings.
+6. Keep the first output as `shadow/research`; no live action from this task
+   until the standard significance, baseline, and forward gates pass.
+
+## Current Verdict
+
+`shadow / zero-notional forward collection`.
+
+This is more promising than trying to beat every crossed-NO robot on speed, but
+it is probabilistic and must be treated like a normal strategy research line.
+
+## 2026-07-13 Unified Replay And Forward Practice
+
+The first unified `source_event_hazard_router_v1` run used 8,094 labeled PIT
+ladder states across 22 target dates / 47 cities, including 518 saved-snapshot
+cross events.  Every expression used its real YES/NO ask, ask size >= 5, and the
+official Weather taker fee.  Models were expanding by target date and compared
+against the market ladder on the same denominator.
+
+- Market probabilities beat both market+elapsed-time and market+physics on
+  current-YES and d1-YES proper score.  No residual probability head cleared the
+  baseline gate.
+- `cross current-NO continuation`, fixed edge >= 2c: 42 rows / 14 dates, ROI
+  +11.6%, date-bootstrap CI [-11.4%, +38.1%], recent four dates +3.5%.  This is
+  the only branch retained for forward observation; it is not confirmed alpha.
+- `cross current-YES exhaustion`: ROI -8.0%; `cross T+1 YES`: ROI -44.7% with a
+  negative CI; the broad immediate-reversal and exact-next expressions failed.
+- `60m no-break current YES` had +10.0% full-window point ROI but recent four
+  dates -40.7% and negative same-band excess.  Elapsed time alone is not a
+  durable reversal rule.
+- The all-expression router returned -5.5% at edge >= 2c.  Combining weak heads
+  did not create portfolio alpha.
+- Saved-snapshot 15-120 minute taker-exit markouts were negative for every
+  tested branch.  This does not answer the second-level local-first-seen
+  question; it shows that waiting for the coarse snapshot loses the repricing.
+
+Durable output:
+
+- `scripts/analysis/market_structure_edge/research_source_event_hazard_router_v1.py`
+- `docs/analysis/2026-07/2026-07-13-source-event-hazard-router-v1.md`
+- `docs/analysis/2026-07/generated/source_event_hazard_router_v1/`
+
+Forward practice is now running in a separate, no-order tmux session:
+
+```text
+session: weather_source_event_ladder_repricing_shadow
+output:  /Volumes/jrs/weather_data_feed_service_runtime/output/source_event_ladder_repricing_shadow
+scope:   all T-1/T/T+1/T+2 YES+NO books; 30s cadence; 90m episode; auto target-date
+```
+
+The existing generic stale-book observer was also restarted on 2026-07-13 so
+its target date rolls automatically again; it had remained in memory with the
+old 2026-07-09 target date despite source files continuing to update.
+
+## 2026-07-14 Fast-event Source Profile And Collector Correction
+
+The first forward collector was not suitable for live calibration.  It used one
+Asia/Shanghai `target_date` for all cities, treated every `temp_c` value as a C
+market bracket, and moved previous/current/next by numeric one-degree steps.
+Those assumptions fail for US local dates, F markets, and range brackets such
+as `76-77 F`.
+
+The v2 collector now:
+
+- routes `target_date` by each city local calendar;
+- converts source and METAR temperature through a `city x source` profile with
+  explicit market unit and rounding/floor semantics;
+- resolves previous/current/next from the real market ladder intervals;
+- keeps a persistent `(city,target_date,bracket)` token index and fills missing
+  local-day markets from Gamma only when required;
+- emits one episode per `(city,target_date,source,market bracket)`, rather than
+  one event per repeated source report.
+
+The profile contains 22 source rows / 21 cities and deliberately grants zero
+live eligibility.  On the historical candidate denominator, the source-profile
+covered subset is 36 rows / 14 dates / 12 cities with ROI +4.4% and date
+bootstrap CI [-19.5%, +33.7%], weaker than the pooled +11.6% result.  Therefore
+the status remains `calibration_only_zero_notional_no_live`.
+
+Historical v1 impact is telemetry-only: the dedicated collector contains 8 US
+events / 581 quote rows with wrong C-vs-F bracket values; the generic observer
+contains 36 US events / 1,458 quote rows.  No live orders were affected.  These
+v1 rows must not be used for repricing conclusions.
+
+Durable profile and audit:
+
+- `weather_data_feed/fast_event_source_profiles.json`
+- `docs/analysis/2026-07/2026-07-14-fast-event-source-profile-v1.md`
+
+Cities without a fast-event profile are excluded only from this source-event
+head.  They are not globally banned from forecast, regime, lottery, Tmax, or
+ordinary METAR/WU strategies.
+
+## 2026-07-14 Denominator And Event-Semantics Correction
+
+The v1 `cross_event` name was too broad: its implementation only checked whether
+the saved running-high bracket changed from the prior snapshot.  It did not join
+JMA, AMOS, HKO, MSS, MADIS, or the new city-source profiles.  The 518 rows are
+therefore generic observed bracket advances, not fast-source events, and the
+42-row current-NO result is a final model-selected subset rather than the full
+date-city denominator.
+
+The corrected denominator audit records 68,026 city-date-local-hour paper
+candidates across 69 dates / 49 cities, but this is a separate hourly-last raw
+inventory, not the parent denominator of the 8,094 v3 states.  The latter are
+individual reconstructed decision snapshots across 22 settled dates, with
+multiple snapshots allowed in one local hour; deduplicating them to the same
+city/date/hour grain yields 4,121 rows.  Of the 8,094 strategy-grain states, 518
+were generic advances and 499 had executable current-NO asks and depth.  Trading
+all 499 current-NO rows returned fee-adjusted ROI -2.7%, with a
+date-bootstrap CI of [-7.1%, +0.9%].  Its date-equal excess over the same-price-
+band initial-anchor baseline was -0.6%, CI [-3.7%, +2.1%].  The broad event has
+not shown alpha.
+
+True profile-matched high-frequency history only begins in the persisted 2026-
+07-08 UTC file (city-local target dates can be 2026-07-07).  With settlement
+labels currently through 2026-07-10, it provides only four overlapping target
+dates / 61 city-dates, not a two-month fast-source replay.  Keep the corrected
+collector at zero notional until a separate forward window passes significance,
+same-denominator baseline, and execution gates.
+
+Durable audit:
+
+- `scripts/analysis/market_structure_edge/audit_source_event_denominator_v2.py`
+- `docs/analysis/2026-07/2026-07-14-source-event-denominator-audit-v2.md`
+- `docs/analysis/2026-07/generated/source_event_denominator_audit_v2/`
+
+## 2026-07-14 Expression-Specific Denominator Correction
+
+The v1/v2 replay inherited the Tmax full-ladder requirement that current, d1,
+and d2 all exist before a state is materialized.  That is invalid for this
+strategy family: current YES/NO only needs the current token; d1 only needs one
+higher rung.  A market naturally ending at current or d1 is not missing data.
+
+The corrected v3 replay materializes each expression independently and fills
+settlement winners from canonical `settlement_outcomes`.  Historical Gamma gaps
+were recovered through saved snapshot condition IDs and the closed CLOB market
+endpoint, expanding winner coverage to 2,954 / 2,956 snapshot city-days; only
+Cape Town 2026-05-17 and Buenos Aires 2026-07-09 remain unrecoverable because
+the winning condition is absent from the saved ladder.
+
+Running max means the highest observation that was already first-seen by the
+decision timestamp.  v3 reconstructs it from embedded snapshot observations
+plus the source/orderbook timing log, then falls back to the value saved in the
+snapshot itself.  It does not use final-day history retroactively.  This yields
+26,383 expression states and 1,075 generic bracket advances; 835 raw decisions
+with no d1 rung are retained for current rather than discarded.
+
+On executable generic crosses, current YES is -8.9% fee-adjusted ROI (426 rows),
+current NO -3.5% (366), d1 YES -23.2% (297), and d1 NO -2.3% (417).  Current NO
+95% CI is [-9.2%, +0.8%] and same-band excess is -2.2%, CI [-7.3%, +2.2%].
+The corrected denominator therefore does not rescue the generic-cross alpha.
+
+Durable output:
+
+- `scripts/analysis/market_structure_edge/research_source_event_expression_denominator_v3.py`
+- `docs/analysis/2026-07/2026-07-14-source-event-expression-denominator-v3.md`
+- `scripts/ops/backfill_weather_pm_history_from_snapshot_conditions.py`
+
+## 2026-08-28 Fixed +60 Minute Taker Exit Cross-Family Check
+
+The Tmin challenger is not a global 60-minute exit rule.  This check migrated
+its single preselected policy to Tmax without searching another horizon:
+entry at the executable ask, then sell the full original quantity at the first
+fresh executable bid in minutes +60 through +72.  Both legs pay the official
+Weather taker fee, freshness is capped at 300 seconds, and missing exits remain
+in the signal denominator.  The fast-source family used the first valid v2/v3
+previous-bracket NO entry per city-day at five shares; normal Core used its
+frozen current-YES selections at their original five- or ten-share quantity.
+This was a quote replay with zero actual orders or fills.
+
+| Tmax family | Signals / exits | Entry cash / gross two-leg quote notional | Fixed-exit result | Same-settled HOLD comparison |
+| --- | ---: | ---: | ---: | ---: |
+| Fast-source previous NO | 279 / 267 | $1,256.01 / $2,507.81 | -$2.99, -0.238% | fixed -$1.59 vs HOLD +$10.44; delta -$12.03 |
+| Normal Core current YES | 112 / 70 | $635.52 / $1,270.35 | +$0.08, +0.013% | fixed -$0.91 vs HOLD +$18.17; delta -$19.09 |
+
+The late secondary-history window started on 2026-08-13.  Fast-source returned
+-$3.55 / -0.923% (95% target-date CI [-3.61%, +1.46%]); normal Core returned
+-$7.85 / -1.962% (CI [-7.25%, +2.58%]).  Neither family had a positive lower
+confidence bound or beat HOLD.  Normal Core's early +$7.93 / +3.37% point
+estimate is not qualification evidence: only 27 of 68 signals had a complete
+exit, and HOLD made +$19.48 on those same rows.
+
+The mechanism sometimes rescues eventual losers, but a fixed clock cannot
+separate those positions from eventual winners experiencing a temporary
+drawdown.  Selling into the bid also adds spread and a second taker fee.  The
+cross-family significance, HOLD-baseline, coverage, and pristine-forward gates
+therefore fail.  Status is `inconclusive_do_not_promote`; retain the existing
+HOLD semantics and do not deploy a general fixed 60-minute exit.
+
+Durable artifact:
+
+- `/Volumes/jrs-archive/pm_agents/research/artifact_store/active/tmax_fixed_60m_taker_exit_v1/tmax_fixed60_20260828_v3/`

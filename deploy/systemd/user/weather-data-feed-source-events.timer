@@ -1,0 +1,10 @@
+[Unit]
+Description=Run weather data feed source-event collector after each completed run
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=2min
+Unit=weather-data-feed-source-events.service
+
+[Install]
+WantedBy=timers.target

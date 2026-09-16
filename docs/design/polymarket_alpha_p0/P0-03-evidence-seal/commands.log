@@ -1,0 +1,40 @@
+# P0-03 rework evidence commands (run from repository root, 2026-08-26 UTC+8)
+
+# 1. Reworked P0-03 test module (50 tests)
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha/test_gamma_catalog_p0_03.py \
+  --junitxml=docs/design/polymarket_alpha_p0/P0-03-evidence-seal/test-results/test_results_p0_03.xml
+# -> 50 passed in 0.27s
+
+# 2. Full polymarket_alpha suite incl. P0-07 rules and P0-11 offline/security subset (159 tests)
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha/ \
+  --junitxml=docs/design/polymarket_alpha_p0/P0-03-evidence-seal/test-results/test_results_full.xml
+# -> 159 passed in 0.47s
+
+# 3. Targeted legacy Gamma regression (no modification to src/platform/clients/gamma.py)
+PYTHONPATH=. .venv/bin/pytest -q \
+  tests/research_tests/test_gamma_normalize_models.py \
+  tests/research_tests/test_gamma_pagination.py \
+  tests/research_tests/polymarket/test_market_resolver.py
+# -> 8 passed in 0.14s
+
+# 4. Seal sample artifacts (golden ingest, replay idempotency, cross-run retry,
+#    multi-event order independence, rule revisions, db manifest, P0-11 Wave-0
+#    capability audit of the owned source trees)
+PYTHONPATH=. .venv/bin/python \
+  docs/design/polymarket_alpha_p0/P0-03-evidence-seal/sample-artifacts/generate_seal_artifacts.py
+# -> {"golden_counts": {"pages": 2, "raw_market_artifacts": 4, "snapshots": 4,
+#     "aliases": 4, "drift_receipts": 0, "error_receipts": 0}, "audit_passed": true}
+# cross_run_retry.json:        original_run_errors=0, retry_run_errors=0,
+#                              artifact_ids_run_scoped=true,
+#                              shared_logical_payload_sha256=true
+# multi_event_order_independence.json: snapshot_ids_identical=true,
+#                              raw_artifact_ids_identical=true,
+#                              canonical_sha256_identical=true,
+#                              primary_event_id=E1, full_event_set=[E1, E2]
+# replay_idempotency.json:     counts_identical=true, replay_snapshot_ids_match=true
+# rule_change_revisions.json:  one-char -> rule_hash_changed=true;
+#                              whitespace-only -> rule_hash_identical=true
+
+# 5. Seal hashes (manifest.json is written FIRST and is covered by the list)
+cd docs/design/polymarket_alpha_p0/P0-03-evidence-seal && \
+  find . -type f ! -name hashes.sha256 -exec shasum -a 256 {} \; | sed 's|  \./|  |' | sort -k2 > hashes.sha256

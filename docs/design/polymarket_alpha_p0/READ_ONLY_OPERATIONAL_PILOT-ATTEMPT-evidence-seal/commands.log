@@ -1,0 +1,25 @@
+2026-08-27 production preflight:
+  .venv/bin/python scripts/ops/weather_production_manifest.py --strict
+  .venv/bin/python scripts/ops/weather_production_ctl.py health
+  result: manifest healthy; controller CRITICAL; no mutation
+
+2026-08-27 tests before attempt:
+  focused operational/owner suite
+  result: 131 passed
+  PYTHONPATH=. .venv/bin/python -m pytest -q tests/polymarket_alpha
+  result: 449 passed
+
+2026-08-27 authorized Gamma invocation 1:
+  clean environment; GET https://gamma-api.polymarket.com/events?closed=false&limit=4&offset=0
+  timeout: 10 seconds per resolved address
+  result: direct TLS timeout; no HTTP response; preflight and authorization sealed
+
+2026-08-27 authorized Gamma invocation 2:
+  env -i ... polymarket_alpha_gamma_read_only_pilot.py --limit 4 --timeout-seconds 5
+  result: direct TLS timeout; immutable typed failure receipt sealed
+
+Not run:
+  Alpha owner demand
+  production config/deploy/restart
+  current runtime/database migration
+  CLOB request/order/signing/private-key operation

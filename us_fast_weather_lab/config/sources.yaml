@@ -1,0 +1,25 @@
+contract_version: US_FAST_WEATHER_SOURCES_V1
+wis2:
+  discovery_url: https://wis2-gdc.weather.gc.ca/collections/wis2-discovery-metadata/items/urn%3Awmo%3Amd%3Aus-noaa-nws%3Aaviation-metar-observations?f=json
+  username: everyone
+  password: everyone
+  port: 8883
+  topic_base: a/wis2/us-noaa-nws/data/core/weather/aviation/metar
+  # NOAA SCN 25-75 (effective 2025-10-28), PNS 25-62, and the current
+  # dataset metadata are authoritative when GDC still returns an old host.
+  authoritative_brokers:
+    us-noaa-nws-node-origin-current: wis2node.globaldata.nws.noaa.gov
+    us-noaa-nws-global-broker-current: wis2broker.globaldata.nws.noaa.gov
+    us-noaa-nws-global-cache-current: wis2cache.globaldata.nws.noaa.gov
+  fallback_brokers:
+    us-noaa-nws-global-broker: wis2globalbroker.nws.noaa.gov
+    fr-meteofrance-global-broker: globalbroker.meteo.fr
+    cn-cma-global-broker: gb.wis.cma.cn
+    br-inmet-global-broker: globalbroker.inmet.gov.br
+awc:
+  api_url: https://aviationweather.gov/api/data/metar
+  cache_url: https://aviationweather.gov/data/cache/metars.cache.xml.gz
+  poll_interval_seconds: 2
+  cache_interval_seconds: 60
+  user_agent: pm-agents-us-fast-weather-lab/0.1 contact=local-research
+  max_requests_per_minute: 30

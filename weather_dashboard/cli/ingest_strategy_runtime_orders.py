@@ -1,0 +1,156 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sqlite3
+from typing import Sequence
+
+from weather_dashboard.db.apply_schema_canonical import init_db_canonical
+from weather_dashboard.db.connection import get_conn, get_existing_wal_conn
+from src.strategies.runtime.sync import sync_instance_specs
+from src.strategies.runtime.production import WeatherProductionSpec, load_production_spec
+from weather_dashboard.legacy_migration.strategy_runtime_orders import (
+    DEFAULT_ROOTS,
+    iter_strategy_order_paths,
+    migrate_strategy_runtime_orders,
+    write_report,
+)
+
+
+_REQUIRED_EXISTING_TABLES = frozenset(
+    {
+        "code_versions",
+        "strategy_config",
+        "universes",
+        "runs",
+        "strategy_instance",
+        "signals",
+        "plans",
+        "orders",
+        "fills",
+    }
+)
+
+
+def require_existing_order_ingest_schema(conn: sqlite3.Connection) -> None:
+    """Validate the accounting schema on the exact connection used for DML."""
+
+    tables = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        )
+    }
+    missing = sorted(_REQUIRED_EXISTING_TABLES - tables)
+    if missing:
+        raise RuntimeError(
+            "existing canonical order-ingest schema is incomplete: "
+            + ", ".join(missing)
+        )
+
+
+def resolve_active_live_order_paths(
+    project_root: str | Path,
+    *,
+    production_spec: WeatherProductionSpec | None = None,
+) -> list[Path]:
+    """Resolve current live journals only from production desired state."""
+
+    root = Path(project_root)
+    spec = production_spec or load_production_spec()
+    paths: list[Path] = []
+    for declared in spec.active_live_order_paths():
+        path = declared if declared.is_absolute() else root / declared
+        if path.is_file():
+            paths.append(path)
+    return paths
+
+
+def resolve_order_paths(
+    root_args: list[str] | None,
+    order_files: list[str] | None,
+) -> list[Path]:
+    # Explicit order files supplement normal runtime discovery.  Previously
+    # their presence silently disabled DEFAULT_ROOTS, so any local strategy not
+    # repeated in the shell wrapper vanished from canonical lineage.
+    roots = root_args if root_args is not None else DEFAULT_ROOTS
+    paths = iter_strategy_order_paths(roots)
+    seen = {str(path) for path in paths}
+    for raw_path in order_files or []:
+        path = Path(raw_path)
+        if str(path) not in seen:
+            paths.append(path)
+            seen.add(str(path))
+    return paths
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Migrate strategy-local runtime order JSONL into canonical DB")
+    parser.add_argument("--db-path", default="runtime/weather.db")
+    parser.add_argument("--report-dir", default="runtime/weather_dashboard_migration/reports")
+    parser.add_argument(
+        "--root",
+        action="append",
+        help="Root containing strategy runtime directories. Can be repeated.",
+    )
+    parser.add_argument(
+        "--order-file",
+        action="append",
+        help="Specific live_orders.jsonl/paper_orders.jsonl to ingest. Can be repeated.",
+    )
+    parser.add_argument(
+        "--active-live-only",
+        action="store_true",
+        help="Discover enabled expected-live instance journals from strategy_instance.",
+    )
+    parser.add_argument(
+        "--project-root",
+        default=".",
+        help="Base directory for relative strategy_instance.runtime_dir values.",
+    )
+    parser.add_argument(
+        "--require-existing-schema",
+        action="store_true",
+        help=(
+            "Do not initialize or migrate schema; fail unless the existing "
+            "canonical order-ingest tables are already present."
+        ),
+    )
+    args = parser.parse_args(argv)
+
+    if args.require_existing_schema:
+        conn = get_existing_wal_conn(args.db_path)
+        try:
+            require_existing_order_ingest_schema(conn)
+        except Exception:
+            conn.close()
+            raise
+    else:
+        init_db_canonical(args.db_path)
+        conn = get_conn(args.db_path)
+    try:
+        if args.active_live_only:
+            paths = resolve_active_live_order_paths(args.project_root)
+            seen = {str(path) for path in paths}
+            for raw_path in args.order_file or []:
+                path = Path(raw_path)
+                if str(path) not in seen:
+                    paths.append(path)
+                    seen.add(str(path))
+        else:
+            sync_instance_specs(conn)
+            paths = resolve_order_paths(args.root, args.order_file)
+        reports = [migrate_strategy_runtime_orders(conn, order_path=path) for path in paths]
+    finally:
+        conn.close()
+
+    report_path = write_report(reports, args.report_dir)
+    print(json.dumps({
+        "report_path": str(report_path),
+        "reports": [report.as_dict() for report in reports],
+    }, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

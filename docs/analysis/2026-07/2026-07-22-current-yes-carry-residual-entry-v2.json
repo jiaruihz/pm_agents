@@ -1,0 +1,824 @@
+{
+  "generated_at_utc": "2026-07-23T16:08:54+00:00",
+  "status": "exploratory_frozen_forward_challenger_no_live_change",
+  "data_snapshot": {
+    "rows": 4061,
+    "city_days": 1305,
+    "dates": 46,
+    "date_min": "2026-05-19",
+    "date_max": "2026-07-08",
+    "oof_rows": 2758,
+    "oof_dates": 32,
+    "carry_rows_market_mid_ge_0p80": 1350,
+    "carry_city_days": 773,
+    "forecast_lineage": "per-city fixed CITY_MODEL dual Single Runs PIT columns",
+    "model_validation": "expanding target-date OOF; strictly earlier dates; each training city-day one total weight",
+    "clob_fill_coverage_gate_pass": true
+  },
+  "target_metric": {
+    "label": "current exact bracket remains final winning bracket",
+    "expression_domain": "market_mid >= 0.8",
+    "entry": "first city-day checkpoint where OOF p_hold exceeds official-fee-adjusted direct ask",
+    "execution": "taker; archived full ask ladder at decision timestamp"
+  },
+  "feature_sets": {
+    "market_cal": [
+      "market_logit"
+    ],
+    "market_plus_clock": [
+      "market_logit",
+      "decision_hour_local",
+      "forecast_peak_delta_hours_local"
+    ],
+    "core": [
+      "market_logit",
+      "decision_hour_local",
+      "forecast_peak_delta_hours_local",
+      "dewpoint_depression_f",
+      "wind_speed_kt",
+      "obs_age_min"
+    ],
+    "core_no_obs_age": [
+      "market_logit",
+      "decision_hour_local",
+      "forecast_peak_delta_hours_local",
+      "dewpoint_depression_f",
+      "wind_speed_kt"
+    ],
+    "core_no_clock": [
+      "market_logit",
+      "dewpoint_depression_f",
+      "wind_speed_kt",
+      "obs_age_min"
+    ],
+    "core_no_wind": [
+      "market_logit",
+      "decision_hour_local",
+      "forecast_peak_delta_hours_local",
+      "dewpoint_depression_f",
+      "obs_age_min"
+    ],
+    "no_path": [
+      "market_logit",
+      "decision_hour_local",
+      "forecast_peak_delta_hours_local",
+      "relative_humidity_pct",
+      "sky_cover_code",
+      "dewpoint_depression_f",
+      "wind_speed_kt",
+      "obs_age_min"
+    ],
+    "path_added": [
+      "market_logit",
+      "decision_hour_local",
+      "forecast_peak_delta_hours_local",
+      "relative_humidity_pct",
+      "sky_cover_code",
+      "dewpoint_depression_f",
+      "wind_speed_kt",
+      "obs_age_min",
+      "decline_steps",
+      "minutes_since_running_max_log",
+      "temp_trend_1h_f",
+      "temp_trend_3h_f"
+    ],
+    "cc_added": [
+      "market_logit",
+      "decision_hour_local",
+      "forecast_peak_delta_hours_local",
+      "relative_humidity_pct",
+      "sky_cover_code",
+      "dewpoint_depression_f",
+      "wind_speed_kt",
+      "obs_age_min",
+      "decline_steps",
+      "minutes_since_running_max_log",
+      "temp_trend_1h_f",
+      "temp_trend_3h_f",
+      "gap_debiased_steps",
+      "bias_known_num",
+      "path_faded_num",
+      "route_num"
+    ]
+  },
+  "proper_scores": [
+    {
+      "model": "market_cal",
+      "rows": 1350,
+      "city_days": 773,
+      "dates": 31,
+      "brier": 0.06252232328283253,
+      "logloss": 0.23338903319070783,
+      "mean_pred": 0.916607197686816,
+      "actual_rate": 0.9290642518326865,
+      "score_weighting": "each city-day one total vote; states within city-day share that vote"
+    },
+    {
+      "model": "market_plus_clock",
+      "rows": 1350,
+      "city_days": 773,
+      "dates": 31,
+      "brier": 0.06194667123179658,
+      "logloss": 0.2316966470991678,
+      "mean_pred": 0.9171846035614176,
+      "actual_rate": 0.9290642518326865,
+      "score_weighting": "each city-day one total vote; states within city-day share that vote",
+      "vs_market_cal": {
+        "candidate_minus_baseline_brier": -0.0005756520510359367,
+        "brier_delta_ci95": [
+          -0.0018286008056814641,
+          0.00056294308844057
+        ],
+        "candidate_minus_baseline_logloss": -0.0016923860915400502,
+        "logloss_delta_ci95": [
+          -0.0061889610020021595,
+          0.002746572548552766
+        ],
+        "city_days": 773,
+        "interpretation": "negative delta means candidate improves; city-days equal-weighted and target dates block-bootstrapped"
+      }
+    },
+    {
+      "model": "core",
+      "rows": 1350,
+      "city_days": 773,
+      "dates": 31,
+      "brier": 0.06147227555145244,
+      "logloss": 0.2275000894753143,
+      "mean_pred": 0.9173166037709817,
+      "actual_rate": 0.9290642518326865,
+      "score_weighting": "each city-day one total vote; states within city-day share that vote",
+      "vs_market_cal": {
+        "candidate_minus_baseline_brier": -0.0010500477313800753,
+        "brier_delta_ci95": [
+          -0.00288494152966071,
+          0.0006409585023325101
+        ],
+        "candidate_minus_baseline_logloss": -0.005888943715393531,
+        "logloss_delta_ci95": [
+          -0.012054200094153332,
+          5.582501964927361e-05
+        ],
+        "city_days": 773,
+        "interpretation": "negative delta means candidate improves; city-days equal-weighted and target dates block-bootstrapped"
+      }
+    },
+    {
+      "model": "core_no_obs_age",
+      "rows": 1350,
+      "city_days": 773,
+      "dates": 31,
+      "brier": 0.061392496356104914,
+      "logloss": 0.22769779777497698,
+      "mean_pred": 0.9167451348733676,
+      "actual_rate": 0.9290642518326865,
+      "score_weighting": "each city-day one total vote; states within city-day share that vote",
+      "vs_market_cal": {
+        "candidate_minus_baseline_brier": -0.001129826926727603,
+        "brier_delta_ci95": [
+          -0.002957553114259802,
+          0.0005390833030052426
+        ],
+        "candidate_minus_baseline_logloss": -0.005691235415730869,
+        "logloss_delta_ci95": [
+          -0.011827522282875662,
+          0.00012556404646716645
+        ],
+        "city_days": 773,
+        "interpretation": "negative delta means candidate improves; city-days equal-weighted and target dates block-bootstrapped"
+      }
+    },
+    {
+      "model": "core_no_clock",
+      "rows": 1350,
+      "city_days": 773,
+      "dates": 31,
+      "brier": 0.061838347852754875,
+      "logloss": 0.22965909764567619,
+      "mean_pred": 0.9142822470143172,
+      "actual_rate": 0.9290642518326865,
+      "score_weighting": "each city-day one total vote; states within city-day share that vote",
+      "vs_market_cal": {
+        "candidate_minus_baseline_brier": -0.0006839754300776436,
+        "brier_delta_ci95": [
+          -0.0023317733175267983,
+          0.0008025074083068182
+        ],
+        "candidate_minus_baseline_logloss": -0.0037299355450316684,
+        "logloss_delta_ci95": [
+          -0.009858558662229462,
+          0.0018121953917001668
+        ],
+        "city_days": 773,
+        "interpretation": "negative delta means candidate improves; city-days equal-weighted and target dates block-bootstrapped"
+      }
+    },
+    {
+      "model": "core_no_wind",
+      "rows": 1350,
+      "city_days": 773,
+      "dates": 31,
+      "brier": 0.06170856327635336,
+      "logloss": 0.2301650318013536,
+      "mean_pred": 0.917768875185688,
+      "actual_rate": 0.9290642518326865,
+      "score_weighting": "each city-day one total vote; states within city-day share that vote",
+      "vs_market_cal": {
+        "candidate_minus_baseline_brier": -0.0008137600064791574,
+        "brier_delta_ci95": [
+          -0.002119491733032141,
+          0.00047919983844270955
+        ],
+        "candidate_minus_baseline_logloss": -0.003224001389354213,
+        "logloss_delta_ci95": [
+          -0.008229507188978472,
+          0.0018189401236543166
+        ],
+        "city_days": 773,
+        "interpretation": "negative delta means candidate improves; city-days equal-weighted and target dates block-bootstrapped"
+      }
+    },
+    {
+      "model": "no_path",
+      "rows": 1350,
+      "city_days": 773,
+      "dates": 31,
+      "brier": 0.06165462516234199,
+      "logloss": 0.22736966326203492,
+      "mean_pred": 0.917525680524849,
+      "actual_rate": 0.9290642518326865,
+      "score_weighting": "each city-day one total vote; states within city-day share that vote",
+      "vs_market_cal": {
+        "candidate_minus_baseline_brier": -0.0008676981204905308,
+        "brier_delta_ci95": [
+          -0.002768253143289337,
+          0.0009309449605164642
+        ],
+        "candidate_minus_baseline_logloss": -0.00601936992867293,
+        "logloss_delta_ci95": [
+          -0.012949002559157596,
+          0.0005524364047518939
+        ],
+        "city_days": 773,
+        "interpretation": "negative delta means candidate improves; city-days equal-weighted and target dates block-bootstrapped"
+      }
+    },
+    {
+      "model": "path_added",
+      "rows": 1350,
+      "city_days": 773,
+      "dates": 31,
+      "brier": 0.0624536616873788,
+      "logloss": 0.22991171138519834,
+      "mean_pred": 0.9180297938680048,
+      "actual_rate": 0.9290642518326865,
+      "score_weighting": "each city-day one total vote; states within city-day share that vote",
+      "vs_market_cal": {
+        "candidate_minus_baseline_brier": -6.86615954537068e-05,
+        "brier_delta_ci95": [
+          -0.001804335243119853,
+          0.0016228010729034406
+        ],
+        "candidate_minus_baseline_logloss": -0.0034773218055095174,
+        "logloss_delta_ci95": [
+          -0.01055844429456857,
+          0.0032993541259480406
+        ],
+        "city_days": 773,
+        "interpretation": "negative delta means candidate improves; city-days equal-weighted and target dates block-bootstrapped"
+      }
+    },
+    {
+      "model": "cc_added",
+      "rows": 1350,
+      "city_days": 773,
+      "dates": 31,
+      "brier": 0.06261867358084854,
+      "logloss": 0.23104752402827577,
+      "mean_pred": 0.9183841970205152,
+      "actual_rate": 0.9290642518326865,
+      "score_weighting": "each city-day one total vote; states within city-day share that vote",
+      "vs_market_cal": {
+        "candidate_minus_baseline_brier": 9.63502980160138e-05,
+        "brier_delta_ci95": [
+          -0.001810005253325233,
+          0.0018410463144395953
+        ],
+        "candidate_minus_baseline_logloss": -0.0023415091624320967,
+        "logloss_delta_ci95": [
+          -0.009953800059093517,
+          0.005163849963548944
+        ],
+        "city_days": 773,
+        "interpretation": "negative delta means candidate improves; city-days equal-weighted and target dates block-bootstrapped"
+      }
+    }
+  ],
+  "entry_results": [
+    {
+      "selector": "market_cal",
+      "city_days": 0,
+      "dates": 0,
+      "cities": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "avg_ask": null,
+      "avg_effective_cost": null,
+      "fee_adjusted_taker_roi": null,
+      "target_date_block_ci95": [
+        null,
+        null
+      ],
+      "top_ask_size_ge_5_share": null,
+      "top_ask_size_ge_10_share": null,
+      "avg_market_mid": null,
+      "avg_model_probability": null,
+      "avg_edge_after_fee": null,
+      "robustness": {
+        "leave_one_date_out_roi_min": null,
+        "leave_one_date_out_roi_max": null,
+        "leave_one_city_out_roi_min": null,
+        "leave_one_city_out_roi_max": null,
+        "front_roi": null,
+        "back_roi": null,
+        "covered_oof_dates": 0,
+        "active_dates": 0,
+        "signals_per_covered_date": null,
+        "signals_per_active_date": null,
+        "signals_p90_active_date": null,
+        "signals_max_active_date": null,
+        "worst_date": null,
+        "worst_date_pnl_per_share": null
+      }
+    },
+    {
+      "selector": "market_plus_clock",
+      "city_days": 65,
+      "dates": 27,
+      "cities": 28,
+      "wins": 59,
+      "losses": 6,
+      "win_rate": 0.9076923076923077,
+      "avg_ask": 0.9071846153846154,
+      "avg_effective_cost": 0.911250923076923,
+      "fee_adjusted_taker_roi": -0.0039051981122821574,
+      "target_date_block_ci95": [
+        -0.09553385901206733,
+        0.07209278126887275
+      ],
+      "top_ask_size_ge_5_share": 0.9384615384615385,
+      "top_ask_size_ge_10_share": 0.8461538461538461,
+      "avg_market_mid": 0.8917538461538461,
+      "avg_model_probability": 0.931529188616169,
+      "avg_edge_after_fee": 0.02027826553924593,
+      "robustness": {
+        "leave_one_date_out_roi_min": -0.015536295718312098,
+        "leave_one_date_out_roi_max": 0.025863976450408062,
+        "leave_one_city_out_roi_min": -0.0117225872958915,
+        "leave_one_city_out_roi_max": 0.010557010312385836,
+        "front_roi": -0.051221781499436826,
+        "back_roi": 0.0543077697587631,
+        "covered_oof_dates": 27,
+        "active_dates": 27,
+        "signals_per_covered_date": 2.4074074074074074,
+        "signals_per_active_date": 2.4074074074074074,
+        "signals_p90_active_date": 4.400000000000002,
+        "signals_max_active_date": 6,
+        "worst_date": "2026-06-07",
+        "worst_date_pnl_per_share": -1.6936
+      }
+    },
+    {
+      "selector": "core",
+      "city_days": 148,
+      "dates": 30,
+      "cities": 29,
+      "wins": 141,
+      "losses": 7,
+      "win_rate": 0.9527027027027027,
+      "avg_ask": 0.9078581081081081,
+      "avg_effective_cost": 0.9119027027027027,
+      "fee_adjusted_taker_roi": 0.044741615392822856,
+      "target_date_block_ci95": [
+        0.006464411416391149,
+        0.07906627887647305
+      ],
+      "top_ask_size_ge_5_share": 0.9662162162162162,
+      "top_ask_size_ge_10_share": 0.8445945945945946,
+      "avg_market_mid": 0.8914290540540543,
+      "avg_model_probability": 0.9341989371373974,
+      "avg_edge_after_fee": 0.022296234434694896,
+      "robustness": {
+        "leave_one_date_out_roi_min": 0.04042129919426359,
+        "leave_one_date_out_roi_max": 0.05183326861103804,
+        "leave_one_city_out_roi_min": 0.04032367130707477,
+        "leave_one_city_out_roi_max": 0.05235805106526967,
+        "front_roi": 0.03753203380154363,
+        "back_roi": 0.05523481066813286,
+        "covered_oof_dates": 30,
+        "active_dates": 30,
+        "signals_per_covered_date": 4.933333333333334,
+        "signals_per_active_date": 4.933333333333334,
+        "signals_p90_active_date": 8.100000000000001,
+        "signals_max_active_date": 10,
+        "worst_date": "2026-06-14",
+        "worst_date_pnl_per_share": -0.71282
+      }
+    },
+    {
+      "selector": "core_no_obs_age",
+      "city_days": 139,
+      "dates": 30,
+      "cities": 29,
+      "wins": 133,
+      "losses": 6,
+      "win_rate": 0.9568345323741008,
+      "avg_ask": 0.9087194244604315,
+      "avg_effective_cost": 0.9127306474820145,
+      "fee_adjusted_taker_roi": 0.04832081076028009,
+      "target_date_block_ci95": [
+        0.01057887556755567,
+        0.08124162995901245
+      ],
+      "top_ask_size_ge_5_share": 0.9712230215827338,
+      "top_ask_size_ge_10_share": 0.841726618705036,
+      "avg_market_mid": 0.8920215827338129,
+      "avg_model_probability": 0.9348211710368591,
+      "avg_edge_after_fee": 0.0220905235548447,
+      "robustness": {
+        "leave_one_date_out_roi_min": 0.04389374354712112,
+        "leave_one_date_out_roi_max": 0.055518126028209665,
+        "leave_one_city_out_roi_min": 0.04421931974163994,
+        "leave_one_city_out_roi_max": 0.05711765243768688,
+        "front_roi": 0.045630812287323845,
+        "back_roi": 0.05253868282070651,
+        "covered_oof_dates": 30,
+        "active_dates": 30,
+        "signals_per_covered_date": 4.633333333333334,
+        "signals_per_active_date": 4.633333333333334,
+        "signals_p90_active_date": 7.200000000000003,
+        "signals_max_active_date": 10,
+        "worst_date": "2026-06-16",
+        "worst_date_pnl_per_share": -0.69678
+      }
+    },
+    {
+      "selector": "core_no_clock",
+      "city_days": 103,
+      "dates": 29,
+      "cities": 29,
+      "wins": 98,
+      "losses": 5,
+      "win_rate": 0.9514563106796117,
+      "avg_ask": 0.9025631067961165,
+      "avg_effective_cost": 0.9068198058252427,
+      "fee_adjusted_taker_roi": 0.04922312522028332,
+      "target_date_block_ci95": [
+        0.011513666181330161,
+        0.0839806811512908
+      ],
+      "top_ask_size_ge_5_share": 0.941747572815534,
+      "top_ask_size_ge_10_share": 0.8252427184466019,
+      "avg_market_mid": 0.8892572815533981,
+      "avg_model_probability": 0.9253652351281054,
+      "avg_edge_after_fee": 0.01854542930286276,
+      "robustness": {
+        "leave_one_date_out_roi_min": 0.044997948770155394,
+        "leave_one_date_out_roi_max": 0.05769646050693628,
+        "leave_one_city_out_roi_min": 0.04383348088607383,
+        "leave_one_city_out_roi_max": 0.06636847126506563,
+        "front_roi": 0.011860504161370014,
+        "back_roi": 0.09902736078570468,
+        "covered_oof_dates": 29,
+        "active_dates": 29,
+        "signals_per_covered_date": 3.5517241379310347,
+        "signals_per_active_date": 3.5517241379310347,
+        "signals_p90_active_date": 6.0,
+        "signals_max_active_date": 8,
+        "worst_date": "2026-06-16",
+        "worst_date_pnl_per_share": -0.63916
+      }
+    },
+    {
+      "selector": "core_no_wind",
+      "city_days": 88,
+      "dates": 29,
+      "cities": 32,
+      "wins": 82,
+      "losses": 6,
+      "win_rate": 0.9318181818181818,
+      "avg_ask": 0.9123522727272728,
+      "avg_effective_cost": 0.9161979545454545,
+      "fee_adjusted_taker_roi": 0.017048965450350534,
+      "target_date_block_ci95": [
+        -0.047084423245528084,
+        0.06831539865016881
+      ],
+      "top_ask_size_ge_5_share": 0.9545454545454546,
+      "top_ask_size_ge_10_share": 0.8522727272727273,
+      "avg_market_mid": 0.8981704545454544,
+      "avg_model_probability": 0.9351320861904365,
+      "avg_edge_after_fee": 0.01893413164498209,
+      "robustness": {
+        "leave_one_date_out_roi_min": 0.009118896354184494,
+        "leave_one_date_out_roi_max": 0.028569283269780622,
+        "leave_one_city_out_roi_min": 0.011230811382905976,
+        "leave_one_city_out_roi_max": 0.03975665535238135,
+        "front_roi": 0.012527923621643636,
+        "back_roi": 0.023500782075009382,
+        "covered_oof_dates": 29,
+        "active_dates": 29,
+        "signals_per_covered_date": 3.0344827586206895,
+        "signals_per_active_date": 3.0344827586206895,
+        "signals_p90_active_date": 5.0,
+        "signals_max_active_date": 6,
+        "worst_date": "2026-06-14",
+        "worst_date_pnl_per_share": -0.84748
+      }
+    },
+    {
+      "selector": "no_path",
+      "city_days": 154,
+      "dates": 30,
+      "cities": 30,
+      "wins": 147,
+      "losses": 7,
+      "win_rate": 0.9545454545454546,
+      "avg_ask": 0.9101688311688312,
+      "avg_effective_cost": 0.9141234415584416,
+      "fee_adjusted_taker_roi": 0.04421942502437045,
+      "target_date_block_ci95": [
+        0.012021676367154878,
+        0.07561939492943494
+      ],
+      "top_ask_size_ge_5_share": 0.9675324675324676,
+      "top_ask_size_ge_10_share": 0.8441558441558441,
+      "avg_market_mid": 0.8943149350649349,
+      "avg_model_probability": 0.9367173675514202,
+      "avg_edge_after_fee": 0.022593925992978797,
+      "robustness": {
+        "leave_one_date_out_roi_min": 0.03976391417640116,
+        "leave_one_date_out_roi_max": 0.05077453552990598,
+        "leave_one_city_out_roi_min": 0.03972469952150163,
+        "leave_one_city_out_roi_max": 0.051717704101833475,
+        "front_roi": 0.030356889867727936,
+        "back_roi": 0.06560303830517825,
+        "covered_oof_dates": 30,
+        "active_dates": 30,
+        "signals_per_covered_date": 5.133333333333334,
+        "signals_per_active_date": 5.133333333333334,
+        "signals_p90_active_date": 8.100000000000001,
+        "signals_max_active_date": 11,
+        "worst_date": "2026-06-05",
+        "worst_date_pnl_per_share": -0.6378599999999999
+      }
+    },
+    {
+      "selector": "path_added",
+      "city_days": 185,
+      "dates": 30,
+      "cities": 35,
+      "wins": 174,
+      "losses": 11,
+      "win_rate": 0.9405405405405406,
+      "avg_ask": 0.9188972972972973,
+      "avg_effective_cost": 0.9224845405405404,
+      "fee_adjusted_taker_roi": 0.019573227741485934,
+      "target_date_block_ci95": [
+        -0.01778347867806117,
+        0.054807069395691896
+      ],
+      "top_ask_size_ge_5_share": 0.972972972972973,
+      "top_ask_size_ge_10_share": 0.7945945945945946,
+      "avg_market_mid": 0.9046864864864864,
+      "avg_model_probability": 0.9434442733135149,
+      "avg_edge_after_fee": 0.020959732772974422,
+      "robustness": {
+        "leave_one_date_out_roi_min": 0.014298909831531726,
+        "leave_one_date_out_roi_max": 0.030028543302733215,
+        "leave_one_city_out_roi_min": 0.015025128764082856,
+        "leave_one_city_out_roi_max": 0.02671368444944954,
+        "front_roi": 0.014387515959771736,
+        "back_roi": 0.02932096708248423,
+        "covered_oof_dates": 30,
+        "active_dates": 30,
+        "signals_per_covered_date": 6.166666666666667,
+        "signals_per_active_date": 6.166666666666667,
+        "signals_p90_active_date": 10.0,
+        "signals_max_active_date": 11,
+        "worst_date": "2026-06-26",
+        "worst_date_pnl_per_share": -1.6156699999999997
+      }
+    },
+    {
+      "selector": "cc_added",
+      "city_days": 230,
+      "dates": 31,
+      "cities": 36,
+      "wins": 219,
+      "losses": 11,
+      "win_rate": 0.9521739130434783,
+      "avg_ask": 0.9248739130434783,
+      "avg_effective_cost": 0.9282119130434782,
+      "fee_adjusted_taker_roi": 0.025815225664828988,
+      "target_date_block_ci95": [
+        -0.0028718729876589535,
+        0.052305599040418274
+      ],
+      "top_ask_size_ge_5_share": 0.9739130434782609,
+      "top_ask_size_ge_10_share": 0.8217391304347826,
+      "avg_market_mid": 0.9102673913043478,
+      "avg_model_probability": 0.9485426722027676,
+      "avg_edge_after_fee": 0.020330759159289318,
+      "robustness": {
+        "leave_one_date_out_roi_min": 0.02285253212038359,
+        "leave_one_date_out_roi_max": 0.03392627199764306,
+        "leave_one_city_out_roi_min": 0.022570350617143447,
+        "leave_one_city_out_roi_max": 0.03575540562464275,
+        "front_roi": 0.0098373341873672,
+        "back_roi": 0.05154579677581388,
+        "covered_oof_dates": 31,
+        "active_dates": 31,
+        "signals_per_covered_date": 7.419354838709677,
+        "signals_per_active_date": 7.419354838709677,
+        "signals_p90_active_date": 11.0,
+        "signals_max_active_date": 14,
+        "worst_date": "2026-06-07",
+        "worst_date_pnl_per_share": -1.3794799999999998
+      }
+    }
+  ],
+  "core_entry_timing": {
+    "policies": [
+      {
+        "selector": "first_positive_taker_ev",
+        "city_days": 148,
+        "dates": 30,
+        "cities": 29,
+        "wins": 141,
+        "losses": 7,
+        "win_rate": 0.9527027027027027,
+        "avg_ask": 0.9078581081081081,
+        "avg_effective_cost": 0.9119027027027027,
+        "fee_adjusted_taker_roi": 0.044741615392822856,
+        "target_date_block_ci95": [
+          0.006464411416391149,
+          0.07906627887647305
+        ],
+        "top_ask_size_ge_5_share": 0.9662162162162162,
+        "top_ask_size_ge_10_share": 0.8445945945945946
+      },
+      {
+        "selector": "two_consecutive_positive_ev",
+        "city_days": 54,
+        "dates": 23,
+        "cities": 21,
+        "wins": 53,
+        "losses": 1,
+        "win_rate": 0.9814814814814815,
+        "avg_ask": 0.9464259259259259,
+        "avg_effective_cost": 0.9488724074074073,
+        "fee_adjusted_taker_roi": 0.03436613165216961,
+        "target_date_block_ci95": [
+          -0.021384605082048817,
+          0.06544632315841822
+        ],
+        "top_ask_size_ge_5_share": 0.9629629629629629,
+        "top_ask_size_ge_10_share": 0.9259259259259259,
+        "paired_vs_first": {
+          "paired_city_days": 54,
+          "paired_dates": 23,
+          "same_bracket_rate": 1.0,
+          "bracket_changed_rate": 0.0,
+          "avg_delay_hours": 1.0846347736625515,
+          "avg_ask_delta_delayed_minus_immediate": 0.04459259259259263,
+          "immediate_roi_on_common": 0.08315769488510458,
+          "delayed_roi_on_common": 0.03436613165216961,
+          "delayed_minus_immediate_roi": -0.048791563232934966,
+          "delta_ci95": [
+            -0.06098265888963478,
+            -0.036064038409184804
+          ]
+        }
+      },
+      {
+        "selector": "fixed_next_retained_hour_same_bracket",
+        "city_days": 89,
+        "dates": 28,
+        "cities": 24,
+        "wins": 87,
+        "losses": 2,
+        "win_rate": 0.9775280898876404,
+        "avg_ask": 0.9435730337078653,
+        "avg_effective_cost": 0.946036966292135,
+        "fee_adjusted_taker_roi": 0.03328741340724863,
+        "target_date_block_ci95": [
+          -0.0066857253350158935,
+          0.06568561152626562
+        ],
+        "top_ask_size_ge_5_share": 0.9775280898876404,
+        "top_ask_size_ge_10_share": 0.8539325842696629,
+        "paired_vs_first": {
+          "paired_city_days": 89,
+          "paired_dates": 28,
+          "same_bracket_rate": 1.0,
+          "bracket_changed_rate": 0.0,
+          "avg_delay_hours": 1.0054588014981274,
+          "avg_ask_delta_delayed_minus_immediate": 0.04611235955056214,
+          "immediate_roi_on_common": 0.08381624406345882,
+          "delayed_roi_on_common": 0.03328741340724863,
+          "delayed_minus_immediate_roi": -0.05052883065621019,
+          "delta_ci95": [
+            -0.059515087235150456,
+            -0.039714538797420866
+          ]
+        }
+      }
+    ],
+    "archive_cadence_limit": "one retained state per city-target_date-local-hour; not minute-level"
+  },
+  "core_taker_vwap": {
+    "5": {
+      "signal_city_days": 148,
+      "raw_book_match_rate": 1.0,
+      "full_quantity_executable_rate": 1.0,
+      "best_ask_mismatch_rows": 0,
+      "avg_principal_vwap": 0.9082851486486487,
+      "avg_effective_cost_per_share": 0.9123129236486487,
+      "avg_slippage_cents_per_share_vs_best_ask": 0.041055878378379276,
+      "fee_adjusted_vwap_roi": 0.044271847966947164,
+      "best_ask_only_roi_same_rows": 0.04474200244439999
+    },
+    "10": {
+      "signal_city_days": 148,
+      "raw_book_match_rate": 1.0,
+      "full_quantity_executable_rate": 1.0,
+      "best_ask_mismatch_rows": 0,
+      "avg_principal_vwap": 0.9088059256756755,
+      "avg_effective_cost_per_share": 0.9128138497972972,
+      "avg_slippage_cents_per_share_vs_best_ask": 0.0911484932432436,
+      "fee_adjusted_vwap_roi": 0.04369878142653431,
+      "best_ask_only_roi_same_rows": 0.04474200244439999
+    }
+  },
+  "forward_coverage": {
+    "ledger_exists": true,
+    "path": "runtime/weather_edge_v1/current_yes_transition_aware_carry_shadow_v1/state_decisions.jsonl",
+    "all_raw_state_rows": 4044,
+    "research_window_rows": 517,
+    "research_window_dates": [
+      "2026-07-22",
+      "2026-07-23"
+    ],
+    "unique_city_snapshot_rows": 517,
+    "non_null": {
+      "heating_exhaustion_index_v2": 517,
+      "forecast_reheat_after_now_f": 517,
+      "solar_elevation_deg": 517,
+      "temperature_transition_risk_score": 385,
+      "regime_predictability_score": 385,
+      "taf_issue_time_utc": 517,
+      "minutes_since_last_strict_new_high": 0,
+      "current_yes_ask": 152
+    },
+    "direct_quote_pair_true": 141,
+    "current_yes_book_status": {
+      "ok": 161,
+      "orderbook_budget_exhausted": 354,
+      "orderbook_scope_skipped": 2
+    }
+  },
+  "interpretation": {
+    "new_candidate": "core",
+    "candidate_features": [
+      "market_logit",
+      "decision_hour_local",
+      "forecast_peak_delta_hours_local",
+      "dewpoint_depression_f",
+      "wind_speed_kt",
+      "obs_age_min"
+    ],
+    "path_group": "reject from challenger until strict-new-high clock semantics replace equal-high-reset minutes_since_running_max",
+    "cc_group": "do not merge; no incremental historical benefit in the continuous residual ablation",
+    "entry_timing": "first positive taker EV; waiting for a second confirmation or next retained hour is not supported",
+    "maker": "deferred; no maker alpha credited",
+    "multiplicity": "core emerged after exploratory ablation; bootstrap is descriptive post-selection evidence, not an independent promotion test"
+  },
+  "verdict": {
+    "historical_execution": "PASS_POINT_ESTIMATE_AND_DATE_BLOCK_CI",
+    "proper_score": "PARTIAL_POINT_IMPROVEMENT_BUT_CI_NOT_BOTH_STRICTLY_BELOW_ZERO",
+    "independent_forward": "FAIL_ONLY_ONE_TARGET_DATE_WITH_NEW_TRANSITION_TELEMETRY",
+    "production_parity": "FAIL_INCOMPLETE_DIRECT_QUOTE_AND_STRICT_HIGH_COVERAGE",
+    "live_action": "none",
+    "next_action": "freeze core as zero-notional challenger; complete quote/strict-high/settlement lineage and collect independent forward"
+  },
+  "outputs": {
+    "script": "scripts/analysis/reheat_risk/research_current_yes_carry_residual_entry_v2.py",
+    "json": "docs/analysis/2026-07/2026-07-22-current-yes-carry-residual-entry-v2.json",
+    "report": "docs/analysis/2026-07/2026-07-22-current-yes-carry-residual-entry-v2.md",
+    "oof_states": "docs/analysis/2026-07/generated/current_yes_carry_residual_entry_v2/oof_state_predictions.csv",
+    "core_entries": "docs/analysis/2026-07/generated/current_yes_carry_residual_entry_v2/entries_core.csv",
+    "core_taker_ladder": "docs/analysis/2026-07/generated/current_yes_carry_residual_entry_v2/core_taker_ladder.csv"
+  }
+}

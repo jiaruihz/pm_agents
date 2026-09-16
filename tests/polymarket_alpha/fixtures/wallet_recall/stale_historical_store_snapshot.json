@@ -1,0 +1,72 @@
+{
+  "name": "stale_historical_wallet_store",
+  "description": "Representation of the known repository wallet stores at their measured 48-79 day staleness: the snapshot receipt window is historical and cannot cover the current freshness window, so the whole batch fails closed and no current or historical hit is emitted.",
+  "request": {
+    "run_id": "wallet-recall-run-stale-store",
+    "clock": {
+      "as_of": "2026-08-26T07:00:00Z"
+    },
+    "source": {
+      "source_id": "specialist_wallet_store",
+      "snapshot_id": "snapshot-2026-06-28t1200z",
+      "snapshot_sha256": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "captured_at": "2026-06-28T12:05:00Z"
+    },
+    "pagination": {
+      "pages_expected": 3,
+      "pages_received": 3,
+      "truncated": false,
+      "window_start": "2026-06-27T00:00:00Z",
+      "window_end": "2026-06-28T12:00:00Z"
+    },
+    "facts": [
+      {
+        "fact_id": "fact-stale-1",
+        "address": "0x1111111111111111111111111111111111111111",
+        "token_id": "tok-alpha-leg-a",
+        "observed_at": "2026-06-28T11:30:00Z",
+        "side": "SELL",
+        "position_direction": "SHORT",
+        "notional_usdc": "500",
+        "size": "20"
+      },
+      {
+        "fact_id": "fact-stale-2",
+        "address": "0x4444444444444444444444444444444444444444",
+        "token_id": "tok-gamma-leg-a",
+        "observed_at": "2026-06-28T10:00:00Z",
+        "side": "BUY",
+        "position_direction": "LONG",
+        "notional_usdc": "12",
+        "size": "1"
+      }
+    ],
+    "aliases": [
+      {
+        "address": "0x1111111111111111111111111111111111111111",
+        "entity_id": "ent-alpha",
+        "provenance": "curated analyst mapping",
+        "confidence": "0.9"
+      }
+    ],
+    "token_markets": [
+      {
+        "token_id": "tok-alpha-leg-a",
+        "market_id": "market-alpha"
+      },
+      {
+        "token_id": "tok-gamma-leg-a",
+        "market_id": "market-gamma"
+      }
+    ]
+  },
+  "expect": {
+    "batch_reason": "WINDOW_COVERAGE_MISSING",
+    "current_market_ids": [],
+    "historical_market_ids": [],
+    "fact_rejections": {
+      "fact-stale-1": "WINDOW_COVERAGE_MISSING",
+      "fact-stale-2": "WINDOW_COVERAGE_MISSING"
+    }
+  }
+}

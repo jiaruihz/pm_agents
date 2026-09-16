@@ -1,0 +1,73 @@
+{
+  "entries": [
+    {
+      "path": "CAPACITY_AND_BACKPRESSURE_TESTS.json",
+      "sha256": "c9f268cfc06f4c3361852de053657822e7db0b62e84590e1c38ba80d9773b860",
+      "size_bytes": 1070
+    },
+    {
+      "path": "CLOCK_DOMAIN_CONTRACT.md",
+      "sha256": "317245e559d4487ef09dc5674404b110a9c83c980f985dd60ddf078d41cd6cc8",
+      "size_bytes": 534
+    },
+    {
+      "path": "CODE_DIFF_AND_IMPLEMENTATION_MAP.md",
+      "sha256": "8a759b84604e18ed53bb58f654997ae984a4e4c2a1064ed7f0e2842e5d4b8ea2",
+      "size_bytes": 668
+    },
+    {
+      "path": "COLLECTOR_CLOCK_AMENDMENT_CONTRACT.md",
+      "sha256": "47ab02f6e1ae708fc9688762abd123791009aced51c86e9d31f21404eb4f69ff",
+      "size_bytes": 1288
+    },
+    {
+      "path": "DEPLOYMENT_AND_ROLLBACK_PLAN.md",
+      "sha256": "fb6e07324c64f77a0d87d5ed45458590f320d9f3c90a985f5ee5e43b75d72848",
+      "size_bytes": 1015
+    },
+    {
+      "path": "EXPECTED_TOKEN_DEMAND_SCHEMA.md",
+      "sha256": "6c807594b9c2f339b33ddc56025ce98e46a3d8d460685e9e5180bf1bb0910d67",
+      "size_bytes": 572
+    },
+    {
+      "path": "GAP_RECONNECT_RESET_CONTRACT.md",
+      "sha256": "a54dc7c66a0238aba50ca42823883f788f00046b994c3d8f6c5fce7dfda54185",
+      "size_bytes": 593
+    },
+    {
+      "path": "GPT_PRO_DEPLOYMENT_REVIEW_PACKET.md",
+      "sha256": "b6a8e979a51fb41f37caa0c8c7ec497766b4dec0f150ba9f51709bad12c46a31",
+      "size_bytes": 908
+    },
+    {
+      "path": "ISOLATED_SHADOW_CONFIG.json",
+      "sha256": "fde583d356a2fbbb648c87d9a56b66e8898daeb1c75d449c4ead181e2edb6855",
+      "size_bytes": 567
+    },
+    {
+      "path": "ISOLATION_ARCHITECTURE.md",
+      "sha256": "3130659ac172f0a3aa4a78333120947c4e665589c7b1d738ed3b7ffe6866a401",
+      "size_bytes": 541
+    },
+    {
+      "path": "RECONNECT_RECOVERY_TESTS.json",
+      "sha256": "b8684aeaa3eb9c7104cd1cd6f02eb516bbbfd1f470714c0405f2f011ccad5e2a",
+      "size_bytes": 397
+    },
+    {
+      "path": "SUBSCRIPTION_EPOCH_AND_LIVENESS_SCHEMA.md",
+      "sha256": "64488115be4baf8c9a6d21a020e702982bcda938081665d2c0881fb9eb1bed3a",
+      "size_bytes": 598
+    },
+    {
+      "path": "ZERO_NOTIONAL_AND_NO_PRODUCTION_CHANGE_AUDIT.json",
+      "sha256": "a9fbe83bb0349d436dc3efab12a643114d5931ec23f64e09d5f3a5ebfe227bad",
+      "size_bytes": 1089
+    }
+  ],
+  "entry_count": 13,
+  "root": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/collector_clock_amendment_v1",
+  "strict_entry_set": true,
+  "unmanifested_extra_files_allowed": false
+}

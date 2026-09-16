@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+source "$PROJECT_DIR/scripts/ops/weather_market_proxy_env.sh"
+RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" data_feed_runtime_root)}"
+PM_RUNTIME_ROOT="${WEATHER_PM_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" pm_runtime_root)}"
+FEATURE_STORE_ROOT="${WEATHER_FEATURE_STORE_DIR:-$(weather_production_path "$PROJECT_DIR" feature_store_root)}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "$RUNTIME_ROOT")"
+TMUX_SESSION="${LOW_PRICE_YES_INTEGRATED_TAIL_TMUX_SESSION:-low_price_yes_integrated_tail_shadow_v2}"
+RUNTIME_DIR="${LOW_PRICE_YES_INTEGRATED_TAIL_SHADOW_RUNTIME_DIR:-$PM_RUNTIME_ROOT/weather_edge_v1/low_price_yes_integrated_tail_shadow_v2}"
+LOG_FILE="$RUNTIME_DIR/shadow_tmux.log"
+OBSERVATION_CACHE="${LOW_PRICE_YES_INTEGRATED_TAIL_OBSERVATION_CACHE:-$(weather_production_path "$PROJECT_DIR" observation_cache_path)}"
+SNAPSHOT_DIR="${LOW_PRICE_YES_INTEGRATED_TAIL_SNAPSHOT_DIR:-$(weather_production_path "$PROJECT_DIR" strategy_paper_snapshot_dir)}"
+INTERVAL_SECONDS="${LOW_PRICE_YES_INTEGRATED_TAIL_INTERVAL_SECONDS:-300}"
+BOOK_TIMEOUT_SECONDS="${LOW_PRICE_YES_INTEGRATED_TAIL_BOOK_TIMEOUT_SEC:-5}"
+BOOK_PROXY="$(weather_resolve_market_proxy "$PROJECT_DIR")"
+
+mkdir -p "$RUNTIME_DIR"
+if weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
+  echo "already running tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION"
+  exit 0
+fi
+
+weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+  "cd $(printf '%q' "$PROJECT_DIR") && exec env LOW_PRICE_YES_INTEGRATED_TAIL_SHADOW_RUNTIME_DIR=$(printf '%q' "$RUNTIME_DIR") WEATHER_FEATURE_STORE_DIR=$(printf '%q' "$FEATURE_STORE_ROOT") $(printf '%q' "$PROJECT_DIR/.venv/bin/python") -u scripts/ops/low_price_yes_integrated_tail_shadow_v2.py loop --observation-cache $(printf '%q' "$OBSERVATION_CACHE") --snapshot-dir $(printf '%q' "$SNAPSHOT_DIR") --interval-seconds $(printf '%q' "$INTERVAL_SECONDS") --book-timeout-sec $(printf '%q' "$BOOK_TIMEOUT_SECONDS") --book-proxy $(printf '%q' "$BOOK_PROXY") --min-ask 0.05 --max-ask 0.20 --min-edge -1.0 --max-candidates-per-run 80 >> $(printf '%q' "$LOG_FILE") 2>&1"
+
+echo "started tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE"

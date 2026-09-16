@@ -1,0 +1,478 @@
+{
+  "coverage": {
+    "current_yes_cities": 36,
+    "current_yes_dates": 27,
+    "current_yes_rows": 7104,
+    "holdout_cities": 36,
+    "holdout_dates": 14,
+    "holdout_rows": 2188,
+    "peak_cities": 36,
+    "peak_dates": 27,
+    "peak_rows": 4243,
+    "source_cities": 36,
+    "source_dates": 27,
+    "source_max_target_date": "2026-06-14",
+    "source_min_target_date": "2026-05-19",
+    "source_rows": 88621,
+    "train_cities": 36,
+    "train_dates": 13,
+    "train_rows": 2055
+  },
+  "data_self_check": {
+    "clob_order_fill_join": [
+      {
+        "orders": 33,
+        "status": "error",
+        "with_fill": 0
+      },
+      {
+        "orders": 961,
+        "status": "submitted",
+        "with_fill": 855
+      }
+    ],
+    "fact_signal_candidate_coverage": {
+      "eligible": 11305,
+      "live_filled": 348,
+      "paper_ordered": 4377,
+      "rows": 32318
+    },
+    "fact_trades_by_class": [
+      {
+        "rows": 855,
+        "trade_class": "live_real"
+      },
+      {
+        "rows": 624,
+        "trade_class": "live_simulated"
+      },
+      {
+        "rows": 2285,
+        "trade_class": "paper"
+      },
+      {
+        "rows": 636,
+        "trade_class": "snapshot_replay"
+      }
+    ],
+    "fact_trades_by_settlement_status": [
+      {
+        "rows": 150,
+        "settlement_status": ""
+      },
+      {
+        "rows": 4250,
+        "settlement_status": "settled"
+      }
+    ],
+    "fact_trades_max_built_at_utc": "2026-06-18T16:42:11.906813+00:00"
+  },
+  "data_snapshot": {
+    "base_model": "docs/analysis/2026-06/generated/theta_yes_current_live_gate_v9/live_model.json",
+    "holdout_start": "2026-06-01",
+    "source_feature_rows": "docs/analysis/2026-06/generated/reheat_feature_factory_v1/reheat_feature_rows.csv",
+    "train_end": "2026-05-31"
+  },
+  "generated_at_utc": "2026-06-18T16:53:07+00:00",
+  "holdout_model_metrics": [
+    {
+      "active_dates": 14,
+      "actual_survive_rate": 0.41773308957952465,
+      "auc": 0.9455856740945832,
+      "brier": 0.09226919881170018,
+      "logloss": 0.29471163793751604,
+      "mean_edge_vs_ask": 0.0,
+      "mean_pred_survive": 0.4353103290676417,
+      "model": "market_price_as_probability",
+      "rows": 2188
+    },
+    {
+      "active_dates": 14,
+      "actual_survive_rate": 0.41773308957952465,
+      "auc": 0.9049599978015107,
+      "brier": 0.12375176271874694,
+      "logloss": 0.38909381158685263,
+      "mean_edge_vs_ask": -0.019649480965847444,
+      "mean_pred_survive": 0.4156608481017942,
+      "model": "weather_forecast_only_v1",
+      "rows": 2188
+    },
+    {
+      "active_dates": 14,
+      "actual_survive_rate": 0.41773308957952465,
+      "auc": 0.9381606202487728,
+      "brier": 0.09669630422746056,
+      "logloss": 0.3185831828428439,
+      "mean_edge_vs_ask": -0.029361396458468123,
+      "mean_pred_survive": 0.4059489326091736,
+      "model": "base_current_yes_v9",
+      "rows": 2188
+    },
+    {
+      "active_dates": 14,
+      "actual_survive_rate": 0.41773308957952465,
+      "auc": 0.945720503316627,
+      "brier": 0.09111762350541608,
+      "logloss": 0.29443417206508493,
+      "mean_edge_vs_ask": -0.014381122898111179,
+      "mean_pred_survive": 0.4209292050124126,
+      "model": "peak_forming_hazard_v1",
+      "rows": 2188
+    }
+  ],
+  "holdout_rule_comparison": [
+    {
+      "active_dates": 14,
+      "avg_ask": 0.8284827586206897,
+      "avg_edge": 0.0,
+      "avg_p": 0.8284827586206897,
+      "bootstrap_roi_ci95": [
+        -0.09989288657610988,
+        0.04523954265870421
+      ],
+      "cities": 36,
+      "cost": 360.39,
+      "orders": 435,
+      "pnl": -10.389999999999997,
+      "roi": -0.028829878742473423,
+      "rule": "market_price_only_tradable",
+      "win_rate": 0.8045977011494253
+    },
+    {
+      "active_dates": 14,
+      "avg_ask": 0.8047845303867404,
+      "avg_edge": 0.0790465379961087,
+      "avg_p": 0.883831068382849,
+      "bootstrap_roi_ci95": [
+        -0.10404701462706699,
+        0.13335864754981505
+      ],
+      "cities": 26,
+      "cost": 145.666,
+      "orders": 181,
+      "pnl": 3.3339999999999996,
+      "roi": 0.022887976604011914,
+      "rule": "base_v9_peak_rule",
+      "win_rate": 0.8232044198895028
+    },
+    {
+      "active_dates": 10,
+      "avg_ask": 0.7693599999999999,
+      "avg_edge": 0.09117112072602557,
+      "avg_p": 0.8605311207260256,
+      "bootstrap_roi_ci95": [
+        -0.34324007291469893,
+        0.2509882150229641
+      ],
+      "cities": 8,
+      "cost": 19.233999999999998,
+      "orders": 25,
+      "pnl": -0.23400000000000032,
+      "roi": -0.012165956119371964,
+      "rule": "base_v9_peak_rule_plus_approx_guard",
+      "win_rate": 0.76
+    },
+    {
+      "active_dates": 14,
+      "avg_ask": 0.8071459227467811,
+      "avg_edge": 0.09594080169615565,
+      "avg_p": 0.9030867244429368,
+      "bootstrap_roi_ci95": [
+        -0.07362258952118977,
+        0.10907552872691514
+      ],
+      "cities": 33,
+      "cost": 188.065,
+      "orders": 233,
+      "pnl": 2.9349999999999996,
+      "roi": 0.015606306330258153,
+      "rule": "hazard_v1_peak_rule",
+      "win_rate": 0.8197424892703863
+    },
+    {
+      "active_dates": 11,
+      "avg_ask": 0.7959629629629629,
+      "avg_edge": 0.12752525880903112,
+      "avg_p": 0.9234882217719941,
+      "bootstrap_roi_ci95": [
+        -0.4487388337365976,
+        0.15947742451687238
+      ],
+      "cities": 8,
+      "cost": 21.490999999999996,
+      "orders": 27,
+      "pnl": -2.4910000000000005,
+      "roi": -0.11590898515657722,
+      "rule": "hazard_v1_peak_rule_plus_approx_guard",
+      "win_rate": 0.7037037037037037
+    },
+    {
+      "active_dates": 14,
+      "avg_ask": 0.764862385321101,
+      "avg_edge": 0.14329125956965916,
+      "avg_p": 0.90815364489076,
+      "bootstrap_roi_ci95": [
+        -0.08347172754127033,
+        0.1758904021201151
+      ],
+      "cities": 26,
+      "cost": 83.37,
+      "orders": 109,
+      "pnl": 4.629999999999999,
+      "roi": 0.055535564351685246,
+      "rule": "train_selected_grid_h13_p0.75_edge0.08",
+      "win_rate": 0.8073394495412844
+    },
+    {
+      "active_dates": 14,
+      "avg_ask": 0.7660847457627118,
+      "avg_edge": 0.141521522445593,
+      "avg_p": 0.9076062682083049,
+      "bootstrap_roi_ci95": [
+        -0.2041164400030309,
+        0.10642863922452762
+      ],
+      "cities": 20,
+      "cost": 45.199,
+      "orders": 59,
+      "pnl": -2.1990000000000003,
+      "roi": -0.048651518838912375,
+      "rule": "train_selected_grid_h15_p0.55_edge0.08",
+      "win_rate": 0.7288135593220338
+    },
+    {
+      "active_dates": 14,
+      "avg_ask": 0.7660847457627118,
+      "avg_edge": 0.141521522445593,
+      "avg_p": 0.9076062682083049,
+      "bootstrap_roi_ci95": [
+        -0.2041164400030309,
+        0.10642863922452762
+      ],
+      "cities": 20,
+      "cost": 45.199,
+      "orders": 59,
+      "pnl": -2.1990000000000003,
+      "roi": -0.048651518838912375,
+      "rule": "train_selected_grid_h15_p0.60_edge0.08",
+      "win_rate": 0.7288135593220338
+    }
+  ],
+  "outputs": {
+    "artifact": "docs/analysis/2026-06/generated/current_yes_peak_forming_hazard_v1/peak_forming_hazard_model.json",
+    "json": "docs/analysis/2026-06/2026-06-19-current-yes-peak-forming-hazard-v1.json",
+    "markdown": "docs/analysis/2026-06/2026-06-19-current-yes-peak-forming-hazard-v1.md",
+    "metrics": "docs/analysis/2026-06/generated/current_yes_peak_forming_hazard_v1/model_metrics.csv",
+    "rule_comparison": "docs/analysis/2026-06/generated/current_yes_peak_forming_hazard_v1/rule_comparison.csv",
+    "scored_rows": "docs/analysis/2026-06/generated/current_yes_peak_forming_hazard_v1/peak_forming_scored_rows.csv"
+  },
+  "train_selected_grid_top10": [
+    {
+      "active_dates": 13,
+      "avg_ask": 0.7631630434782608,
+      "avg_edge": 0.14267962304782997,
+      "avg_p": 0.9058426665260909,
+      "bootstrap_roi_ci95": [
+        0.030419009570163292,
+        0.20562111027548594
+      ],
+      "cities": 26,
+      "cost": 70.211,
+      "min_edge": 0.08,
+      "min_hour": 13,
+      "min_p": 0.75,
+      "orders": 92,
+      "pnl": 8.789000000000001,
+      "roi": 0.12517981512868356,
+      "rule": "grid_h13_p0.75_edge0.08",
+      "win_rate": 0.8586956521739131
+    },
+    {
+      "active_dates": 12,
+      "avg_ask": 0.759225,
+      "avg_edge": 0.13837168262074315,
+      "avg_p": 0.8975966826207431,
+      "bootstrap_roi_ci95": [
+        -0.042358623181904566,
+        0.2771392081736909
+      ],
+      "cities": 14,
+      "cost": 30.369,
+      "min_edge": 0.08,
+      "min_hour": 15,
+      "min_p": 0.55,
+      "orders": 40,
+      "pnl": 3.6310000000000002,
+      "roi": 0.11956271197602819,
+      "rule": "grid_h15_p0.55_edge0.08",
+      "win_rate": 0.85
+    },
+    {
+      "active_dates": 12,
+      "avg_ask": 0.759225,
+      "avg_edge": 0.13837168262074315,
+      "avg_p": 0.8975966826207431,
+      "bootstrap_roi_ci95": [
+        -0.042358623181904566,
+        0.2771392081736909
+      ],
+      "cities": 14,
+      "cost": 30.369,
+      "min_edge": 0.08,
+      "min_hour": 15,
+      "min_p": 0.6,
+      "orders": 40,
+      "pnl": 3.6310000000000002,
+      "roi": 0.11956271197602819,
+      "rule": "grid_h15_p0.60_edge0.08",
+      "win_rate": 0.85
+    },
+    {
+      "active_dates": 12,
+      "avg_ask": 0.759225,
+      "avg_edge": 0.13837168262074315,
+      "avg_p": 0.8975966826207431,
+      "bootstrap_roi_ci95": [
+        -0.042358623181904566,
+        0.2771392081736909
+      ],
+      "cities": 14,
+      "cost": 30.369,
+      "min_edge": 0.08,
+      "min_hour": 15,
+      "min_p": 0.65,
+      "orders": 40,
+      "pnl": 3.6310000000000002,
+      "roi": 0.11956271197602819,
+      "rule": "grid_h15_p0.65_edge0.08",
+      "win_rate": 0.85
+    },
+    {
+      "active_dates": 12,
+      "avg_ask": 0.759225,
+      "avg_edge": 0.13837168262074315,
+      "avg_p": 0.8975966826207431,
+      "bootstrap_roi_ci95": [
+        -0.042358623181904566,
+        0.2771392081736909
+      ],
+      "cities": 14,
+      "cost": 30.369,
+      "min_edge": 0.08,
+      "min_hour": 15,
+      "min_p": 0.7,
+      "orders": 40,
+      "pnl": 3.6310000000000002,
+      "roi": 0.11956271197602819,
+      "rule": "grid_h15_p0.70_edge0.08",
+      "win_rate": 0.85
+    },
+    {
+      "active_dates": 12,
+      "avg_ask": 0.7753783783783783,
+      "avg_edge": 0.13602420686866398,
+      "avg_p": 0.9114025852470423,
+      "bootstrap_roi_ci95": [
+        -0.02535519596065469,
+        0.25
+      ],
+      "cities": 14,
+      "cost": 28.688999999999997,
+      "min_edge": 0.08,
+      "min_hour": 15,
+      "min_p": 0.75,
+      "orders": 37,
+      "pnl": 3.3110000000000004,
+      "roi": 0.11541008748997876,
+      "rule": "grid_h15_p0.75_edge0.08",
+      "win_rate": 0.8648648648648649
+    },
+    {
+      "active_dates": 13,
+      "avg_ask": 0.7721408450704228,
+      "avg_edge": 0.13887961822582273,
+      "avg_p": 0.9110204632962451,
+      "bootstrap_roi_ci95": [
+        0.017942831646668687,
+        0.2059541050371442
+      ],
+      "cities": 24,
+      "cost": 54.82200000000002,
+      "min_edge": 0.08,
+      "min_hour": 14,
+      "min_p": 0.75,
+      "orders": 71,
+      "pnl": 6.178000000000001,
+      "roi": 0.11269198496953775,
+      "rule": "grid_h14_p0.75_edge0.08",
+      "win_rate": 0.8591549295774648
+    },
+    {
+      "active_dates": 13,
+      "avg_ask": 0.7759459459459459,
+      "avg_edge": 0.1299463760080572,
+      "avg_p": 0.905892321954003,
+      "bootstrap_roi_ci95": [
+        0.017208566844111525,
+        0.184271205807803
+      ],
+      "cities": 30,
+      "cost": 86.13,
+      "min_edge": 0.06,
+      "min_hour": 13,
+      "min_p": 0.75,
+      "orders": 111,
+      "pnl": 8.870000000000001,
+      "roi": 0.10298386160455128,
+      "rule": "grid_h13_p0.75_edge0.06",
+      "win_rate": 0.8558558558558559
+    },
+    {
+      "active_dates": 13,
+      "avg_ask": 0.7563896103896105,
+      "avg_edge": 0.14011903590765368,
+      "avg_p": 0.8965086462972639,
+      "bootstrap_roi_ci95": [
+        0.0016044510542247922,
+        0.19202884356332905
+      ],
+      "cities": 24,
+      "cost": 58.24200000000001,
+      "min_edge": 0.08,
+      "min_hour": 14,
+      "min_p": 0.55,
+      "orders": 77,
+      "pnl": 5.758000000000001,
+      "roi": 0.09886336320868101,
+      "rule": "grid_h14_p0.55_edge0.08",
+      "win_rate": 0.8311688311688312
+    },
+    {
+      "active_dates": 13,
+      "avg_ask": 0.7563896103896105,
+      "avg_edge": 0.14011903590765368,
+      "avg_p": 0.8965086462972639,
+      "bootstrap_roi_ci95": [
+        0.0016044510542247922,
+        0.19202884356332905
+      ],
+      "cities": 24,
+      "cost": 58.24200000000001,
+      "min_edge": 0.08,
+      "min_hour": 14,
+      "min_p": 0.6,
+      "orders": 77,
+      "pnl": 5.758000000000001,
+      "roi": 0.09886336320868101,
+      "rule": "grid_h14_p0.60_edge0.08",
+      "win_rate": 0.8311688311688312
+    }
+  ],
+  "verdict": {
+    "baseline": "PASS",
+    "conclusion": "inconclusive",
+    "forward": "PASS",
+    "plain_text": "\u5728 2026-06-01..2026-06-14 holdout\uff0cpeak-forming hazard v1 \u7684\u4e3b\u4ea4\u6613\u89c4\u5219 ROI \u4e3a 1.6%\uff0c95% \u65e5\u671f bootstrap CI [-7.4%, 10.9%]\uff1bapprox guard \u540e ROI \u4e3a -11.6%\u3002\u5b83\u53ef\u4ee5\u7ee7\u7eed\u4f5c\u4e3a shadow/\u7814\u7a76\u6982\u7387\u5c42\uff0c\u4f46\u8fd8\u6ca1\u6709\u6ee1\u8db3\u663e\u8457\u6027\u548c\u524d\u77bb\u95e8\uff0c\u6682\u4e0d\u66ff\u6362 live\u3002",
+    "significance": "FAIL"
+  }
+}

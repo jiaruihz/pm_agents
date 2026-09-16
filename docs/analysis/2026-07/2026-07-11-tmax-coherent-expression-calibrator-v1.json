@@ -1,0 +1,105 @@
+{
+  "generated_at_utc": "2026-07-10T16:18:41+00:00",
+  "data_snapshot": {
+    "status": "partial_rebuild_strategy_runtime_order_migration_failed",
+    "fact_signal_candidates_rows": 50559,
+    "fact_signal_candidates_max_event_date": "2026-07-12",
+    "fact_signal_candidates_built_at_utc": "2026-07-10T15:00:15.974752+00:00",
+    "fact_trades_rows": 4632,
+    "fact_trades_max_target_date": "2026-07-10",
+    "fact_trades_built_at_utc": "2026-07-10T14:57:21.411574+00:00"
+  },
+  "funnel": {
+    "atlas_raw_rows": 14368,
+    "scored_rows": 8376,
+    "date_range": [
+      "2026-05-19",
+      "2026-07-08"
+    ],
+    "active_dates": 49,
+    "meta_oof_rows": 7539,
+    "meta_oof_dates": 44,
+    "forward_state_rows": 2077,
+    "forward_dates": 16
+  },
+  "base_model_meta": {
+    "c": 0.03,
+    "alpha": 0.5,
+    "fit_rows": 8376
+  },
+  "candidate_count": 3,
+  "model_selection": {
+    "primary": {
+      "spec": "coherent_cal_quote",
+      "c": 0.3,
+      "alpha": 0.25,
+      "rows": 3938,
+      "dates": 20,
+      "date_equal_logloss": 0.6077668626824931,
+      "date_equal_brier": 0.3460776377003913
+    },
+    "selected_by_spec": {
+      "coherent_cal_context": {
+        "spec": "coherent_cal_context",
+        "c": 0.1,
+        "alpha": 0.25,
+        "rows": 3938,
+        "dates": 20,
+        "date_equal_logloss": 0.609111237761282,
+        "date_equal_brier": 0.3463469254737669
+      },
+      "coherent_cal_global": {
+        "spec": "coherent_cal_global",
+        "c": 0.3,
+        "alpha": 0.25,
+        "rows": 3938,
+        "dates": 20,
+        "date_equal_logloss": 0.6083731344951712,
+        "date_equal_brier": 0.3459339466126534
+      },
+      "coherent_cal_quote": {
+        "spec": "coherent_cal_quote",
+        "c": 0.3,
+        "alpha": 0.25,
+        "rows": 3938,
+        "dates": 20,
+        "date_equal_logloss": 0.6077668626824931,
+        "date_equal_brier": 0.3460776377003913
+      }
+    }
+  },
+  "primary": "coherent_cal_quote",
+  "paired_vs_full": {
+    "candidate": "coherent_cal_quote",
+    "baseline": "historical_full_features",
+    "dates": 16,
+    "candidate_roi": 0.11194053638528889,
+    "baseline_roi": 0.08080755975760436,
+    "delta_roi": 0.031132976627684536,
+    "ci_low": 0.006344637092765595,
+    "ci_high": 0.05729501476871678
+  },
+  "probability_delta_vs_full": {
+    "candidate": "coherent_cal_quote",
+    "baseline": "historical_full_features",
+    "rows": 2077,
+    "dates": 16,
+    "date_equal_delta_logloss": -0.0020425031271999305,
+    "logloss_ci_low": -0.004469619174920147,
+    "logloss_ci_high": -0.00032349920156224523,
+    "date_equal_delta_brier": -0.0007138427871062374,
+    "brier_ci_low": -0.001565001264415976,
+    "brier_ci_high": 3.561827559932671e-05
+  },
+  "positive_delta_days": 10,
+  "gates": {
+    "significance": "PASS",
+    "baseline": "PASS",
+    "forward": "FAIL_research_window_already_observed",
+    "conclusion": "shadow_candidate"
+  },
+  "outputs": {
+    "report": "docs/analysis/2026-07/2026-07-11-tmax-coherent-expression-calibrator-v1.md",
+    "generated_dir": "docs/analysis/2026-07/generated/tmax_coherent_expression_calibrator_v1"
+  }
+}

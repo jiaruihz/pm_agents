@@ -1,0 +1,93 @@
+{
+  "schema": "polymarket_alpha_live50_e2e_evidence_v1",
+  "run_id": "live50-iNMR73",
+  "run_date": "2026-08-27",
+  "disposition": "CONTROLLED_READ_ONLY_E2E_COMPLETE_WITH_LIMITATIONS",
+  "readiness_scope": "CONTROLLED_READ_ONLY_E2E_PILOT_ONLY",
+  "artifact_root": "/private/tmp/polymarket-alpha-pilot/live50-iNMR73",
+  "network": {
+    "transport": "SEALED_READ_ONLY_EXPLICIT_PROXY",
+    "proxy_profile_id": "mac_local_market_proxy_v1",
+    "redirect_count": 0,
+    "authorization_headers_present": false,
+    "gamma_pages": [
+      {
+        "offset": 0,
+        "event_count": 20,
+        "nested_distinct_market_count": 84,
+        "raw_bytes": 379568,
+        "raw_sha256": "71be4593e26258dadf5aa2a27c115c582c3627ca18f4a813bad84079825fab94"
+      },
+      {
+        "offset": 20,
+        "event_count": 20,
+        "nested_distinct_market_count": 466,
+        "raw_bytes": 1742134,
+        "raw_sha256": "23787f91c42c925736246c691f6fe2cb068085a1b1c14c94fe31be9b4d89b5d5"
+      }
+    ],
+    "failed_attempts": [
+      {
+        "request_sha256": "ce1d18f444338dfcdb43c63c7f0fde2b9572ab4595909295f3b2b2c2499a8ac2",
+        "reason": "response body exceeds pilot limit",
+        "result": "FAILED_BEFORE_HTTP_RESPONSE"
+      }
+    ]
+  },
+  "catalog": {
+    "selected_markets": 50,
+    "pages": 1,
+    "raw_market_artifacts": 50,
+    "snapshots": 50,
+    "aliases": 50,
+    "error_receipts": 0,
+    "drift_receipts": 50
+  },
+  "recall": {
+    "accepted_hits": 52,
+    "candidates": 50,
+    "aggregation_rejections": 0,
+    "providers": [
+      {"id": "new_changed", "status": "SUCCESS", "hits": 50, "suppressions": 0, "skips": 0},
+      {"id": "structural_metadata", "status": "SUCCESS", "hits": 0, "suppressions": 50, "skips": 0},
+      {"id": "controversy", "status": "SUCCESS", "hits": 0, "suppressions": 0, "skips": 1},
+      {"id": "specialist_wallet", "status": "SUCCESS", "hits": 0, "suppressions": 0, "skips": 0},
+      {"id": "book_anomaly", "status": "SUCCESS", "hits": 2, "suppressions": 0, "skips": 6}
+    ]
+  },
+  "books": {
+    "sensing_tokens_requested": 22,
+    "sensing_tokens_ok": 22,
+    "paired_markets_accepted": 11,
+    "formal_review_tokens_requested": 2,
+    "formal_review_tokens_ok": 2,
+    "capture_owner_implementation": "weather_market_books"
+  },
+  "full_chain": {
+    "market_id": "3867798",
+    "final_stage": "FINALIZED",
+    "gate_a": "PASS",
+    "gate_b": "PASS",
+    "decision": "SIMULATE",
+    "direction": "NO",
+    "execution": "NO_ORDER",
+    "research_mode": "DETERMINISTIC_ENGINEERING_FIXTURE_NOT_FACTUAL_RESEARCH",
+    "decision_id": "review_decision:3c683561052aff8a25f1907afe30301d1338ee232bfc2d69c3b3ff6fdc5a28d0",
+    "prediction_id": "prediction_record:b3062567d6bdda423ca8070f0a131776d2002708b18b71596b49a5fd85005316"
+  },
+  "tests": {
+    "focused": {"passed": 155, "failed": 0},
+    "polymarket_alpha_full": {"passed": 639, "failed": 0}
+  },
+  "post_run_review_fixes": {
+    "authorization_policy_budget_hash_binding": true,
+    "persistent_request_artifact_budget_ledger": true,
+    "offset_cli_replay_path": true,
+    "event_id_fail_closed": true,
+    "post_fix_live_network_rerun": false
+  },
+  "production_mutation": false,
+  "production_deploy": false,
+  "live_order_or_signing": false,
+  "read_only_daily_operation_approved": false
+}

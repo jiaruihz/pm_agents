@@ -1,0 +1,1186 @@
+{
+  "generated_at_utc": "2026-07-15T12:41:41.147861Z",
+  "strategy_head": "heat_death_early_dislocation_v1",
+  "decision_clock": "new METAR/SPECI detect -> first later paper snapshot -> first archived direct quote after signal",
+  "window": {
+    "start": "2026-07-07",
+    "end": "2026-07-15"
+  },
+  "date_coverage": {
+    "input_target_dates": [
+      "2026-07-07",
+      "2026-07-08",
+      "2026-07-09",
+      "2026-07-10",
+      "2026-07-11",
+      "2026-07-12",
+      "2026-07-13",
+      "2026-07-14",
+      "2026-07-15"
+    ],
+    "settled_target_dates": [
+      "2026-07-07",
+      "2026-07-08",
+      "2026-07-09",
+      "2026-07-10",
+      "2026-07-11",
+      "2026-07-12",
+      "2026-07-13",
+      "2026-07-14"
+    ],
+    "unsettled_base_signal_city_days": 15,
+    "unsettled_strong_signal_city_days": 6
+  },
+  "rule": {
+    "local_hour": [
+      13.0,
+      17.0
+    ],
+    "decline_native_gte": 0.5,
+    "minutes_since_running_max_gte": 60,
+    "warming_state": [
+      "flat",
+      "cooling"
+    ],
+    "forecast_peak_passed_hours_gte": 0.25,
+    "strong_partial_support_count_gte": 2,
+    "quote_delay_minutes_lte": 30.0,
+    "price_role": "continuous EV input; never an eligibility gate"
+  },
+  "signal_funnel": {
+    "unit_note": "event rows until market alignment; then first signal per city-day",
+    "unique_source_reports": 12998,
+    "local_hour_13_17_event_rows": 2226,
+    "plus_decline_gte_0_5_event_rows": 827,
+    "plus_high_age_gte_60m_event_rows": 644,
+    "plus_path_not_warming_event_rows": 575,
+    "market_aligned_event_rows": 551,
+    "first_base_signal_city_days": 168,
+    "first_strong_partial_signal_city_days": 84,
+    "anchor_city_day_excluded_from_evidence": true
+  },
+  "evidence_funnel": {
+    "unit_note": "quote and settlement availability are evidence coverage, not strategy filters",
+    "base_quote_coverage": {
+      "city_days": 167,
+      "current_yes_direct_ask": 22,
+      "d1_no_direct_ask": 21
+    },
+    "strong_quote_coverage": {
+      "city_days": 83,
+      "current_yes_direct_ask": 9,
+      "d1_no_direct_ask": 8
+    },
+    "base_settled_executable_expression_rows": 43,
+    "strong_settled_executable_expression_rows": 17,
+    "base_settled_indicative_expression_rows": 303,
+    "strong_settled_indicative_expression_rows": 153,
+    "base_settled_price_history_proxy_expression_rows": 301,
+    "strong_settled_price_history_proxy_expression_rows": 153
+  },
+  "evidence_coverage_audit": [
+    {
+      "cohort": "base",
+      "expression": "current_yes",
+      "signal_city_days": 167,
+      "leg_present": 167,
+      "indicative_price_present": 167,
+      "indicative_but_no_direct_ask": 145,
+      "settlement_present": 152,
+      "indicative_and_settled": 152,
+      "first_snapshot_direct_ask": 18,
+      "direct_ask_within_30m": 22,
+      "direct_and_settled": 22,
+      "direct_active_dates": 7,
+      "settled_active_dates": 8,
+      "first_snapshot_book_status_counts": {
+        "ok": 18,
+        "orderbook_budget_exhausted": 146,
+        "orderbook_scope_skipped": 3
+      },
+      "direct_quote_source_counts": {
+        "orderbook_archive_first_after_signal": 22
+      }
+    },
+    {
+      "cohort": "base",
+      "expression": "d1_no",
+      "signal_city_days": 167,
+      "leg_present": 166,
+      "indicative_price_present": 166,
+      "indicative_but_no_direct_ask": 145,
+      "settlement_present": 151,
+      "indicative_and_settled": 151,
+      "first_snapshot_direct_ask": 18,
+      "direct_ask_within_30m": 21,
+      "direct_and_settled": 21,
+      "direct_active_dates": 7,
+      "settled_active_dates": 8,
+      "first_snapshot_book_status_counts": {
+        "missing_status": 1,
+        "ok": 18,
+        "orderbook_budget_exhausted": 145,
+        "orderbook_scope_skipped": 3
+      },
+      "direct_quote_source_counts": {
+        "orderbook_archive_first_after_signal": 21
+      }
+    },
+    {
+      "cohort": "strong_partial",
+      "expression": "current_yes",
+      "signal_city_days": 83,
+      "leg_present": 83,
+      "indicative_price_present": 83,
+      "indicative_but_no_direct_ask": 74,
+      "settlement_present": 77,
+      "indicative_and_settled": 77,
+      "first_snapshot_direct_ask": 7,
+      "direct_ask_within_30m": 9,
+      "direct_and_settled": 9,
+      "direct_active_dates": 7,
+      "settled_active_dates": 8,
+      "first_snapshot_book_status_counts": {
+        "ok": 8,
+        "orderbook_budget_exhausted": 74,
+        "orderbook_scope_skipped": 1
+      },
+      "direct_quote_source_counts": {
+        "orderbook_archive_first_after_signal": 9
+      }
+    },
+    {
+      "cohort": "strong_partial",
+      "expression": "d1_no",
+      "signal_city_days": 83,
+      "leg_present": 82,
+      "indicative_price_present": 82,
+      "indicative_but_no_direct_ask": 74,
+      "settlement_present": 76,
+      "indicative_and_settled": 76,
+      "first_snapshot_direct_ask": 7,
+      "direct_ask_within_30m": 8,
+      "direct_and_settled": 8,
+      "direct_active_dates": 7,
+      "settled_active_dates": 8,
+      "first_snapshot_book_status_counts": {
+        "missing_status": 1,
+        "ok": 8,
+        "orderbook_budget_exhausted": 73,
+        "orderbook_scope_skipped": 1
+      },
+      "direct_quote_source_counts": {
+        "orderbook_archive_first_after_signal": 8
+      }
+    }
+  ],
+  "historical_collection_diagnosis": {
+    "root_cause": "bounded strategy-scoped orderbook enrichment, not missing weather signals",
+    "snapshot_interval_seconds_default": 600,
+    "orderbook_scope_default": "strategy_live",
+    "orderbook_budget_seconds_default": 60,
+    "orderbook_workers_default": 1,
+    "effect": "most paper records retain indicative market prices but lack a contemporaneous executable ask",
+    "recoverable_layer": "CLOB /prices-history minute price is still available for most selected tokens",
+    "irrecoverable_layer": "historical best ask, size, depth, spread and guaranteed taker fill where orderbooks were not archived"
+  },
+  "feature_coverage": {
+    "available_pit": [
+      "METAR/SPECI precipitation",
+      "cloud layers",
+      "wind direction/speed",
+      "temperature path",
+      "forecast peak clock",
+      "direct quote"
+    ],
+    "missing_in_archive": [
+      "forecast remaining-3h precipitation/cloud/wind",
+      "coordinate-backed solar geometry"
+    ],
+    "strong_name": "strong_partial because two newly added feature families are unavailable historically"
+  },
+  "executable_summary": [
+    {
+      "cohort": "base",
+      "price_layer": "direct_executable_ask",
+      "expression": "current_yes",
+      "rows": 22,
+      "active_dates": 7,
+      "cities": 8,
+      "wins": 22.0,
+      "win_rate": 1.0,
+      "avg_ask": 0.9764090909090908,
+      "cost": 21.50364,
+      "pnl": 0.49636000000000047,
+      "roi": 0.023082603689421905,
+      "roi_ci95": [
+        0.008814045680594549,
+        0.05926443265443901
+      ]
+    },
+    {
+      "cohort": "base",
+      "price_layer": "direct_executable_ask",
+      "expression": "d1_no",
+      "rows": 21,
+      "active_dates": 7,
+      "cities": 7,
+      "wins": 21.0,
+      "win_rate": 1.0,
+      "avg_ask": 0.9831428571428572,
+      "cost": 20.66239,
+      "pnl": 0.3376100000000005,
+      "roi": 0.0163393489330131,
+      "roi_ci95": [
+        0.006215898714307666,
+        0.03828143656619565
+      ]
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "direct_executable_ask",
+      "expression": "current_yes",
+      "rows": 9,
+      "active_dates": 7,
+      "cities": 4,
+      "wins": 9.0,
+      "win_rate": 1.0,
+      "avg_ask": 0.9600000000000001,
+      "cost": 8.6549,
+      "pnl": 0.3451000000000002,
+      "roi": 0.03987336653225343,
+      "roi_ci95": [
+        0.00809613204715203,
+        0.1086582048329183
+      ]
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "direct_executable_ask",
+      "expression": "d1_no",
+      "rows": 8,
+      "active_dates": 7,
+      "cities": 3,
+      "wins": 8.0,
+      "win_rate": 1.0,
+      "avg_ask": 0.97225,
+      "cost": 7.78792,
+      "pnl": 0.21208000000000016,
+      "roi": 0.027231918150160784,
+      "roi_ci95": [
+        0.005598309445584945,
+        0.0694549904589337
+      ]
+    }
+  ],
+  "indicative_summary": [
+    {
+      "cohort": "base",
+      "price_layer": "indicative_not_executable",
+      "expression": "current_yes",
+      "rows": 152,
+      "active_dates": 8,
+      "cities": 39,
+      "wins": 139.0,
+      "win_rate": 0.9144736842105263,
+      "avg_ask": 0.9048980263157894,
+      "cost": 137.87093,
+      "pnl": 1.1290699999999996,
+      "roi": 0.008189326060250697,
+      "roi_ci95": [
+        -0.018494993178181995,
+        0.031217956583332793
+      ]
+    },
+    {
+      "cohort": "base",
+      "price_layer": "indicative_not_executable",
+      "expression": "d1_no",
+      "rows": 151,
+      "active_dates": 8,
+      "cities": 39,
+      "wins": 142.0,
+      "win_rate": 0.9403973509933775,
+      "avg_ask": 0.9405132450331126,
+      "cost": 142.32133,
+      "pnl": -0.321330000000001,
+      "roi": -0.0022577782262152906,
+      "roi_ci95": [
+        -0.028762235167742484,
+        0.02267286761324613
+      ]
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "indicative_not_executable",
+      "expression": "current_yes",
+      "rows": 77,
+      "active_dates": 8,
+      "cities": 25,
+      "wins": 72.0,
+      "win_rate": 0.935064935064935,
+      "avg_ask": 0.9255389610389612,
+      "cost": 71.41803,
+      "pnl": 0.5819699999999993,
+      "roi": 0.008148782597335705,
+      "roi_ci95": [
+        -0.032401218060260605,
+        0.042275132538877984
+      ]
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "indicative_not_executable",
+      "expression": "d1_no",
+      "rows": 76,
+      "active_dates": 8,
+      "cities": 25,
+      "wins": 72.0,
+      "win_rate": 0.9473684210526315,
+      "avg_ask": 0.9547105263157896,
+      "cost": 72.70033,
+      "pnl": -0.7003300000000007,
+      "roi": -0.009633106204607335,
+      "roi_ci95": [
+        -0.04942807041477179,
+        0.016783452592926792
+      ]
+    }
+  ],
+  "price_history_proxy_summary": [
+    {
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 151,
+      "active_dates": 8,
+      "cities": 39,
+      "wins": 139.0,
+      "win_rate": 0.9205298013245033,
+      "avg_ask": 0.9156225165562915,
+      "cost": 138.56822,
+      "pnl": 0.4317800000000006,
+      "roi": 0.003116010294423935,
+      "roi_ci95": [
+        -0.028495560113468744,
+        0.03106419670819499
+      ]
+    },
+    {
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 150,
+      "active_dates": 8,
+      "cities": 39,
+      "wins": 142.0,
+      "win_rate": 0.9466666666666667,
+      "avg_ask": 0.9574933333333333,
+      "cost": 143.88894,
+      "pnl": -1.888940000000001,
+      "roi": -0.013127763676624493,
+      "roi_ci95": [
+        -0.04293690490274916,
+        0.015454369288598049
+      ]
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 77,
+      "active_dates": 8,
+      "cities": 25,
+      "wins": 72.0,
+      "win_rate": 0.935064935064935,
+      "avg_ask": 0.9273246753246753,
+      "cost": 71.5542,
+      "pnl": 0.44580000000000025,
+      "roi": 0.006230242249930826,
+      "roi_ci95": [
+        -0.04058806718325669,
+        0.042855962630543226
+      ]
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 76,
+      "active_dates": 8,
+      "cities": 25,
+      "wins": 72.0,
+      "win_rate": 0.9473684210526315,
+      "avg_ask": 0.9590263157894736,
+      "cost": 73.0188,
+      "pnl": -1.0188000000000006,
+      "roi": -0.013952571118670817,
+      "roi_ci95": [
+        -0.05491620232761055,
+        0.014422266794183285
+      ]
+    }
+  ],
+  "paired_expression_economics": [
+    {
+      "cohort": "base",
+      "price_layer": "direct_executable_ask",
+      "rows": 21,
+      "active_dates": 7,
+      "cities": 7,
+      "current_yes_win_rate": 1.0,
+      "d1_no_win_rate": 1.0,
+      "d1_extra_win_rate": 0.0,
+      "avg_d1_minus_current_ask": 0.006952380952380953,
+      "current_yes_roi": 0.023306537320720373,
+      "d1_no_roi": 0.0163393489330131,
+      "current_yes_minus_d1_no_roi": 0.006967188387707272,
+      "roi_delta_ci95": [
+        0.00040724488592795705,
+        0.020737177589788144
+      ],
+      "outcome_counts": {
+        "both_win_stop_current": 21,
+        "both_lose_exact_d1": 0,
+        "d1_only_win_d2_plus": 0,
+        "current_only_win_inconsistent": 0
+      }
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "direct_executable_ask",
+      "rows": 8,
+      "active_dates": 7,
+      "cities": 3,
+      "current_yes_win_rate": 1.0,
+      "d1_no_win_rate": 1.0,
+      "d1_extra_win_rate": 0.0,
+      "avg_d1_minus_current_ask": 0.014875,
+      "current_yes_roi": 0.042621045045139,
+      "d1_no_roi": 0.027231918150160784,
+      "current_yes_minus_d1_no_roi": 0.015389126894978216,
+      "roi_delta_ci95": [
+        -0.0007517719487192872,
+        0.047631084339998644
+      ],
+      "outcome_counts": {
+        "both_win_stop_current": 8,
+        "both_lose_exact_d1": 0,
+        "d1_only_win_d2_plus": 0,
+        "current_only_win_inconsistent": 0
+      }
+    },
+    {
+      "cohort": "base",
+      "price_layer": "indicative_not_executable",
+      "rows": 151,
+      "active_dates": 8,
+      "cities": 39,
+      "current_yes_win_rate": 0.9139072847682119,
+      "d1_no_win_rate": 0.9403973509933775,
+      "d1_extra_win_rate": 0.026490066225165563,
+      "avg_d1_minus_current_ask": 0.036241721854304645,
+      "current_yes_roi": 0.00824562266144551,
+      "d1_no_roi": -0.0022577782262152906,
+      "current_yes_minus_d1_no_roi": 0.010503400887660802,
+      "roi_delta_ci95": [
+        0.004322443360600465,
+        0.016575316732921532
+      ],
+      "outcome_counts": {
+        "both_win_stop_current": 138,
+        "both_lose_exact_d1": 9,
+        "d1_only_win_d2_plus": 4,
+        "current_only_win_inconsistent": 0
+      }
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "indicative_not_executable",
+      "rows": 76,
+      "active_dates": 8,
+      "cities": 25,
+      "current_yes_win_rate": 0.9342105263157895,
+      "d1_no_win_rate": 0.9473684210526315,
+      "d1_extra_win_rate": 0.013157894736842105,
+      "avg_d1_minus_current_ask": 0.030144736842105262,
+      "current_yes_roi": 0.008257629989614938,
+      "d1_no_roi": -0.009633106204607335,
+      "current_yes_minus_d1_no_roi": 0.017890736194222275,
+      "roi_delta_ci95": [
+        0.003762325996045583,
+        0.037474230758493536
+      ],
+      "outcome_counts": {
+        "both_win_stop_current": 71,
+        "both_lose_exact_d1": 4,
+        "d1_only_win_d2_plus": 1,
+        "current_only_win_inconsistent": 0
+      }
+    },
+    {
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "rows": 150,
+      "active_dates": 8,
+      "cities": 39,
+      "current_yes_win_rate": 0.92,
+      "d1_no_win_rate": 0.9466666666666667,
+      "d1_extra_win_rate": 0.02666666666666667,
+      "avg_d1_minus_current_ask": 0.042426666666666675,
+      "current_yes_roi": 0.003131733658057257,
+      "d1_no_roi": -0.013127763676624493,
+      "current_yes_minus_d1_no_roi": 0.01625949733468175,
+      "roi_delta_ci95": [
+        0.009770488179197477,
+        0.02371737804017808
+      ],
+      "outcome_counts": {
+        "both_win_stop_current": 138,
+        "both_lose_exact_d1": 8,
+        "d1_only_win_d2_plus": 4,
+        "current_only_win_inconsistent": 0
+      }
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "rows": 76,
+      "active_dates": 8,
+      "cities": 25,
+      "current_yes_win_rate": 0.9342105263157895,
+      "d1_no_win_rate": 0.9473684210526315,
+      "d1_extra_win_rate": 0.013157894736842105,
+      "avg_d1_minus_current_ask": 0.032644736842105275,
+      "current_yes_roi": 0.006304996871241862,
+      "d1_no_roi": -0.013952571118670817,
+      "current_yes_minus_d1_no_roi": 0.020257567989912677,
+      "roi_delta_ci95": [
+        0.004838010273580879,
+        0.043743780382810606
+      ],
+      "outcome_counts": {
+        "both_win_stop_current": 71,
+        "both_lose_exact_d1": 4,
+        "d1_only_win_d2_plus": 1,
+        "current_only_win_inconsistent": 0
+      }
+    }
+  ],
+  "price_history_proxy_slippage_sensitivity": [
+    {
+      "slippage_add": 0.0,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 151,
+      "active_dates": 8,
+      "cities": 39,
+      "wins": 139.0,
+      "win_rate": 0.9205298013245033,
+      "avg_ask": 0.9156225165562915,
+      "cost": 138.56822,
+      "pnl": 0.4317800000000006,
+      "roi": 0.003116010294423935,
+      "roi_ci95": [
+        -0.028495560113468744,
+        0.03106419670819499
+      ]
+    },
+    {
+      "slippage_add": 0.0,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 150,
+      "active_dates": 8,
+      "cities": 39,
+      "wins": 142.0,
+      "win_rate": 0.9466666666666667,
+      "avg_ask": 0.9574933333333333,
+      "cost": 143.88894,
+      "pnl": -1.888940000000001,
+      "roi": -0.013127763676624493,
+      "roi_ci95": [
+        -0.04293690490274916,
+        0.015454369288598049
+      ]
+    },
+    {
+      "slippage_add": 0.0,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 77,
+      "active_dates": 8,
+      "cities": 25,
+      "wins": 72.0,
+      "win_rate": 0.935064935064935,
+      "avg_ask": 0.9273246753246753,
+      "cost": 71.5542,
+      "pnl": 0.44580000000000025,
+      "roi": 0.006230242249930826,
+      "roi_ci95": [
+        -0.04058806718325669,
+        0.042855962630543226
+      ]
+    },
+    {
+      "slippage_add": 0.0,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 76,
+      "active_dates": 8,
+      "cities": 25,
+      "wins": 72.0,
+      "win_rate": 0.9473684210526315,
+      "avg_ask": 0.9590263157894736,
+      "cost": 73.0188,
+      "pnl": -1.0188000000000006,
+      "roi": -0.013952571118670817,
+      "roi_ci95": [
+        -0.05491620232761055,
+        0.014422266794183285
+      ]
+    },
+    {
+      "slippage_add": 0.01,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 151,
+      "active_dates": 8,
+      "cities": 39,
+      "wins": 139.0,
+      "win_rate": 0.9205298013245033,
+      "avg_ask": 0.9238311258278146,
+      "cost": 139.75778,
+      "pnl": -0.7577800000000001,
+      "roi": -0.005422095285142624,
+      "roi_ci95": [
+        -0.0369855619141463,
+        0.022262317622013396
+      ]
+    },
+    {
+      "slippage_add": 0.01,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 150,
+      "active_dates": 8,
+      "cities": 39,
+      "wins": 142.0,
+      "win_rate": 0.9466666666666667,
+      "avg_ask": 0.9650133333333334,
+      "cost": 144.96627,
+      "pnl": -2.9662700000000006,
+      "roi": -0.0204617943194648,
+      "roi_ci95": [
+        -0.050113789009803164,
+        0.008000399792834616
+      ]
+    },
+    {
+      "slippage_add": 0.01,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 77,
+      "active_dates": 8,
+      "cities": 25,
+      "wins": 72.0,
+      "win_rate": 0.935064935064935,
+      "avg_ask": 0.9353051948051948,
+      "cost": 72.14323,
+      "pnl": -0.14323000000000002,
+      "roi": -0.0019853560756844407,
+      "roi_ci95": [
+        -0.04873565077183212,
+        0.03444854122960685
+      ]
+    },
+    {
+      "slippage_add": 0.01,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 76,
+      "active_dates": 8,
+      "cities": 25,
+      "wins": 72.0,
+      "win_rate": 0.9473684210526315,
+      "avg_ask": 0.9664736842105263,
+      "cost": 73.55927,
+      "pnl": -1.5592700000000004,
+      "roi": -0.021197464303275446,
+      "roi_ci95": [
+        -0.06252612231898748,
+        0.007907478836536823
+      ]
+    },
+    {
+      "slippage_add": 0.02,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 151,
+      "active_dates": 8,
+      "cities": 39,
+      "wins": 139.0,
+      "win_rate": 0.9205298013245033,
+      "avg_ask": 0.9295960264900662,
+      "cost": 140.59571,
+      "pnl": -1.5957100000000002,
+      "roi": -0.01134963506354497,
+      "roi_ci95": [
+        -0.04333498316089746,
+        0.01656749039106035
+      ]
+    },
+    {
+      "slippage_add": 0.02,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 150,
+      "active_dates": 8,
+      "cities": 39,
+      "wins": 142.0,
+      "win_rate": 0.9466666666666667,
+      "avg_ask": 0.9698966666666666,
+      "cost": 145.66695,
+      "pnl": -3.666950000000001,
+      "roi": -0.025173520829536146,
+      "roi_ci95": [
+        -0.054934097291067185,
+        0.003296486289642141
+      ]
+    },
+    {
+      "slippage_add": 0.02,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 77,
+      "active_dates": 8,
+      "cities": 25,
+      "wins": 72.0,
+      "win_rate": 0.935064935064935,
+      "avg_ask": 0.9407857142857143,
+      "cost": 72.54884,
+      "pnl": -0.5488400000000002,
+      "roi": -0.007565110620652242,
+      "roi_ci95": [
+        -0.05451552263044906,
+        0.028470878847065444
+      ]
+    },
+    {
+      "slippage_add": 0.02,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 76,
+      "active_dates": 8,
+      "cities": 25,
+      "wins": 72.0,
+      "win_rate": 0.9473684210526315,
+      "avg_ask": 0.9713092105263158,
+      "cost": 73.91075,
+      "pnl": -1.91075,
+      "roi": -0.02585212570566528,
+      "roi_ci95": [
+        -0.06748101404478665,
+        0.004440216604578474
+      ]
+    },
+    {
+      "slippage_add": 0.03,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 151,
+      "active_dates": 8,
+      "cities": 39,
+      "wins": 139.0,
+      "win_rate": 0.9205298013245033,
+      "avg_ask": 0.9339370860927152,
+      "cost": 141.22866,
+      "pnl": -2.22866,
+      "roi": -0.015780508007369045,
+      "roi_ci95": [
+        -0.04821084033464908,
+        0.011879026104021456
+      ]
+    },
+    {
+      "slippage_add": 0.03,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 150,
+      "active_dates": 8,
+      "cities": 39,
+      "wins": 142.0,
+      "win_rate": 0.9466666666666667,
+      "avg_ask": 0.9736533333333334,
+      "cost": 146.2064,
+      "pnl": -4.2064,
+      "roi": -0.028770286389651893,
+      "roi_ci95": [
+        -0.05896934962347011,
+        -0.00010437266685313675
+      ]
+    },
+    {
+      "slippage_add": 0.03,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 77,
+      "active_dates": 8,
+      "cities": 25,
+      "wins": 72.0,
+      "win_rate": 0.935064935064935,
+      "avg_ask": 0.9447727272727273,
+      "cost": 72.84486,
+      "pnl": -0.8448600000000002,
+      "roi": -0.011598072945709557,
+      "roi_ci95": [
+        -0.05870783841668015,
+        0.02420972122165428
+      ]
+    },
+    {
+      "slippage_add": 0.03,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 76,
+      "active_dates": 8,
+      "cities": 25,
+      "wins": 72.0,
+      "win_rate": 0.9473684210526315,
+      "avg_ask": 0.9752302631578948,
+      "cost": 74.19582,
+      "pnl": -2.19582,
+      "roi": -0.02959492866309719,
+      "roi_ci95": [
+        -0.0720026685078821,
+        0.002726679268581675
+      ]
+    }
+  ],
+  "price_history_proxy_direct_overlap": [
+    {
+      "expression": "current_yes",
+      "overlap_rows": 22,
+      "mean_direct_ask_minus_history": 0.016090909090909065,
+      "median_direct_ask_minus_history": 0.0050000000000000044,
+      "p90_direct_ask_minus_history": 0.015499999999999958
+    },
+    {
+      "expression": "d1_no",
+      "overlap_rows": 21,
+      "mean_direct_ask_minus_history": 0.006190476190476159,
+      "median_direct_ask_minus_history": 0.0050000000000000044,
+      "p90_direct_ask_minus_history": 0.010499999999999954
+    }
+  ],
+  "same_snapshot_ask_premium": [
+    {
+      "expression": "current_yes",
+      "overlap_rows": 18,
+      "mean_ask_minus_indicative": 0.02516666666666664,
+      "median_ask_minus_indicative": 0.008499999999999952,
+      "p90_ask_minus_indicative": 0.0635
+    },
+    {
+      "expression": "d1_no",
+      "overlap_rows": 18,
+      "mean_ask_minus_indicative": 0.012722222222222202,
+      "median_ask_minus_indicative": 0.0044999999999999485,
+      "p90_ask_minus_indicative": 0.03500000000000003
+    }
+  ],
+  "anchor_price_band_0_80_0_90_diagnostic": [
+    {
+      "cohort": "base_anchor_price_band_0.80_0.90",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 8,
+      "active_dates": 6,
+      "cities": 7,
+      "wins": 6.0,
+      "win_rate": 0.75,
+      "avg_ask": 0.8575625,
+      "cost": 6.90906,
+      "pnl": -0.9090599999999999,
+      "roi": -0.13157506230948926,
+      "roi_ci95": [
+        -0.61180274921293,
+        0.15810173228857116
+      ]
+    },
+    {
+      "cohort": "base_anchor_price_band_0.80_0.90",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 10,
+      "active_dates": 6,
+      "cities": 9,
+      "wins": 7.0,
+      "win_rate": 0.7,
+      "avg_ask": 0.8513,
+      "cost": 8.57576,
+      "pnl": -1.57576,
+      "roi": -0.1837458137821021,
+      "roi_ci95": [
+        -0.5082346114315782,
+        0.059674697529103524
+      ]
+    },
+    {
+      "cohort": "strong_anchor_price_band_0.80_0.90",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 2,
+      "active_dates": 2,
+      "cities": 2,
+      "wins": 1.0,
+      "win_rate": 0.5,
+      "avg_ask": 0.85425,
+      "cost": 1.72081,
+      "pnl": -0.72081,
+      "roi": -0.418878318931201,
+      "roi_ci95": [
+        -1.0,
+        0.11445447453471527
+      ]
+    },
+    {
+      "cohort": "strong_anchor_price_band_0.80_0.90",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 2,
+      "active_dates": 2,
+      "cities": 2,
+      "wins": 1.0,
+      "win_rate": 0.5,
+      "avg_ask": 0.8175,
+      "cost": 1.64991,
+      "pnl": -0.64991,
+      "roi": -0.3939063342849004,
+      "roi_ci95": [
+        -1.0,
+        0.19465749169713056
+      ]
+    }
+  ],
+  "support_slice_summary": [
+    {
+      "support_bucket": "0",
+      "price_layer": "indicative_not_executable",
+      "expression": "current_yes",
+      "rows": 42,
+      "active_dates": 8,
+      "cities": 26,
+      "wins": 38.0,
+      "win_rate": 0.9047619047619048,
+      "avg_ask": 0.9022976190476191,
+      "cost": 37.9808,
+      "pnl": 0.01920000000000011,
+      "roi": 0.0005055185778077373,
+      "roi_ci95": [
+        -0.0578308790276384,
+        0.04337573786227963
+      ]
+    },
+    {
+      "support_bucket": "0",
+      "price_layer": "indicative_not_executable",
+      "expression": "d1_no",
+      "rows": 42,
+      "active_dates": 8,
+      "cities": 26,
+      "wins": 40.0,
+      "win_rate": 0.9523809523809523,
+      "avg_ask": 0.9418809523809524,
+      "cost": 39.64336,
+      "pnl": 0.3566399999999996,
+      "roi": 0.00899621021023444,
+      "roi_ci95": [
+        -0.03550694620478168,
+        0.03861475229510255
+      ]
+    },
+    {
+      "support_bucket": "1",
+      "price_layer": "indicative_not_executable",
+      "expression": "current_yes",
+      "rows": 40,
+      "active_dates": 8,
+      "cities": 20,
+      "wins": 36.0,
+      "win_rate": 0.9,
+      "avg_ask": 0.881625,
+      "cost": 35.36118,
+      "pnl": 0.63882,
+      "roi": 0.01806557360359581,
+      "roi_ci95": [
+        -0.046251044066091915,
+        0.05771529265924433
+      ]
+    },
+    {
+      "support_bucket": "1",
+      "price_layer": "indicative_not_executable",
+      "expression": "d1_no",
+      "rows": 40,
+      "active_dates": 8,
+      "cities": 20,
+      "wins": 37.0,
+      "win_rate": 0.925,
+      "avg_ask": 0.9184625000000001,
+      "cost": 36.82325,
+      "pnl": 0.17675000000000005,
+      "roi": 0.0047999565491910695,
+      "roi_ci95": [
+        -0.056221810525203114,
+        0.04644395261578672
+      ]
+    },
+    {
+      "support_bucket": "2",
+      "price_layer": "indicative_not_executable",
+      "expression": "current_yes",
+      "rows": 36,
+      "active_dates": 8,
+      "cities": 20,
+      "wins": 31.0,
+      "win_rate": 0.8611111111111112,
+      "avg_ask": 0.87475,
+      "cost": 31.58934,
+      "pnl": -0.5893399999999999,
+      "roi": -0.01865629354712697,
+      "roi_ci95": [
+        -0.08695461369196972,
+        0.04468100665461804
+      ]
+    },
+    {
+      "support_bucket": "2",
+      "price_layer": "indicative_not_executable",
+      "expression": "d1_no",
+      "rows": 36,
+      "active_dates": 8,
+      "cities": 20,
+      "wins": 32.0,
+      "win_rate": 0.8888888888888888,
+      "avg_ask": 0.9333750000000001,
+      "cost": 33.69604,
+      "pnl": -1.6960400000000007,
+      "roi": -0.05033351100010566,
+      "roi_ci95": [
+        -0.11836913718920102,
+        0.013577164225734337
+      ]
+    },
+    {
+      "support_bucket": "3+",
+      "price_layer": "indicative_not_executable",
+      "expression": "current_yes",
+      "rows": 34,
+      "active_dates": 7,
+      "cities": 16,
+      "wins": 34.0,
+      "win_rate": 1.0,
+      "avg_ask": 0.9674117647058824,
+      "cost": 32.93961,
+      "pnl": 1.0603899999999993,
+      "roi": 0.0321919415560779,
+      "roi_ci95": [
+        0.015635859142333213,
+        0.055891982853520907
+      ]
+    },
+    {
+      "support_bucket": "3+",
+      "price_layer": "indicative_not_executable",
+      "expression": "d1_no",
+      "rows": 33,
+      "active_dates": 7,
+      "cities": 16,
+      "wins": 33.0,
+      "win_rate": 1.0,
+      "avg_ask": 0.9732878787878787,
+      "cost": 32.15868,
+      "pnl": 0.84132,
+      "roi": 0.026161521554989197,
+      "roi_ci95": [
+        0.013242785189847428,
+        0.04359184113165753
+      ]
+    }
+  ],
+  "overfit_audit": {
+    "previous_five_rows_was_signal_count": false,
+    "previous_five_rows_cause": "first-snapshot direct-ask archive gap plus an unjustified 0.20-0.97 price hard filter",
+    "price_hard_filter_removed": true,
+    "support_gte_2_status": "diagnostic cohort only; not an approved strategy gate",
+    "shadow_runner_scope": "all physical_confirmation_base rows; quote refresh capped operationally; zero notional",
+    "tiny_live_probe_scope": "physical_confirmation_strong rows in H2 ask 0.50-0.93; fixed 10 shares; no size-up approval"
+  },
+  "busan_executed_anchor_not_in_settled_roi": {
+    "city": "Busan",
+    "target_date": "2026-07-14",
+    "source_report_ts_utc": "2026-07-14T04:00:00Z",
+    "source_detect_ts_utc": "2026-07-14T04:06:39.103630Z",
+    "decision_snapshot_ts_utc": "2026-07-14T04:08:34Z",
+    "report_kind": "METAR",
+    "source_lane": "metar_speci_capable",
+    "current_bracket": "30",
+    "current_yes_ask": 0.84,
+    "current_yes_indicative": 0.81,
+    "d1_bracket": "31",
+    "d1_no_ask": 0.89,
+    "d1_no_indicative": 0.86,
+    "decline_native": 1.0,
+    "minutes_since_running_max_at_detect": 83.65172716666666,
+    "temp_trend_1h_f": 0.0,
+    "forecast_peak_delta_hours_local": 1.13,
+    "physical_support_reasons_partial": [
+      "cloud_limited_flat_or_cooling",
+      "moisture_cloud_suppression"
+    ]
+  },
+  "busan_anchor_backtest_alignment": {
+    "role": "user-reported executed anchor case that defines the intended early-dislocation morphology",
+    "selector_match": true,
+    "first_strong_ts_utc": "2026-07-14T04:08:34Z",
+    "current_yes_ask": 0.84,
+    "d1_no_ask": 0.89,
+    "included_in_settled_roi_window": false,
+    "why_not_in_settled_roi": "excluded as defining anchor: the morphology was specified from this executed trade, so it is in-sample by construction",
+    "actual_backtest_gap": "historical first-signal direct executable quote coverage is sparse and skewed toward already-repriced late books",
+    "not_a_backtest_gap": [
+      "the forward runner did not exist yet",
+      "the personal fill is not in strategy canonical lineage"
+    ]
+  },
+  "sample_gate": {
+    "required": {
+      "settled_rows": 30,
+      "active_dates": 10
+    },
+    "pass": false
+  },
+  "three_gates": {
+    "significance": "FAIL_LOW_SAMPLE",
+    "baseline": "NA_short_event_archive",
+    "forward": "FAIL_THIN",
+    "conclusion": "inconclusive_tiny_live_probe_only"
+  }
+}

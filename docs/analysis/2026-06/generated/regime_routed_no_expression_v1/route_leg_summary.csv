@@ -1,0 +1,4 @@
+variant,route_leg,day_regime,expression,trades,active_dates,cities,wins,win_rate,avg_ask,profit_usd,cost_usd,roi
+routed_capped_d1_no_relaxed50_first_eligible,capped_d1_no,day_forecast_capped,d1_no,94,33,31,36,0.3829787234042553,0.40904255319148947,-22.282357873043416,470.0,-0.04740927207030514
+routed_capped_d1_no_relaxed50_first_eligible,runway_current_no,day_marginal_runway,current_bracket_no,49,26,21,17,0.3469387755102041,0.36883673469387757,0.7959996791534394,245.0,0.0032489782822589363
+routed_capped_d1_no_relaxed50_first_eligible,runway_current_no,day_open_runway,current_bracket_no,52,28,24,20,0.38461538461538464,0.3545769230769231,80.42936975184215,260.0,0.3093437298147775

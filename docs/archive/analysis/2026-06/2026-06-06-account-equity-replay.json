@@ -1,0 +1,762 @@
+{
+  "local_fill_window": {
+    "by_fill_day_cost": {
+      "2026-05-31": 237.970566,
+      "2026-06-01": 251.295531,
+      "2026-06-02": 155.883588,
+      "2026-06-03": 152.457638,
+      "2026-06-04": 200.980607,
+      "2026-06-05": 140.878408,
+      "2026-06-06": 86.408661
+    },
+    "by_strategy": {
+      "live_weather_edge_v1_4b07f7abc42f": {
+        "cost_usd": 133.519708,
+        "fills": 39,
+        "settled_pnl_usd": -10.549806
+      },
+      "live_weather_edge_v1_4ef9b3ec3e2e": {
+        "cost_usd": 685.042567,
+        "fills": 208,
+        "settled_pnl_usd": -27.0266
+      },
+      "live_weather_edge_v1_91f019941593": {
+        "cost_usd": 61.064432,
+        "fills": 25,
+        "settled_pnl_usd": 22.401171
+      },
+      "live_weather_edge_v1_986d901ccc58": {
+        "cost_usd": 339.86944,
+        "fills": 120,
+        "settled_pnl_usd": -59.324997
+      },
+      "live_weather_edge_v1_c13ccf0c3181": {
+        "cost_usd": 6.378852,
+        "fills": 2,
+        "settled_pnl_usd": 5.432099
+      }
+    },
+    "by_target_date_cost": {
+      "2026-05-31": 66.221662,
+      "2026-06-01": 333.467684,
+      "2026-06-02": 162.610542,
+      "2026-06-03": 123.984447,
+      "2026-06-04": 204.347529,
+      "2026-06-05": 158.698966,
+      "2026-06-06": 126.524906,
+      "2026-06-07": 50.019263
+    },
+    "cost_usd": 1225.874999,
+    "distinct_fill_ids": 394,
+    "distinct_token_ids": 214,
+    "fills": 394,
+    "settled_cost_usd": 1049.33083,
+    "settled_fills": 343,
+    "settled_pnl_usd": -69.068133
+  },
+  "local_target_window": {
+    "by_fill_day_cost": {
+      "2026-05-30": 148.348939,
+      "2026-05-31": 237.970566,
+      "2026-06-01": 251.295531,
+      "2026-06-02": 155.883588,
+      "2026-06-03": 152.457638,
+      "2026-06-04": 200.980607,
+      "2026-06-05": 140.878408,
+      "2026-06-06": 36.389398
+    },
+    "by_strategy": {
+      "live_weather_edge_v1_4b07f7abc42f": {
+        "cost_usd": 133.519708,
+        "fills": 39,
+        "settled_pnl_usd": -10.549806
+      },
+      "live_weather_edge_v1_4ef9b3ec3e2e": {
+        "cost_usd": 732.224873,
+        "fills": 222,
+        "settled_pnl_usd": -79.271396
+      },
+      "live_weather_edge_v1_91f019941593": {
+        "cost_usd": 61.064432,
+        "fills": 25,
+        "settled_pnl_usd": 22.401171
+      },
+      "live_weather_edge_v1_986d901ccc58": {
+        "cost_usd": 391.01681,
+        "fills": 143,
+        "settled_pnl_usd": -97.932065
+      },
+      "live_weather_edge_v1_c13ccf0c3181": {
+        "cost_usd": 6.378852,
+        "fills": 2,
+        "settled_pnl_usd": 5.432099
+      }
+    },
+    "by_target_date_cost": {
+      "2026-05-31": 214.570601,
+      "2026-06-01": 333.467684,
+      "2026-06-02": 162.610542,
+      "2026-06-03": 123.984447,
+      "2026-06-04": 204.347529,
+      "2026-06-05": 158.698966,
+      "2026-06-06": 126.524906
+    },
+    "cost_usd": 1324.204675,
+    "distinct_fill_ids": 431,
+    "distinct_token_ids": 222,
+    "fills": 431,
+    "settled_cost_usd": 1197.679769,
+    "settled_fills": 393,
+    "settled_pnl_usd": -159.919997
+  },
+  "local_vs_polymarket_trade_buy_match": {
+    "matched": 369,
+    "matched_local_cost": 1153.328799,
+    "matched_poly_money": 1153.328799,
+    "top_unmatched_poly_titles": [
+      {
+        "money": 24.697239,
+        "rows": 15,
+        "title": "Will the highest temperature in Miami be between 92-93°F on June 1?"
+      },
+      {
+        "money": 20.447177,
+        "rows": 10,
+        "title": "Will the highest temperature in Lucknow be 34°C on June 1?"
+      },
+      {
+        "money": 20.4382,
+        "rows": 11,
+        "title": "Will the highest temperature in New York City be between 70-71°F on June 1?"
+      },
+      {
+        "money": 19.9916,
+        "rows": 4,
+        "title": "Will the highest temperature in Karachi be 35°C on June 1?"
+      },
+      {
+        "money": 16.98146,
+        "rows": 6,
+        "title": "Will the highest temperature in Lucknow be 35°C on June 1?"
+      },
+      {
+        "money": 11.611285,
+        "rows": 10,
+        "title": "Will the highest temperature in Miami be between 90-91°F on June 1?"
+      },
+      {
+        "money": 10.3149,
+        "rows": 3,
+        "title": "Will the highest temperature in Los Angeles be between 72-73°F on June 1?"
+      },
+      {
+        "money": 10.1053,
+        "rows": 3,
+        "title": "Will the highest temperature in New York City be between 72-73°F on June 1?"
+      },
+      {
+        "money": 9.4178,
+        "rows": 2,
+        "title": "Will the highest temperature in Los Angeles be between 70-71°F on June 3?"
+      },
+      {
+        "money": 9.045,
+        "rows": 2,
+        "title": "Will the highest temperature in Karachi be 36°C on June 1?"
+      },
+      {
+        "money": 8.7843,
+        "rows": 4,
+        "title": "Will the highest temperature in Miami be between 88-89°F on June 1?"
+      },
+      {
+        "money": 8.3218,
+        "rows": 7,
+        "title": "Will the highest temperature in New York City be between 88-89°F on June 4?"
+      },
+      {
+        "money": 8.2071,
+        "rows": 5,
+        "title": "Will the highest temperature in Ankara be 23°C on June 1?"
+      },
+      {
+        "money": 7.7057,
+        "rows": 4,
+        "title": "Will the highest temperature in Tokyo be 25°C on June 2?"
+      },
+      {
+        "money": 7.3474,
+        "rows": 2,
+        "title": "Will the highest temperature in Moscow be 23°C on June 4?"
+      },
+      {
+        "money": 7.23488,
+        "rows": 4,
+        "title": "Will the highest temperature in Buenos Aires be 15°C on June 1?"
+      },
+      {
+        "money": 7.20002,
+        "rows": 2,
+        "title": "Will the highest temperature in Los Angeles be between 72-73°F on June 4?"
+      },
+      {
+        "money": 7.19844,
+        "rows": 2,
+        "title": "Will the highest temperature in Los Angeles be between 68-69°F on June 4?"
+      },
+      {
+        "money": 7.0426,
+        "rows": 6,
+        "title": "Will the highest temperature in Miami be between 84-85°F on June 6?"
+      },
+      {
+        "money": 6.79,
+        "rows": 2,
+        "title": "Will the highest temperature in Los Angeles be between 70-71°F on June 5?"
+      },
+      {
+        "money": 6.744,
+        "rows": 4,
+        "title": "Will the highest temperature in London be 18°C on June 5?"
+      },
+      {
+        "money": 6.72,
+        "rows": 2,
+        "title": "Will the highest temperature in Los Angeles be between 70-71°F on June 1?"
+      },
+      {
+        "money": 6.5912,
+        "rows": 2,
+        "title": "Will the highest temperature in Los Angeles be between 70-71°F on June 4?"
+      },
+      {
+        "money": 6.4337,
+        "rows": 2,
+        "title": "Will the highest temperature in Miami be between 82-83°F on June 4?"
+      },
+      {
+        "money": 6.409292,
+        "rows": 7,
+        "title": "Will the highest temperature in Warsaw be 22°C on June 2?"
+      }
+    ],
+    "unmatched_local": 25,
+    "unmatched_local_cost": 72.5462,
+    "unmatched_local_sample": [
+      {
+        "city": "Miami",
+        "cost_usd": 2.4136,
+        "fill_id": "966a49841ea9be0118a3afc6797ba15377f8ba83f7b744996c047e1c6db4cd37",
+        "fill_ts_utc": "2026-05-31T03:33:59+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-05-31",
+        "token_id": "62614560357986280394541524797303322224945710110474810711686765852819717785416"
+      },
+      {
+        "city": "Karachi",
+        "cost_usd": 2.1306,
+        "fill_id": "f116d906f4793dc3103cb78fe645b4bff0378815cf8b2152e0d120cdd9056081",
+        "fill_ts_utc": "2026-05-31T15:07:40+00:00",
+        "side": "BUY_NO",
+        "target_date": "2026-06-01",
+        "token_id": "99636988379957095774543396897739029588179208842182609656694899837136695390243"
+      },
+      {
+        "city": "Amsterdam",
+        "cost_usd": 4.6845,
+        "fill_id": "1be1042b605c1e83ceeb0695440b17bddd8788e125f1227523ce00b842571c64",
+        "fill_ts_utc": "2026-05-31T18:31:43+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-01",
+        "token_id": "2624047491265874788843292126243744066392765023856057802839441227686091485363"
+      },
+      {
+        "city": "London",
+        "cost_usd": 2.4975,
+        "fill_id": "c922c621b02b1a5673c2aa6242b156faf630b1fa0ed0bc352376910de0cef593",
+        "fill_ts_utc": "2026-05-31T18:43:26+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-01",
+        "token_id": "22373384125787066944601492807774995144741210726234633085199068709151003921731"
+      },
+      {
+        "city": "Miami",
+        "cost_usd": 0.6885,
+        "fill_id": "c0f8fb818437c6cfddcf385475894e08d3aaf944740c8a2a862be9e473b2f0b5",
+        "fill_ts_utc": "2026-06-01T03:01:40+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-01",
+        "token_id": "20666987983005737394947097508723813855836307887905980379959389331825895193266"
+      },
+      {
+        "city": "Miami",
+        "cost_usd": 0.6615,
+        "fill_id": "2b66b2d72c9a55e7b1343b7f59bec9400ab0fa2e93390c2674fc24b174fdef3a",
+        "fill_ts_utc": "2026-06-01T03:01:40+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-01",
+        "token_id": "20666987983005737394947097508723813855836307887905980379959389331825895193266"
+      },
+      {
+        "city": "LA",
+        "cost_usd": 2.9276,
+        "fill_id": "cd362cb3c38d745970950af19293b26852404c9866a495b9ff64f424e08c8763",
+        "fill_ts_utc": "2026-06-01T07:21:29+00:00",
+        "side": "BUY_NO",
+        "target_date": "2026-06-01",
+        "token_id": "49062214114383746496602617817793981157059812737161652573348354871371391320039"
+      },
+      {
+        "city": "LA",
+        "cost_usd": 2.58,
+        "fill_id": "90accfa19b3209716fca105197ac8915e9ed3dd40e5cfbb7ef54d29e889e374f",
+        "fill_ts_utc": "2026-06-01T16:18:21+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-01",
+        "token_id": "53477359569428406228328041746589999798700027584541294234629388746176384821749"
+      },
+      {
+        "city": "BuenosAires",
+        "cost_usd": 4.998,
+        "fill_id": "56ea33f5d00cc929f007caa8290d612e3b6f17d85f7af016219ffef32601a181",
+        "fill_ts_utc": "2026-06-01T17:17:19+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-01",
+        "token_id": "66577387057471271206485111266124498343896970381442150945704304063428519514126"
+      },
+      {
+        "city": "BuenosAires",
+        "cost_usd": 4.998,
+        "fill_id": "5ff6f68d0d7c9e4510560f8028c7ecbc525c4d2a55bf3102b70c3c261b6e3f40",
+        "fill_ts_utc": "2026-06-01T17:17:19+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-01",
+        "token_id": "66577387057471271206485111266124498343896970381442150945704304063428519514126"
+      },
+      {
+        "city": "LA",
+        "cost_usd": 0.78,
+        "fill_id": "eb2aec3bd6c0cc758f9a435a81170a21744988069ab3a746f121ed39a3c21985",
+        "fill_ts_utc": "2026-06-01T17:53:59+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-01",
+        "token_id": "53477359569428406228328041746589999798700027584541294234629388746176384821749"
+      },
+      {
+        "city": "LA",
+        "cost_usd": 2.42,
+        "fill_id": "cc2380410ccaff8289e9191ba385aa531f8f4a8315d2837ff2bf60bd9f59b0a2",
+        "fill_ts_utc": "2026-06-01T17:53:59+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-01",
+        "token_id": "53477359569428406228328041746589999798700027584541294234629388746176384821749"
+      },
+      {
+        "city": "LA",
+        "cost_usd": 2.9,
+        "fill_id": "6588a8b04c2df77525d9844a4eff0ece8f79cdea8030e56ebcfe5ea84fb1b8b6",
+        "fill_ts_utc": "2026-06-02T02:59:24+00:00",
+        "side": "BUY_NO",
+        "target_date": "2026-06-02",
+        "token_id": "18233330210054320706400570982668903172070959285735318825071547680874626606046"
+      },
+      {
+        "city": "Shanghai",
+        "cost_usd": 1.922,
+        "fill_id": "dcab884ff238bae32569546058b12fcc9f47d57f743972a9e6d3e2e55a0d905c",
+        "fill_ts_utc": "2026-06-02T10:34:10+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-03",
+        "token_id": "32807987026796663461630183978889692523480700798095526510941273840487817845184"
+      },
+      {
+        "city": "LA",
+        "cost_usd": 2.4976,
+        "fill_id": "3c3d7b41309eaa8ef945a9fc0ef88ff7d0fd422aa62af7e69d4372a2e4c52d19",
+        "fill_ts_utc": "2026-06-03T02:35:14+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-03",
+        "token_id": "58538292637366620047313903803093133593532304081721748837873100520301505066936"
+      },
+      {
+        "city": "Shanghai",
+        "cost_usd": 4.9998,
+        "fill_id": "7d68567d009fc3bd5c2fb0b201e1d0f7bb92db3c2f603bdd376dfec52748be8d",
+        "fill_ts_utc": "2026-06-03T12:12:20+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-04",
+        "token_id": "29767217759031044852595889501956397888271955603848721090001280512935268808127"
+      },
+      {
+        "city": "Shanghai",
+        "cost_usd": 4.9998,
+        "fill_id": "6309bf814fd173a00392bdffd2b318bff626a4a7aaf5d0623cd5cb3037c8c61f",
+        "fill_ts_utc": "2026-06-03T12:12:20+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-04",
+        "token_id": "29767217759031044852595889501956397888271955603848721090001280512935268808127"
+      },
+      {
+        "city": "Warsaw",
+        "cost_usd": 2.4975,
+        "fill_id": "8214bb9049595cb7960cb21db8561ba09917aaeb050c774d2b9d5abd7b4eb490",
+        "fill_ts_utc": "2026-06-03T21:06:27+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-04",
+        "token_id": "66968297058610852564701090025251525207277451535808439003108885671850284304733"
+      },
+      {
+        "city": "NYC",
+        "cost_usd": 1.0896,
+        "fill_id": "88779ca839dc52903a26deb3b3a84c5daa73f8729d4ef0ae54281bf186dd5da9",
+        "fill_ts_utc": "2026-06-04T03:37:00+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-04",
+        "token_id": "88769348971714441217452186040998090541902905746209913450385978415497173525983"
+      },
+      {
+        "city": "London",
+        "cost_usd": 4.9987,
+        "fill_id": "300fff326964bca40ea08748c0cd29c04984dbb0b3f944d52dec4fef9eb5f896",
+        "fill_ts_utc": "2026-06-04T07:49:36+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-04",
+        "token_id": "19412101601334870291341287112743486402567418851803845446481385251196566586965"
+      },
+      {
+        "city": "London",
+        "cost_usd": 4.9987,
+        "fill_id": "8854dd50797c8c525c6630a7d87ca9f4339989786ec2f91d4cf239ffae7aa2da",
+        "fill_ts_utc": "2026-06-04T07:49:36+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-04",
+        "token_id": "19412101601334870291341287112743486402567418851803845446481385251196566586965"
+      },
+      {
+        "city": "LA",
+        "cost_usd": 2.1996,
+        "fill_id": "d86ddda83be43ae940d337f19f553755a2369ed22b354acd875f88e2b9159ebb",
+        "fill_ts_utc": "2026-06-04T09:38:34+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-04",
+        "token_id": "34046170194346020011226638797048728753344076726075991831234647147778923603570"
+      },
+      {
+        "city": "Warsaw",
+        "cost_usd": 0.385,
+        "fill_id": "fbd437db2bcf1f555af19bbabfb89bef4b0b20ff0d0015af0d6c54b5dbb94299",
+        "fill_ts_utc": "2026-06-04T18:09:15+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-05",
+        "token_id": "26374145554103499951055618825164192013148975703445193159105392744162293165246"
+      },
+      {
+        "city": "LA",
+        "cost_usd": 2.2785,
+        "fill_id": "cb199b84612ad2ee01dfe1ae46fc5225904335f5ade0d8d824d850b3463f861b",
+        "fill_ts_utc": "2026-06-05T02:08:25+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-05",
+        "token_id": "41530581765887155839533829746834541395284925533791532284904728976453705957840"
+      },
+      {
+        "city": "Miami",
+        "cost_usd": 4.9996,
+        "fill_id": "aacb54679eea7e8edb30448913bdf570922e70a2824a9a9f9b30e397a2f77a06",
+        "fill_ts_utc": "2026-06-05T02:25:19+00:00",
+        "side": "BUY_YES",
+        "target_date": "2026-06-05",
+        "token_id": "23047814345713368022371149370926038765471859144373316483360200977274626535704"
+      }
+    ],
+    "unmatched_poly_buy_by_day": {
+      "2026-05-31": 143.284039,
+      "2026-06-01": 136.644562,
+      "2026-06-02": 77.599229,
+      "2026-06-03": 74.358456,
+      "2026-06-04": 103.599138,
+      "2026-06-05": 55.809734,
+      "2026-06-06": 41.346213
+    },
+    "unmatched_poly_buy_known_local_token_money": 623.222971,
+    "unmatched_poly_buy_money": 632.641371,
+    "unmatched_poly_buy_other_money": 0.0,
+    "unmatched_poly_buy_unknown_local_token_money": 9.4184,
+    "unmatched_poly_buy_weather_like_money": 632.641371,
+    "unmatched_poly_buys": 321,
+    "unmatched_poly_sample": [
+      {
+        "asset": "17388425544092887236200036872929071964447318950051445423965969286652503722880",
+        "money": 0.6785,
+        "outcome": "No",
+        "price": 0.59,
+        "size": 1.15,
+        "title": "Will the highest temperature in Manila be 32°C on June 7?",
+        "ts_utc": "2026-06-06T15:57:15+00:00"
+      },
+      {
+        "asset": "11292818214574105292001644885270734815311396838225849562748458615841637168948",
+        "money": 1.6198,
+        "outcome": "Yes",
+        "price": 0.26,
+        "size": 6.23,
+        "title": "Will the highest temperature in Istanbul be 24°C on June 7?",
+        "ts_utc": "2026-06-06T15:53:13+00:00"
+      },
+      {
+        "asset": "11292818214574105292001644885270734815311396838225849562748458615841637168948",
+        "money": 1.3,
+        "outcome": "Yes",
+        "price": 0.26,
+        "size": 5,
+        "title": "Will the highest temperature in Istanbul be 24°C on June 7?",
+        "ts_utc": "2026-06-06T15:53:12+00:00"
+      },
+      {
+        "asset": "11292818214574105292001644885270734815311396838225849562748458615841637168948",
+        "money": 0.78,
+        "outcome": "Yes",
+        "price": 0.26,
+        "size": 3,
+        "title": "Will the highest temperature in Istanbul be 24°C on June 7?",
+        "ts_utc": "2026-06-06T15:53:12+00:00"
+      },
+      {
+        "asset": "8698866713019652677443642644378098656437778152844088072508218183636950721470",
+        "money": 2.86,
+        "outcome": "No",
+        "price": 0.65,
+        "size": 4.4,
+        "title": "Will the highest temperature in Chengdu be 25°C on June 7?",
+        "ts_utc": "2026-06-06T15:51:51+00:00"
+      },
+      {
+        "asset": "95929139931235775497925101373881834980777759243277402408482981639113447278787",
+        "money": 4.5495,
+        "outcome": "Yes",
+        "price": 0.27,
+        "size": 16.85,
+        "title": "Will the highest temperature in Shanghai be 28°C on June 7?",
+        "ts_utc": "2026-06-06T12:37:13+00:00"
+      },
+      {
+        "asset": "51684342024897420853785661446479571311789854299440708289628060465703594123288",
+        "money": 0.0994,
+        "outcome": "No",
+        "price": 0.71,
+        "size": 0.14,
+        "title": "Will the highest temperature in Tokyo be 21°C on June 7?",
+        "ts_utc": "2026-06-06T12:29:10+00:00"
+      },
+      {
+        "asset": "33768402801195807083359175399757173277363105052815842929920808052962076281984",
+        "money": 4.998,
+        "outcome": "No",
+        "price": 0.6,
+        "size": 8.33,
+        "title": "Will the highest temperature in Shanghai be 27°C on June 7?",
+        "ts_utc": "2026-06-06T10:35:15+00:00"
+      },
+      {
+        "asset": "46212751488255124394360136655080073025918179603896569605200280097491150575325",
+        "money": 0.351,
+        "outcome": "Yes",
+        "price": 0.54,
+        "size": 0.65,
+        "title": "Will the highest temperature in Jeddah be 38°C or higher on June 6?",
+        "ts_utc": "2026-06-06T09:01:52+00:00"
+      },
+      {
+        "asset": "46212751488255124394360136655080073025918179603896569605200280097491150575325",
+        "money": 1.173913,
+        "outcome": "Yes",
+        "price": 0.5400002392001149,
+        "size": 2.173912,
+        "title": "Will the highest temperature in Jeddah be 38°C or higher on June 6?",
+        "ts_utc": "2026-06-06T08:31:46+00:00"
+      },
+      {
+        "asset": "46212751488255124394360136655080073025918179603896569605200280097491150575325",
+        "money": 0.7668,
+        "outcome": "Yes",
+        "price": 0.54,
+        "size": 1.42,
+        "title": "Will the highest temperature in Jeddah be 38°C or higher on June 6?",
+        "ts_utc": "2026-06-06T08:00:24+00:00"
+      },
+      {
+        "asset": "50003696925475953930308417018613860786371689988964312949742211459441142684614",
+        "money": 0.144,
+        "outcome": "Yes",
+        "price": 0.2,
+        "size": 0.72,
+        "title": "Will the highest temperature in Miami be between 84-85°F on June 6?",
+        "ts_utc": "2026-06-06T07:41:43+00:00"
+      },
+      {
+        "asset": "50003696925475953930308417018613860786371689988964312949742211459441142684614",
+        "money": 2.2,
+        "outcome": "Yes",
+        "price": 0.2,
+        "size": 11,
+        "title": "Will the highest temperature in Miami be between 84-85°F on June 6?",
+        "ts_utc": "2026-06-06T07:41:39+00:00"
+      },
+      {
+        "asset": "50003696925475953930308417018613860786371689988964312949742211459441142684614",
+        "money": 1.788,
+        "outcome": "Yes",
+        "price": 0.2,
+        "size": 8.94,
+        "title": "Will the highest temperature in Miami be between 84-85°F on June 6?",
+        "ts_utc": "2026-06-06T07:27:33+00:00"
+      },
+      {
+        "asset": "106706652390588277928328666527254576260321352010514685019449871535700853464596",
+        "money": 0.0992,
+        "outcome": "No",
+        "price": 0.62,
+        "size": 0.16,
+        "title": "Will the highest temperature in Los Angeles be between 68-69°F on June 6?",
+        "ts_utc": "2026-06-06T06:55:22+00:00"
+      },
+      {
+        "asset": "11542673293165091495981280535011375417721996668370419736286955981490195506809",
+        "money": 2.6596,
+        "outcome": "No",
+        "price": 0.61,
+        "size": 4.36,
+        "title": "Will the highest temperature in Seattle be between 56-57°F on June 6?",
+        "ts_utc": "2026-06-06T06:20:42+00:00"
+      },
+      {
+        "asset": "62328610176918306236621284761944927679219053897782273158868190673940494890962",
+        "money": 0.817,
+        "outcome": "No",
+        "price": 0.38,
+        "size": 2.15,
+        "title": "Will the highest temperature in Miami be between 86-87°F on June 6?",
+        "ts_utc": "2026-06-06T05:30:10+00:00"
+      },
+      {
+        "asset": "62328610176918306236621284761944927679219053897782273158868190673940494890962",
+        "money": 4.104,
+        "outcome": "No",
+        "price": 0.38,
+        "size": 10.8,
+        "title": "Will the highest temperature in Miami be between 86-87°F on June 6?",
+        "ts_utc": "2026-06-06T05:29:06+00:00"
+      },
+      {
+        "asset": "10873449184675826762523215447171812724273922301306712392483211715990957651062",
+        "money": 0.996,
+        "outcome": "No",
+        "price": 0.6,
+        "size": 1.66,
+        "title": "Will the highest temperature in New York City be between 92-93°F on June 6?",
+        "ts_utc": "2026-06-06T05:00:52+00:00"
+      },
+      {
+        "asset": "50003696925475953930308417018613860786371689988964312949742211459441142684614",
+        "money": 0.0506,
+        "outcome": "Yes",
+        "price": 0.22,
+        "size": 0.23,
+        "title": "Will the highest temperature in Miami be between 84-85°F on June 6?",
+        "ts_utc": "2026-06-06T02:56:58+00:00"
+      },
+      {
+        "asset": "50003696925475953930308417018613860786371689988964312949742211459441142684614",
+        "money": 1.54,
+        "outcome": "Yes",
+        "price": 0.22,
+        "size": 7,
+        "title": "Will the highest temperature in Miami be between 84-85°F on June 6?",
+        "ts_utc": "2026-06-06T02:56:54+00:00"
+      },
+      {
+        "asset": "50003696925475953930308417018613860786371689988964312949742211459441142684614",
+        "money": 1.32,
+        "outcome": "Yes",
+        "price": 0.22,
+        "size": 6,
+        "title": "Will the highest temperature in Miami be between 84-85°F on June 6?",
+        "ts_utc": "2026-06-06T02:53:13+00:00"
+      },
+      {
+        "asset": "104821307045495982155985331861754715877611461393787596512860570048762334278463",
+        "money": 0.2925,
+        "outcome": "Yes",
+        "price": 0.45,
+        "size": 0.65,
+        "title": "Will the highest temperature in Los Angeles be between 70-71°F on June 6?",
+        "ts_utc": "2026-06-06T02:22:09+00:00"
+      },
+      {
+        "asset": "104821307045495982155985331861754715877611461393787596512860570048762334278463",
+        "money": 1.8,
+        "outcome": "Yes",
+        "price": 0.45,
+        "size": 4,
+        "title": "Will the highest temperature in Los Angeles be between 70-71°F on June 6?",
+        "ts_utc": "2026-06-06T02:22:07+00:00"
+      },
+      {
+        "asset": "75134917769527363002156274940280782733648359788191733009364848248708591167483",
+        "money": 2.4384,
+        "outcome": "Yes",
+        "price": 0.32,
+        "size": 7.62,
+        "title": "Will the highest temperature in Warsaw be 24°C on June 6?",
+        "ts_utc": "2026-06-06T00:10:57+00:00"
+      }
+    ]
+  },
+  "notes": [
+    "Polymarket public activity has no local fill_id, so matching uses token_id/asset, timestamp, and notional tolerance.",
+    "REDEEM belongs to account cashflow and settlement payout timing; it is not one-to-one with fills in the same fill_date window.",
+    "For daily-settled weather markets, target_date PnL should be read from fact_trades; account cash should be read from activity BUY/SELL/REDEEM/REBATE."
+  ],
+  "polymarket_activity_window": {
+    "by_day_signed_cash": {
+      "2026-05-31": -125.076609,
+      "2026-06-01": -104.763219,
+      "2026-06-02": 220.747612,
+      "2026-06-03": -48.936529,
+      "2026-06-04": 53.809343,
+      "2026-06-05": 20.628531,
+      "2026-06-06": -87.69307
+    },
+    "by_type_side": {
+      "MAKER_REBATE:": {
+        "money": 11.3678,
+        "rows": 7,
+        "signed_cash": 11.3678
+      },
+      "REDEEM:": {
+        "money": 1565.08904,
+        "rows": 118,
+        "signed_cash": 1565.08904
+      },
+      "TRADE:BUY": {
+        "money": 1785.97017,
+        "rows": 690,
+        "signed_cash": -1785.97017
+      },
+      "TRADE:SELL": {
+        "money": 138.229389,
+        "rows": 16,
+        "signed_cash": 138.229389
+      }
+    },
+    "signed_cash_delta": -71.283941
+  },
+  "target_date_window": {
+    "end": "2026-06-06",
+    "start": "2026-05-31"
+  },
+  "window_utc": {
+    "end": "2026-06-07T00:00:00+00:00",
+    "start": "2026-05-31T00:00:00+00:00"
+  }
+}

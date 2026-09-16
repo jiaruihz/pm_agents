@@ -1,0 +1,165 @@
+{
+  "contract_verdict": {
+    "baseline": "NA",
+    "conclusion": "shadow_candidate",
+    "forward": "NA",
+    "live_action": "none",
+    "significance": "NA"
+  },
+  "generated_at_utc": "2026-07-09T14:11:24.545956+00:00",
+  "outputs": {
+    "json": "docs/analysis/2026-07/2026-07-09-fast-source-prev-no-realtime-source-basis-v1.json",
+    "lead_rows_csv": "docs/analysis/2026-07/generated/fast_source_prev_no_realtime_source_basis_20260709/lead_rows.csv",
+    "report_md": "docs/analysis/2026-07/2026-07-09-fast-source-prev-no-realtime-source-basis-v1.md",
+    "stale_book_rows_csv": "docs/analysis/2026-07/generated/fast_source_prev_no_realtime_source_basis_20260709/stale_book_rows.csv"
+  },
+  "params": {
+    "high_frequency_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/high_frequency_observations/high_frequency_observations.jsonl",
+    "max_book_age_min": 25.0,
+    "max_high_freq_age_min": 30.0,
+    "max_next_report_min": 90.0,
+    "paper_snapshot_dir": "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots",
+    "source_events_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/source_events/sources.jsonl"
+  },
+  "summary": {
+    "bucket_summary": [
+      {
+        "bucket": "<= -1",
+        "empirical_prob": 0.2431,
+        "feature": "hf_round_minus_prev_round",
+        "positive_rows": 316,
+        "rows": 1300
+      },
+      {
+        "bucket": "0",
+        "empirical_prob": 0.201,
+        "feature": "hf_round_minus_prev_round",
+        "positive_rows": 879,
+        "rows": 4373
+      },
+      {
+        "bucket": "1",
+        "empirical_prob": 0.5899,
+        "feature": "hf_round_minus_prev_round",
+        "positive_rows": 830,
+        "rows": 1407
+      },
+      {
+        "bucket": ">= 2",
+        "empirical_prob": 0.791,
+        "feature": "hf_round_minus_prev_round",
+        "positive_rows": 265,
+        "rows": 335
+      },
+      {
+        "bucket": "<= -1",
+        "empirical_prob": 0.0374,
+        "feature": "hf_round_minus_prev_day_max",
+        "positive_rows": 183,
+        "rows": 4899
+      },
+      {
+        "bucket": "0",
+        "empirical_prob": 0.2669,
+        "feature": "hf_round_minus_prev_day_max",
+        "positive_rows": 524,
+        "rows": 1963
+      },
+      {
+        "bucket": "1",
+        "empirical_prob": 0.8458,
+        "feature": "hf_round_minus_prev_day_max",
+        "positive_rows": 406,
+        "rows": 480
+      },
+      {
+        "bucket": ">= 2",
+        "empirical_prob": 0.7534,
+        "feature": "hf_round_minus_prev_day_max",
+        "positive_rows": 55,
+        "rows": 73
+      }
+    ],
+    "lead_city_counts": {
+      "Ankara": 689,
+      "Atlanta": 301,
+      "Austin": 305,
+      "Busan": 993,
+      "Chicago": 279,
+      "Dallas": 269,
+      "Helsinki": 885,
+      "Houston": 269,
+      "LA": 282,
+      "Miami": 281,
+      "NYC": 346,
+      "SanFrancisco": 210,
+      "Seattle": 235,
+      "Singapore": 1029,
+      "Tokyo": 1042
+    },
+    "lead_rows": 7415,
+    "lead_source_counts": {
+      "amos_runway": 993,
+      "fmi": 885,
+      "jma_amedas": 1042,
+      "mgm": 689,
+      "noaa_madis_hfmetar": 2777,
+      "singapore_mss": 1029
+    },
+    "raw_high_frequency_rows": 18169,
+    "raw_source_event_rows": 51384,
+    "signal_quality": {
+      "cross_prob_head": {
+        "base_rate": 0.3088,
+        "hit_rows": 1095,
+        "label_positive_rows": 2290,
+        "lift_vs_base": 2.0354,
+        "precision": 0.6286,
+        "recall": 0.4782,
+        "rows": 7415,
+        "signal_rows": 1742
+      },
+      "next_report_up_prob_head": {
+        "base_rate": 0.3173,
+        "hit_rows": 1535,
+        "label_positive_rows": 2353,
+        "lift_vs_base": 1.4971,
+        "precision": 0.4751,
+        "recall": 0.6524,
+        "rows": 7415,
+        "signal_rows": 3231
+      },
+      "overshoot_prob_head": {
+        "base_rate": 0.1575,
+        "hit_rows": 461,
+        "label_positive_rows": 1168,
+        "lift_vs_base": 5.2923,
+        "precision": 0.8336,
+        "recall": 0.3947,
+        "rows": 7415,
+        "signal_rows": 553
+      }
+    },
+    "source_event_cities": 40,
+    "stale_book_rows": 6537,
+    "stale_book_summary": {
+      "current_bracket_status_counts": {
+        "missing": 115,
+        "ok": 223,
+        "orderbook_budget_exhausted": 4673,
+        "orderbook_scope_skipped": 1526
+      },
+      "detector_candidate_rows": 0,
+      "hf_implies_overshoot_rows": 444,
+      "next_bracket_status_counts": {
+        "orderbook_budget_exhausted": 4750,
+        "orderbook_scope_skipped": 1787
+      },
+      "rows": 6537,
+      "rows_with_current_yes_ask": 223,
+      "rows_with_next_yes_ask": 0,
+      "stale_current_yes_high_rows": 0,
+      "stale_next_yes_cheap_rows": 0
+    }
+  }
+}

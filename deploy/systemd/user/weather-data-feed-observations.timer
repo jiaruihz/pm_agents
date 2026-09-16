@@ -1,0 +1,11 @@
+[Unit]
+Description=Run weather data feed fast observation cache every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+Persistent=true
+Unit=weather-data-feed-observations.service
+
+[Install]
+WantedBy=timers.target

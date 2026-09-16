@@ -1,0 +1,3 @@
+group,rows,dates,cities,wins,win_rate,avg_ask,cost,pnl,roi
+dist_eq0_forecast_boundary_tail_v1,1,1,1,0,0.0,0.105,0.10969875,-0.10969875,-1.0
+dist_lt0_cold_or_inside_forecast_tail_v1,16,3,13,4,0.25,0.103875,1.7347815,2.2652185,1.3057658846373448

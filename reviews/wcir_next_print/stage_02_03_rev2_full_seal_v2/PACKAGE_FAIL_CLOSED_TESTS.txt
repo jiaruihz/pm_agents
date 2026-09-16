@@ -1,0 +1,9 @@
+Verifier mutation coverage inherited and rerun:
+- missing entry: fail closed
+- unmanifested extra entry: fail closed
+- size drift: fail closed
+- same-size hash drift: fail closed
+- duplicate zip entry name: fail closed
+
+Expanded reproduction additionally verifies the exact extracted package entry set and
+every PACKAGE_CONTENTS.json size/SHA-256 identity before rebuilding evidence.

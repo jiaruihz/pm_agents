@@ -1,0 +1,31 @@
+{
+  "fixture_kind": "point_observation",
+  "note": "deployed point payload at Phase 0 cutoff",
+  "raw_ref": {
+    "line_numbers": [
+      1152
+    ],
+    "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/2026-08-01/high_frequency_observations.jsonl",
+    "source_file_sha256_at_census": "5eecf6132bb81d9cbe791111eb086df60b3f9c0539071443e00414329469346e"
+  },
+  "record_schema_fingerprint": "21b5189160eec618e39bcf9321d514e38f8f1df612ffc2a7b2eb17c15ab82665",
+  "records": {
+    "city": "Tokyo",
+    "fetched_at_utc": "2026-08-01T05:47:14.745496+00:00",
+    "observation_time_utc": "2026-08-01T05:40:00+00:00",
+    "payload_hash": "efd7f7d99b1b33ac",
+    "pressure_hpa": null,
+    "raw_payload_hash": "27e1c86730713187",
+    "schema_version": "weather_high_frequency_observation_v1",
+    "source": "jma_amedas",
+    "source_first_seen_at_utc": "2026-08-01T05:47:14.745496+00:00",
+    "source_kind": "official_airport_station",
+    "station": "44166",
+    "target_date": "2026-08-01",
+    "temp_c": 34.1,
+    "temp_f": 93.38,
+    "temp_round_f": 93,
+    "wind_speed_kt": null
+  },
+  "schema_version": "weather_city_intraday_phase0_fixture_v1"
+}

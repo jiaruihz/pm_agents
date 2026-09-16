@@ -1,0 +1,438 @@
+{
+  "generated_at_utc": "2026-06-09T18:56:46.292593+00:00",
+  "git_sha": "90fce40",
+  "db": {
+    "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+    "db_last_modified_utc": "2026-06-09T17:38:04.156943+00:00",
+    "max_fact_built_at_utc": "2026-06-09T17:37:40.513320+00:00",
+    "trade_class_distribution": [
+      {
+        "trade_class": "live_real",
+        "n": 1405
+      },
+      {
+        "trade_class": "live_simulated",
+        "n": 1147
+      },
+      {
+        "trade_class": "paper",
+        "n": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "n": 636
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "settlement_status": null,
+        "n": 232
+      },
+      {
+        "settlement_status": "settled",
+        "n": 5241
+      }
+    ],
+    "candidate_coverage": {
+      "rows": 25117,
+      "eligible": 8306,
+      "paper_ordered": 3139,
+      "live_filled": 554
+    },
+    "order_fill_coverage": [
+      {
+        "status": "error",
+        "orders": 151,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 1635,
+        "with_fill": 1405
+      }
+    ],
+    "fact_signal_candidates_range": {
+      "min_event_date": "2026-05-05",
+      "max_event_date": "2026-06-10",
+      "event_dates": 37,
+      "rows": 25117
+    },
+    "fact_signal_candidates_usable_main": {
+      "min_event_date": "2026-05-12",
+      "max_event_date": "2026-06-08",
+      "rows": 918,
+      "event_dates": 26,
+      "city_days": 372
+    },
+    "fact_trades_range": {
+      "min_target_date": "2026-05-06",
+      "max_target_date": "2026-06-10",
+      "target_dates": 36,
+      "rows": 5473
+    },
+    "decision_window_missing": [
+      {
+        "decision_window_missing": 0,
+        "rows": 14276
+      },
+      {
+        "decision_window_missing": 1,
+        "rows": 10841
+      }
+    ]
+  },
+  "sources": {
+    "paper_snapshots": {
+      "label": "paper_snapshots",
+      "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/paper_snapshots",
+      "pattern": "*.json",
+      "exists": true,
+      "files": 1690,
+      "dated_files": 1690,
+      "latest_mtime_utc": "2026-06-09T17:16:01.552175+00:00",
+      "min_date": "2026-05-05",
+      "max_date": "2026-06-10",
+      "distinct_dates": 37,
+      "sample_files": [
+        "snapshot_20260505_2325.json",
+        "snapshot_20260505_2326.json",
+        "snapshot_20260505_2327.json",
+        "snapshot_20260505_2330.json",
+        "snapshot_20260506_0000.json"
+      ]
+    },
+    "orderbook_snapshots": {
+      "label": "orderbook_snapshots",
+      "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/orderbook_snapshots",
+      "pattern": "*.jsonl.gz",
+      "exists": true,
+      "files": 1053,
+      "dated_files": 1053,
+      "latest_mtime_utc": "2026-06-09T17:36:19.788127+00:00",
+      "min_date": "2026-05-19",
+      "max_date": "2026-06-10",
+      "distinct_dates": 23,
+      "sample_files": [
+        "2026-05-19/orderbook_snapshot_20260519_0100.jsonl.gz",
+        "2026-05-19/orderbook_snapshot_20260519_0130.jsonl.gz",
+        "2026-05-19/orderbook_snapshot_20260519_0200.jsonl.gz",
+        "2026-05-19/orderbook_snapshot_20260519_0230.jsonl.gz",
+        "2026-05-19/orderbook_snapshot_20260519_0300.jsonl.gz"
+      ]
+    },
+    "pm_history": {
+      "label": "pm_history",
+      "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/pm_history",
+      "pattern": "*.json",
+      "exists": true,
+      "files": 16484,
+      "dated_files": 1575,
+      "latest_mtime_utc": "2026-06-09T09:27:27.657475+00:00",
+      "min_date": "2026-05-04",
+      "max_date": "2026-06-08",
+      "distinct_dates": 36,
+      "sample_files": [
+        "Amsterdam_2026-05-12.json",
+        "Amsterdam_2026-05-13.json",
+        "Amsterdam_2026-05-14.json",
+        "Amsterdam_2026-05-15.json",
+        "Amsterdam_2026-05-16.json"
+      ]
+    },
+    "research_files": {
+      "label": "research_files",
+      "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/research",
+      "pattern": "*",
+      "exists": true,
+      "files": 37,
+      "dated_files": 8,
+      "latest_mtime_utc": "2026-06-09T17:37:37.140950+00:00",
+      "min_date": "2026-05-12",
+      "max_date": "2026-06-09",
+      "distinct_dates": 5,
+      "sample_files": [
+        "2026-06-08-executable-edge.json",
+        "2026-06-08-market-structural-edge.json",
+        "2026-06-09-model-rank-ic.json",
+        "city_day_portfolio/city_day_portfolio_conflicts.csv",
+        "city_day_portfolio/city_day_portfolio_groups.csv"
+      ]
+    },
+    "iem_cache": {
+      "label": "iem_cache",
+      "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/iem",
+      "pattern": "*.csv",
+      "exists": true,
+      "files": 38,
+      "latest_mtime_utc": "2026-05-12T16:40:35.871737+00:00",
+      "filename_date_range": {
+        "min_date": "2025-05-12",
+        "max_date": "2025-05-12",
+        "distinct_dates": 1
+      },
+      "sampled_content_date_range": {
+        "min_date": "2025-05-12",
+        "max_date": "2026-05-11",
+        "distinct_dates": 2
+      },
+      "sampled_files": [
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/iem/iem_v2_DNMM_2025-05-12_2026-05-12.csv",
+          "exists": true,
+          "rows_scanned": 7118,
+          "min_date": "2025-05-12",
+          "max_date": "2026-05-11",
+          "distinct_dates": 355
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/iem/iem_v2_EDDM_2025-05-12_2026-05-12.csv",
+          "exists": true,
+          "rows_scanned": 17518,
+          "min_date": "2025-05-12",
+          "max_date": "2026-05-11",
+          "distinct_dates": 365
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/iem/iem_v2_EFHK_2025-05-12_2026-05-12.csv",
+          "exists": true,
+          "rows_scanned": 17513,
+          "min_date": "2025-05-12",
+          "max_date": "2026-05-11",
+          "distinct_dates": 365
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/iem/iem_v2_EHAM_2025-05-12_2026-05-12.csv",
+          "exists": true,
+          "rows_scanned": 17475,
+          "min_date": "2025-05-12",
+          "max_date": "2026-05-11",
+          "distinct_dates": 365
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/iem/iem_v2_FACT_2025-05-12_2026-05-12.csv",
+          "exists": true,
+          "rows_scanned": 9972,
+          "min_date": "2025-05-12",
+          "max_date": "2026-05-11",
+          "distinct_dates": 365
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/iem/iem_v2_KATL_2025-05-12_2026-05-12.csv",
+          "exists": true,
+          "rows_scanned": 10288,
+          "min_date": "2025-05-12",
+          "max_date": "2026-05-11",
+          "distinct_dates": 365
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/iem/iem_v2_KBKF_2025-05-12_2026-05-12.csv",
+          "exists": true,
+          "rows_scanned": 9126,
+          "min_date": "2025-05-12",
+          "max_date": "2026-05-11",
+          "distinct_dates": 361
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/iem/iem_v2_KDAL_2025-05-12_2026-05-12.csv",
+          "exists": true,
+          "rows_scanned": 9915,
+          "min_date": "2025-05-12",
+          "max_date": "2026-05-11",
+          "distinct_dates": 365
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/iem/iem_v2_KHOU_2025-05-12_2026-05-12.csv",
+          "exists": true,
+          "rows_scanned": 10077,
+          "min_date": "2025-05-12",
+          "max_date": "2026-05-11",
+          "distinct_dates": 365
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/iem/iem_v2_KMSP_2025-05-12_2026-05-12.csv",
+          "exists": true,
+          "rows_scanned": 10786,
+          "min_date": "2025-05-12",
+          "max_date": "2026-05-11",
+          "distinct_dates": 365
+        }
+      ]
+    },
+    "wu_obs": {
+      "label": "wu_obs",
+      "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/wu_obs",
+      "pattern": "*.csv",
+      "exists": true,
+      "files": 52,
+      "latest_mtime_utc": "2026-05-12T16:40:36.111896+00:00",
+      "filename_date_range": {
+        "min_date": null,
+        "max_date": null,
+        "distinct_dates": 0
+      },
+      "sampled_content_date_range": {
+        "min_date": null,
+        "max_date": null,
+        "distinct_dates": 0
+      },
+      "sampled_files": [
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_DNMM.csv",
+          "exists": true,
+          "rows_scanned": 7107,
+          "min_date": null,
+          "max_date": null,
+          "distinct_dates": 0
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_EDDM.csv",
+          "exists": true,
+          "rows_scanned": 17514,
+          "min_date": null,
+          "max_date": null,
+          "distinct_dates": 0
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_EFHK.csv",
+          "exists": true,
+          "rows_scanned": 17513,
+          "min_date": null,
+          "max_date": null,
+          "distinct_dates": 0
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_EGLL.csv",
+          "exists": true,
+          "rows_scanned": 35268,
+          "min_date": null,
+          "max_date": null,
+          "distinct_dates": 0
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_EHAM.csv",
+          "exists": true,
+          "rows_scanned": 17475,
+          "min_date": null,
+          "max_date": null,
+          "distinct_dates": 0
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_EPWA.csv",
+          "exists": true,
+          "rows_scanned": 35256,
+          "min_date": null,
+          "max_date": null,
+          "distinct_dates": 0
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_FACT.csv",
+          "exists": true,
+          "rows_scanned": 9970,
+          "min_date": null,
+          "max_date": null,
+          "distinct_dates": 0
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_KATL.csv",
+          "exists": true,
+          "rows_scanned": 10286,
+          "min_date": null,
+          "max_date": null,
+          "distinct_dates": 0
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_KAUS.csv",
+          "exists": true,
+          "rows_scanned": 20137,
+          "min_date": null,
+          "max_date": null,
+          "distinct_dates": 0
+        },
+        {
+          "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_KBKF.csv",
+          "exists": true,
+          "rows_scanned": 9126,
+          "min_date": null,
+          "max_date": null,
+          "distinct_dates": 0
+        }
+      ]
+    },
+    "paper_orders": {
+      "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/paper_trades/paper_orders.jsonl",
+      "exists": true,
+      "rows": 3998,
+      "min_date": "2026-05-08",
+      "max_date": "2026-06-10",
+      "distinct_dates": 34,
+      "city_pool_distribution": {
+        "t2_research": 2227,
+        "t1_trading": 1556
+      }
+    }
+  },
+  "builder_inputs": {
+    "builder_path": "/home/rui/projects/pm_agent/scripts/etl/build_weather_signal_candidates.py",
+    "exists": true,
+    "uses_paper_snapshots": true,
+    "uses_paper_orders": true,
+    "uses_fact_trades": true,
+    "uses_settlements": true,
+    "hardcoded_snapshot_dir": true,
+    "hardcoded_paper_orders_path": true
+  },
+  "assessment": {
+    "can_expand_opportunity_fact_from_local_runtime_now": false,
+    "main_blocker": "Local paper_snapshots/orderbook/pm_history coverage is near-window. Weather observation/model caches are longer, but they do not contain decision-time market prices.",
+    "fact_signal_candidates_range": {
+      "min_event_date": "2026-05-05",
+      "max_event_date": "2026-06-10",
+      "event_dates": 37,
+      "rows": 25117
+    },
+    "market_snapshot_range": {
+      "paper_snapshots": {
+        "files": 1690,
+        "min_date": "2026-05-05",
+        "max_date": "2026-06-10",
+        "distinct_dates": 37
+      },
+      "orderbook_snapshots": {
+        "files": 1053,
+        "min_date": "2026-05-19",
+        "max_date": "2026-06-10",
+        "distinct_dates": 23
+      },
+      "pm_history": {
+        "files": 16484,
+        "min_date": "2026-05-04",
+        "max_date": "2026-06-08",
+        "distinct_dates": 36
+      }
+    },
+    "weather_cache_range": {
+      "iem_filename": {
+        "min_date": "2025-05-12",
+        "max_date": "2025-05-12",
+        "distinct_dates": 1
+      },
+      "iem_sampled_content": {
+        "min_date": "2025-05-12",
+        "max_date": "2026-05-11",
+        "distinct_dates": 2
+      },
+      "wu_sampled_content": {
+        "min_date": null,
+        "max_date": null,
+        "distinct_dates": 0
+      }
+    },
+    "minimum_viable_expansion_path": [
+      "Recover or ingest historical Polymarket paper_snapshots/orderbook snapshots with decision timestamps.",
+      "Ensure condition_id/market_id/bracket/event_date mapping is available for those historical markets.",
+      "Ensure pm_history/settlement labels cover the same event dates.",
+      "Re-run build_weather_signal_candidates.py so expanded data lands in runtime/weather.db fact_signal_candidates.",
+      "Only then rerun adjacent3 matched-baseline/readiness gates."
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "disposition": "CONTINUE_COLLECTION_WITHOUT_MODELING",
+  "event_rows": 841,
+  "future_price_action_invariance": "pass",
+  "paired_executable_rows": 89,
+  "primary_contract": {
+    "action_information": "actual next print + prior running state + t0 entry cost only",
+    "entry": "fee-aware ask sweep",
+    "exit": "fee-aware bid sweep",
+    "horizon_seconds": 30,
+    "shares": 5.0
+  },
+  "row_file": {
+    "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03_rev2/evidence/PRIMARY_ORACLE_ROWS.jsonl.gz",
+    "row_count": 841,
+    "sha256": "e3c8db8d4e5ac75eff298dff3ebb9f3b6cc3ee14112e274d019640f6065b08c4",
+    "size_bytes": 117285
+  }
+}

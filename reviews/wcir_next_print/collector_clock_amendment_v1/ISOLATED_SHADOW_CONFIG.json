@@ -1,0 +1,15 @@
+{
+  "active_epoch_id": "wcir-collector-clock-amendment-v1-review-20260828",
+  "archive_mode": "append_only_jsonl_isolated_output",
+  "backpressure_policy": "bounded_queue_drop_fail_closed",
+  "config_id": "wcir_collector_clock_shadow_v1",
+  "connection_id": "synthetic-review-connection-20260828",
+  "max_active_tokens": 120,
+  "network_enabled": false,
+  "orders_enabled": false,
+  "production_consumer_connected": false,
+  "production_startup_modified": false,
+  "shared_token_set_connected": false,
+  "subscription_rate_per_second": 120,
+  "zero_notional": true
+}

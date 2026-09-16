@@ -1,0 +1,295 @@
+{
+  "schema_version": "weather_city_probability_runtime_config_v3",
+  "framework_id": "weather_city_intraday_runtime_v1",
+  "framework_name": "Weather City Intraday Runtime",
+  "strategy_family": "weather.city_intraday_probability",
+  "output_schema_version": "weather_city_probability_runtime_v3",
+  "output_schema_fingerprint": "a108e39c36707bc6ed6cc0175d241f49d93442218b047a0534644eb239928985",
+  "execution_mode": "zero_notional_shadow",
+  "orders_submitted": 0,
+  "output_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3",
+  "decision_contract_output": {
+    "enabled": true,
+    "authority": "active",
+    "execution_mode": "zero_notional",
+    "cities": ["Amsterdam", "Busan", "Helsinki", "Seoul", "Tokyo"],
+    "output_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3",
+    "execution_profile": "city_probability_zero_notional_v1"
+  },
+  "legacy_runtime": {
+    "lifecycle_status": "deprecated_read_only",
+    "runtime_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2",
+    "journals": ["evaluations.jsonl", "paper_intents.jsonl", "checkpoints.jsonl", "errors.jsonl"]
+  },
+  "require_producer_contracts": true,
+  "producer_contracts": [
+    {
+      "journal_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations",
+      "latest_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/latest.json",
+      "schema_version": "weather_high_frequency_observations_payload_v2",
+      "schema_fingerprint": "789563c9c429f760b1578897c7086563cb876956e9d4d69a191abc185d5b1bf1"
+    },
+    {
+      "journal_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data",
+      "latest_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/latest.json",
+      "schema_version": "weather_knmi_open_data_payload_v1",
+      "schema_fingerprint": "401ae97fea4cd0f75399a50944949e658b5b17df80a06ac6d6056531b254c883"
+    },
+    {
+      "journal_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/korea_first_seen_state_v1/checkpoints",
+      "latest_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/korea_first_seen_state_v1/latest.json",
+      "schema_version": "korea_first_seen_collector_latest_v2",
+      "schema_fingerprint": "6d7d5a4427c35ea74c24c0216ce36ec66a29ff16af2b4183e375dd171c59f9b2"
+    }
+  ],
+  "profiles": [
+    {
+      "enabled": true,
+      "city": "Amsterdam",
+      "adapter": "amsterdam_knmi_remaining_heat_v9",
+      "framework_id": "weather_city_intraday_runtime_v1",
+      "strategy_family": "weather.city_intraday_probability",
+      "profile_id": "amsterdam_knmi_remaining_heat_v9_ecmwf_day1_clean_forward",
+      "source": "knmi",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "ladder_snapshot_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/snapshots",
+      "forecast_previous_day1_dir": "/Volumes/jrs/weather_data_feed_service_runtime/forecast/previous_day1/forecast_hourly_curves",
+      "forward_start_utc": "2026-08-11T22:00:00Z",
+      "max_source_age_seconds": 900,
+      "expression_sides": ["YES", "NO"],
+      "material_state_change_only": true,
+      "edge_threshold": 0.02,
+      "position_scope": "city_date_bracket_model",
+      "emit_paper_intents": true,
+      "artifacts": {
+        "weather": {
+          "path": "/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_remaining_heat_v9_ecmwf_day1/run=61b8cde77f5320a4/model_v9.pkl",
+          "sha256": "c0bcb0afe1a86da376e86affb411e146b26c292c68bad9c9b6db246acaecd4d2"
+        }
+      }
+    },
+    {
+      "enabled": true,
+      "city": "Amsterdam",
+      "adapter": "amsterdam_knmi_cross_survival_v1",
+      "framework_id": "weather_city_intraday_runtime_v1",
+      "strategy_family": "weather.city_intraday_probability",
+      "profile_id": "amsterdam_knmi_cross07_survival_clean_forward_v1",
+      "source": "knmi",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "ladder_snapshot_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/snapshots",
+      "forecast_previous_day1_dir": "/Volumes/jrs/weather_data_feed_service_runtime/forecast/previous_day1/forecast_hourly_curves",
+      "forward_start_utc": "2026-08-12T03:00:00Z",
+      "max_source_age_seconds": 900,
+      "required_cross_margin_c": 0.7,
+      "expression_sides": ["NO"],
+      "material_state_change_only": true,
+      "edge_threshold": 0.01,
+      "selection_shares": 10.0,
+      "position_scope": "city_date_bracket_model",
+      "emit_paper_intents": true,
+      "artifacts": {
+        "weather": {
+          "path": "/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_cross_survival/run=53d49e6d7a4c075e/model.pkl",
+          "sha256": "b2d5ec1b06cd2c85e764182fbe65ac5a96a438c399016c6107dc80180bd854a2"
+        }
+      }
+    },
+    {
+      "enabled": true,
+      "city": "Amsterdam",
+      "adapter": "amsterdam_knmi_market_offset_probability_v3",
+      "framework_id": "weather_city_intraday_runtime_v1",
+      "strategy_family": "weather.city_intraday_probability",
+      "profile_id": "amsterdam_knmi_market_offset_current_best_20260826_clean_forward",
+      "source": "knmi",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "ladder_snapshot_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/snapshots",
+      "pre_event_reference_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/pre_event_references.jsonl",
+      "forecast_previous_day1_dir": "/Volumes/jrs/weather_data_feed_service_runtime/forecast/previous_day1/forecast_hourly_curves",
+      "forward_start_utc": "2026-08-26T12:00:15.867834+00:00",
+      "max_source_age_seconds": 900,
+      "allowed_source_minutes": [10, 40],
+      "allowed_local_hours": [10, 16],
+      "expression_sides": ["YES", "NO"],
+      "material_state_change_only": true,
+      "edge_threshold": 0.02,
+      "min_model_probability": 0.55,
+      "selection_shares": 5.0,
+      "position_scope": "city_date_bracket_model",
+      "emit_paper_intents": true,
+      "artifacts": {
+        "weather": {
+          "path": "/Volumes/jrs/weather_data_feed_service_runtime/model_artifacts/city_probability_runtime_v3/amsterdam_knmi_market_offset_current_best_20260826.pkl",
+          "sha256": "9e337219995b548e075021ea9ec7cb1404bd2ce876393b8a9f9ceb055b1b20f6"
+        },
+        "base_weather": {
+          "path": "/Volumes/jrs/weather_data_feed_service_runtime/research/model_runs/amsterdam_knmi_remaining_heat_v9_ecmwf_day1/run=61b8cde77f5320a4/model_v9.pkl",
+          "sha256": "c0bcb0afe1a86da376e86affb411e146b26c292c68bad9c9b6db246acaecd4d2"
+        }
+      }
+    },
+    {
+      "enabled": true,
+      "city": "Busan",
+      "adapter": "busan_online_market_prior_v1",
+      "framework_id": "weather_city_intraday_runtime_v1",
+      "strategy_family": "weather.city_intraday_probability",
+      "profile_id": "busan_crossno_probability_clock_v2_clean_forward",
+      "evaluation_identity_version": "v2_profile_epoch",
+      "forward_epoch_id": "busan_clock_v2_20260906",
+      "source": "amos_runway",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/korea_first_seen_state_v1/checkpoints",
+      "forward_start_utc": "2026-09-05T15:00:00Z",
+      "decision_clock_policy": "runtime_score_after_source_book_forecast_and_collector_v2",
+      "max_source_age_seconds": 180,
+      "max_feature_book_response_seconds": 10,
+      "max_execution_book_age_seconds": 90,
+      "material_state_change_only": true,
+      "edge_threshold": 0.0,
+      "selection_shares": 5.0,
+      "position_scope": "city_date_bracket_side_model",
+      "emit_paper_intents": true,
+      "artifacts": {
+        "runtime": {
+          "path": "/Volumes/jrs/weather_data_feed_service_runtime/model_artifacts/city_probability_runtime_v3/busan_online_market_prior_v1.joblib",
+          "sha256": "80d6efe97fe25560fc6818e90070a9b051cb03dbcbfaf11e384c37c5aefa189f",
+          "spec_path": "/Volumes/jrs/weather_data_feed_service_runtime/model_artifacts/city_probability_runtime_v3/busan_online_market_prior_v1.spec.json",
+          "spec_sha256": "0863b3999c7014578d69d9cfc074d413f04e58bb2c614e47e890e542492c3056"
+        }
+      }
+    },
+    {
+      "enabled": true,
+      "city": "Helsinki",
+      "adapter": "helsinki_remaining_heat_v1",
+      "profile_id": "helsinki_regime_calibrated_bounded_residual_c015_v2",
+      "forward_start_utc": "2026-08-12T08:31:24Z",
+      "max_book_age_seconds": 900,
+      "max_source_to_book_lag_seconds": 120,
+      "selection_shares": 5.0,
+      "edge_threshold": 0.0,
+      "position_scope": "city_date_bracket_model",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations",
+      "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/helsinki_pre_cross_active_ladder_shadow/active_bracket_books",
+      "forecast_curve_dir": "/Volumes/jrs/weather_data_feed_service_runtime/forecast/forecast_hourly_curves",
+      "expression_models": ["bounded"],
+      "artifacts": {
+        "weather": {
+          "path": "docs/analysis/2026-07/generated/helsinki_remaining_heat_probability_v5/helsinki_remaining_heat_v5_composite_hazard_challenger.joblib",
+          "sha256": "8d94a959dbcf0e5a2e752c1cc7dd133808a06ebae7194b8a07cd3f699a293dd5"
+        },
+        "fade": {
+          "path": "docs/analysis/2026-07/generated/helsinki_fade_morphology_v1/helsinki_fade_morphology_v1.joblib",
+          "sha256": "4a34089bab953c4e1e7ae95560222b812f553138409b57e301b779721942f7e2"
+        },
+        "bounded": {
+          "path": "docs/analysis/2026-08/generated/helsinki_bounded_market_residual_v2/helsinki_regime_calibrated_bounded_residual_c015_v2.json",
+          "sha256": "fd09be9c39e585a8b5502452a84db517fbaa455a728427db71de92e030f614e9"
+        }
+      }
+    },
+    {
+      "enabled": true,
+      "city": "Seoul",
+      "adapter": "observation_coverage_v1",
+      "framework_id": "weather_city_intraday_runtime_v1",
+      "strategy_family": "weather.city_intraday_probability",
+      "profile_id": "seoul_amos_point_group_coverage_v1",
+      "source": "amos_runway",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations",
+      "max_source_age_seconds": 180,
+      "material_state_change_only": true,
+      "blocker_reason": "city_probability_model_not_deployed",
+      "emit_paper_intents": false
+    },
+    {
+      "enabled": true,
+      "city": "Tokyo",
+      "adapter": "tokyo_pre_cross_market_sharpening_v2",
+      "profile_id": "tokyo_v2_pre_cross_market_sharpening_clean_forward",
+      "user_facing_version": "Tokyo V2",
+      "human_summary": "cross前升温/离档模型：首次到current+0.3/+0.4C时判断当前档最终是否会被向上离开",
+      "model_id": "weather.city_intraday_probability.tokyo_pre_cross_market_sharpening",
+      "probability_policy": "pre_cross_market_sharpening_v2",
+      "forward_start_utc": "2026-08-12T00:00:00Z",
+      "max_book_age_seconds": 180,
+      "edge_threshold": 0.0,
+      "selection_shares": 5.0,
+      "execution_uncertainty_reserve": {
+        "minimum_reserve": 0.001,
+        "spread_multiplier": 0.5
+      },
+      "position_scope": "city_date_bracket_model",
+      "emit_paper_intents": true,
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/active_bracket_books",
+      "artifacts": {
+        "candidate_spec": {
+          "path": "configs/weather/tokyo_pre_cross_market_sharpening_v2.json",
+          "sha256": "4d454faaa89af0b9e6b4793175385333f1af845f0ea78015a3429ac2dde34aac"
+        }
+      }
+    },
+    {
+      "enabled": true,
+      "city": "Tokyo",
+      "adapter": "tokyo_market_anchor_v7",
+      "model_id": "tokyo_state_entry_routed_market_residual_v7",
+      "forward_start_utc": "2026-07-31T15:00:00Z",
+      "max_book_age_seconds": 180,
+      "edge_threshold": 0.02,
+      "position_scope": "city_date_model",
+      "emit_paper_intents": false,
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/active_bracket_books",
+      "decision_bundle_journals": [
+        "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3/decision_bundles.jsonl"
+      ],
+      "artifacts": {
+        "weather": {
+          "path": "docs/analysis/2026-07/generated/tokyo_current_break_binary_v5/models/binary_multigrain_hgb_v5.joblib",
+          "sha256": "c329b133c35384c2ba04689e82d28f6e06efeae4db2a66a4c3fb7bcef98b3175",
+          "spec_path": "docs/analysis/2026-07/generated/tokyo_current_break_binary_v5/models/binary_multigrain_hgb_v5.spec.json",
+          "spec_sha256": "31eaed86215cc287d3e97f4699e07e34b3cb50a0d69de11d692336902da2dc81"
+        },
+        "offset": {
+          "path": "docs/analysis/2026-07/generated/tokyo_market_anchor_binary_v6/models/offset_physical_ridge1_v6.joblib",
+          "sha256": "c7ad6b9abff0433deb1fd4af21a17b1544ea482f46b96af7a49f5b97423b98df",
+          "spec_path": "docs/analysis/2026-07/generated/tokyo_market_anchor_binary_v6/models/offset_physical_ridge1_v6.spec.json",
+          "spec_sha256": "67f78b5f6d0f152e93d052404ca795c0c41e810a1b74c29dc9e995757adeaa83"
+        }
+      }
+    },
+    {
+      "enabled": true,
+      "city": "Tokyo",
+      "adapter": "tokyo_overshoot_market_residual_v2",
+      "profile_id": "tokyo_overshoot_market_residual_frozen_20260802_v2",
+      "model_id": "tokyo_overshoot_market_residual_v2",
+      "probability_policy": "overshoot_market_residual_v2",
+      "forward_start_utc": "2026-08-02T00:00:00Z",
+      "max_book_age_seconds": 180,
+      "edge_threshold": 0.02,
+      "position_scope": "city_date_bracket_model",
+      "emit_paper_intents": false,
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/active_bracket_books",
+      "artifacts": {
+        "overshoot": {
+          "path": "docs/analysis/2026-08/generated/tokyo_overshoot_market_residual_v2/tokyo_overshoot_market_residual_v2.joblib",
+          "sha256": "298b89ee629b7bf6e3fb6a074fa737de98e47156edba81b02c08ea20e784265e",
+          "spec_path": "docs/analysis/2026-08/generated/tokyo_overshoot_market_residual_v2/tokyo_overshoot_market_residual_v2.spec.json",
+          "spec_sha256": "59a7a7f1ee0a7defa1bf4405db27edbedddf6cdddb8825467b36d6037cbca2ab"
+        }
+      }
+    }
+  ]
+}

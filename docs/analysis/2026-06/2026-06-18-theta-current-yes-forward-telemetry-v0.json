@@ -1,0 +1,55 @@
+{
+  "artifact": "theta_current_yes_forward_telemetry_v0",
+  "generated_date": "2026-06-18",
+  "status": "implementation_no_live_policy_change",
+  "runtime_file": "runtime/weather_edge_v1/theta_current_yes_tiny_live_v1/forward_telemetry.jsonl",
+  "data_self_check": {
+    "fact_built_at_utc": "2026-06-17T16:09:29.241520+00:00",
+    "fact_trades_by_class": {
+      "live_real": 855,
+      "live_simulated": 624,
+      "paper": 2285,
+      "snapshot_replay": 636
+    },
+    "settlement_status": {
+      "null": 150,
+      "settled": 4250
+    },
+    "fact_signal_candidates": {
+      "rows": 31496,
+      "eligible": 10961,
+      "paper_ordered": 4274,
+      "live_filled": 348
+    },
+    "clob_gate": {
+      "gate_pass": true,
+      "missing_order_rows": 0,
+      "over_order_keys": 0,
+      "db_fill_cost_minus_fact_cost": 0.0
+    }
+  },
+  "implemented_fields": [
+    "decision_status",
+    "telemetry_run_id",
+    "obs_age_min",
+    "minutes_to_next_obs",
+    "running_max_obs_utc",
+    "minutes_since_running_max",
+    "fresh_best_ask",
+    "edge_at_fresh_ask",
+    "forecast_peak_hour_local",
+    "forecast_peak_delta_hours_local",
+    "source_profile_class",
+    "source_profile_primary_source"
+  ],
+  "verification": {
+    "py_compile": true,
+    "pytest": "tests/pmm_tests/test_theta_current_yes_live_guards.py: 9 passed"
+  },
+  "gates": {
+    "significance": "NA",
+    "baseline": "NA",
+    "forward": "IN_PROGRESS",
+    "conclusion": "telemetry_required_done_locally_no_live_policy_change"
+  }
+}

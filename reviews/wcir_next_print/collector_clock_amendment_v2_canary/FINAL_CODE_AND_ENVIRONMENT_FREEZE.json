@@ -1,0 +1,64 @@
+{
+  "branch": "codex/market-ladder-kink-v1",
+  "code_and_test_identities": [
+    {
+      "path": "scripts/analysis/forecast_quality/wcir_stage23_rev2_closure.py",
+      "sha256": "43c7966d6e50198c1371a1f200ccfc2ace077465192d021e1de07fa896bcd9d0",
+      "size_bytes": 38599
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/wcir_stage23_full_seal_v2.py",
+      "sha256": "7d86debac16dce075405da0e4c3a28ceb3e2200655df0e10b39fda589d9375df",
+      "size_bytes": 23229
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/wcir_collector_clock_shadow.py",
+      "sha256": "c4ce30fe434a1696117a114a0b0391d08777148e895a9427adcbcaf0a412eb4f",
+      "size_bytes": 14619
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/wcir_isolated_network_canary.py",
+      "sha256": "896e1866d9061a98d79005ea43ca8b133d7581bbb9b37e3c4aa3ee8b847bb103",
+      "size_bytes": 24282
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/package_wcir_stage23_rev2_closure.py",
+      "sha256": "100e5faf89903c8389124d618a41245ac6f38496e88994d85d32f08050a39105",
+      "size_bytes": 6652
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/package_wcir_stage23_full_seal_v2.py",
+      "sha256": "3350876a95cc0a0d86f63f4086162e47688eb4052b7ba3cbb01b3424d0a4d934",
+      "size_bytes": 7907
+    },
+    {
+      "path": "tests/research_tests/test_wcir_stage23_rev2_closure.py",
+      "sha256": "dfbcb2d9837aa7925126c79f94a3d35151221ab18f41193a415fd7b5eff37c89",
+      "size_bytes": 7596
+    },
+    {
+      "path": "tests/research_tests/test_wcir_stage23_full_seal_v2.py",
+      "sha256": "e636b0dc9fcfeb15b70eff655bad4b5e9cf0bbec5ef50fd30d65916253dbed5c",
+      "size_bytes": 6153
+    }
+  ],
+  "code_commit_sha": "a84d8491cb02966842695ecff84b1ee49a209d29",
+  "environment": {
+    "locale": "C/C.UTF-8/C/C/C/C",
+    "machine": "arm64",
+    "os": "macOS-26.5.1-arm64-arm-64bit",
+    "pip_freeze_sha256": "af61f8c75e03cab1d5fe114aa8472e4e4eb32bccc15a9d8ee47740bed74420ea",
+    "python": "3.12.13",
+    "python_executable": "/Users/deepsleep/projects/pm_agents/.venv/bin/python",
+    "timezone": "Asia/Shanghai (CST +0800)"
+  },
+  "generated_at_utc": "2026-08-28T02:16:39.210238+00:00",
+  "production_boundary": {
+    "production_config_modified_by_this_work": false,
+    "production_deployment_performed": false,
+    "production_manifest_stdout_sha256": "5869278070e51628245f391366bcdab595647a4ca2a12d5f480284a86492aac2",
+    "production_manifest_strict_postcheck": "healthy",
+    "production_yaml_matches_code_commit": true,
+    "production_yaml_sha256": "d75f6bc11305812fb740f33153076994ad89e5c2db7a32ebd2d9a47178510ed8"
+  }
+}

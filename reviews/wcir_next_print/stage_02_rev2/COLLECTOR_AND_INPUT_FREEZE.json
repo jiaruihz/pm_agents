@@ -1,0 +1,40 @@
+{
+  "collector_change_authorized": false,
+  "collector_or_production_files_modified_by_runner": false,
+  "frozen_legacy_event_dataset": {
+    "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03/evidence/FROZEN_NEXT_REPORT_EVENTS.jsonl.gz",
+    "row_count": 841,
+    "sha256": "c169c3f8153b562c48a4761c1f9a0151ac4278e1beb57a057385d512474ee26c",
+    "size_bytes": 122585
+  },
+  "latency_contract": {
+    "contract_id": "8a7f53b0991ee069d5c9c9ec0e5ef10d3eb9499cc1f823b2b847e03cc0e1f64e",
+    "duplicate_serialization_count": 0,
+    "journal_prefix_bytes": 20117190,
+    "journal_prefix_line_count": 4334,
+    "journal_prefix_sha256": "6c1585969d71d4132baee73e22404fa49abecc4747acc7b193d8137f2974b807",
+    "latency_observation_count": 840,
+    "matched_event_count": 841,
+    "method": "global_empirical_nearest_rank_p95",
+    "missing_latency_count": 1,
+    "p50_seconds": 0.616,
+    "p90_seconds": 6.518000000000001,
+    "p95_seconds": 49.772999999999996,
+    "p99_seconds": 147.409,
+    "raw_event_count": 841,
+    "raw_journal_observed_identity_not_reproduction_boundary": {
+      "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/events.jsonl",
+      "sha256": "329c3a1648d1bbbd85a7665ee2db1380d46f7b6efdec6eafffecf65d64f11075",
+      "size_bytes": 20188276
+    },
+    "reproduction_boundary": "frozen compact latency rows plus verified append-only journal prefix",
+    "value_seconds": 49.772999999999996
+  },
+  "latency_rows": {
+    "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_02_rev2/evidence/FROZEN_PIPELINE_LATENCY_ROWS.jsonl.gz",
+    "row_count": 841,
+    "sha256": "b4920db706345f3a4349dd43fc3982a79c15e49dee0a3aad60fe229381b8ca9a",
+    "size_bytes": 86433
+  },
+  "runner_observed_commit_before_input_scan": "ed844e4816b0fad70633103dac97aae0702d0402"
+}

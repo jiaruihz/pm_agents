@@ -1,0 +1,104 @@
+{
+  "name": "fresh_wallet_snapshot",
+  "description": "Current-window wallet snapshot: market-alpha has two distinct addresses both aliasing entity ent-alpha with independent provenance; market-beta has one unaliased address. All facts carry private direction fields that must never reach public output.",
+  "request": {
+    "run_id": "wallet-recall-run-1",
+    "clock": {
+      "as_of": "2026-08-26T07:00:00Z"
+    },
+    "source": {
+      "source_id": "specialist_wallet_store",
+      "snapshot_id": "snapshot-2026-08-26t0655z",
+      "snapshot_sha256": "abababababababababababababababababababababababababababababababab",
+      "captured_at": "2026-08-26T06:55:00Z"
+    },
+    "pagination": {
+      "pages_expected": 2,
+      "pages_received": 2,
+      "truncated": false,
+      "window_start": "2026-08-24T00:00:00Z",
+      "window_end": "2026-08-26T07:00:00Z"
+    },
+    "facts": [
+      {
+        "fact_id": "fact-alpha-1",
+        "address": "0x1111111111111111111111111111111111111111",
+        "token_id": "tok-alpha-leg-a",
+        "observed_at": "2026-08-26T06:00:00Z",
+        "side": "BUY",
+        "position_direction": "LONG",
+        "notional_usdc": "150.5",
+        "size": "10"
+      },
+      {
+        "fact_id": "fact-alpha-2",
+        "address": "0x2222222222222222222222222222222222222222",
+        "token_id": "tok-alpha-leg-b",
+        "observed_at": "2026-08-26T05:00:00Z",
+        "side": "SELL",
+        "position_direction": "SHORT",
+        "notional_usdc": "80",
+        "size": "5"
+      },
+      {
+        "fact_id": "fact-beta-1",
+        "address": "0x3333333333333333333333333333333333333333",
+        "token_id": "tok-beta-leg-a",
+        "observed_at": "2026-08-26T06:30:00Z",
+        "side": "BUY",
+        "position_direction": "LONG",
+        "notional_usdc": "42.25",
+        "size": "3"
+      }
+    ],
+    "aliases": [
+      {
+        "address": "0x1111111111111111111111111111111111111111",
+        "entity_id": "ent-alpha",
+        "provenance": "curated analyst mapping",
+        "confidence": "0.9"
+      },
+      {
+        "address": "0x2222222222222222222222222222222222222222",
+        "entity_id": "ent-alpha",
+        "provenance": "exchange clustering review",
+        "confidence": "0.85"
+      }
+    ],
+    "token_markets": [
+      {
+        "token_id": "tok-alpha-leg-a",
+        "market_id": "market-alpha"
+      },
+      {
+        "token_id": "tok-alpha-leg-b",
+        "market_id": "market-alpha"
+      },
+      {
+        "token_id": "tok-beta-leg-a",
+        "market_id": "market-beta"
+      }
+    ]
+  },
+  "expect": {
+    "current_market_ids": ["market-alpha", "market-beta"],
+    "historical_market_ids": [],
+    "fact_rejections": {},
+    "market_alpha": {
+      "addresses": [
+        "0x1111111111111111111111111111111111111111",
+        "0x2222222222222222222222222222222222222222"
+      ],
+      "entity_ids": ["ent-alpha", "ent-alpha"],
+      "reason_codes": [
+        "SPECIALIST_WALLET_ACTIVITY",
+        "SPECIALIST_WALLET_ENTITY_ACTIVITY"
+      ]
+    },
+    "market_beta": {
+      "addresses": ["0x3333333333333333333333333333333333333333"],
+      "entity_ids": [],
+      "reason_codes": ["SPECIALIST_WALLET_ACTIVITY"]
+    }
+  }
+}

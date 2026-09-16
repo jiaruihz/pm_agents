@@ -1,0 +1,943 @@
+# Weather Data Pipeline
+
+Status: current-source
+Updated: 2026-09-07 replay protocol migration progress snapshot
+Source of truth: yes
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
+
+> **2026-08-30 project-wide clock contract**：所有 source/detect/available/decision/snapshot/order/fill
+> 边界统一走 `weather_clock_contract.py`，只接受 timezone-aware UTC；当地 wall time 必须携带 IANA
+> timezone，禁止 `.replace(tzinfo=...)` 和固定 offset 推断。历史 signal clock 不原地改写，修正进入
+> append-only `signal_clock_adjustments`，fact 层同时保留 original/effective clock、basis、status、ref。
+> 8/30 审计定位到 31 signals / 50 fact rows / 44 executions 的 signal-snapshot-after-order 污染，覆盖
+> 2026-06-18..2026-07-15、fill cost `$32.971566`、settled PnL `$8.187404`；其中 29 条可因果重建，
+> 2 条因缺 exact feature snapshot fail closed。exchange 秒级 fill clock 相对本地高精度 order 的 4 条
+> `<1s` 反序单列为 precision-only，不篡改事实。
+
+> **2026-08-30 execution-evidence contract**：盘口快照只证明 public book state，不证明 own fill、queue
+> position 或 execution。WS raw owner 现在从同一增量流派生 public trade prints、重建 book 与
+> baseline/requested/10s-changed-state checkpoints；private authenticated fill 继续作为成交 truth，二者只在
+> append-only `execution_evidence_links` 合成。派生层保留 epoch/gap、top-5/sweep、raw ref/hash，并有每日
+> 1GB hard budget，预算耗尽不得拖垮 raw capture。2026-08-29 全量回放输入 1,910,274 frames
+>（2.45GB），产出 43,522 books、1,577 public prints、7,399 requested checkpoints（155.7MB）；919 条
+> parity 前 reconstruction error 全部 fail closed，没有猜盘。durable artifact：
+> `/Volumes/jrs/weather_data_feed_service_runtime/market_books/ws_incremental/execution_evidence_backfill_v1/run=2026-08-29_5f676262`。
+
+> “更快的源”在本项目中本来就是 predictive evidence，不是 settlement truth；允许 source 与 settlement
+> 不一致，但必须按 source×city×regime 做 basis calibration，并始终用独立 settlement label 评估。
+
+Last updated: 2026-08-30
+
+> **2026-08-30 migration v1**：代码层已增加 production-bound data-product registry、严格
+> JSONL quarantine、append-only decision/settlement facts、cursor recovery epoch、统一 replay
+> catalog、immutable dataset/split、artifact verifier 与 zero-notional frozen shadow。该变更采用
+> per-product cutover，不重写现有在线 runner；在生产 release 部署、逐产品 GO 和旧 writer 连续两轮
+> 为 0 之前，旧路径仍原样运行。历史路径只转为 registered read-only input，不删除。
+
+> **2026-08-10 journal storage override**：forecast enrichment、forecast version、
+> observations、AMOS fast lane、source events 以及已停止的历史/probe journal 均已切为只写、只读
+> `YYYY-MM-DD/<dataset>.jsonl` shard；根目录同名 aggregate 已停止双写并在逐项校验后删除。
+> `latest.json` 仍是当前 cache。source-events、KNMI 与 live-cross 的 reader 均已完成
+> rollover-aware 切换，当前只保留各自的 `YYYY-MM-DD/<dataset>.jsonl` 历史。
+> 2026-08-11 复扫 current JRS raw/runtime，未发现“根 aggregate 与同名 daily shard”重复候选。
+> 仍在增长的单文件策略 telemetry/raw journal 属于后续逐实例 shard cutover 范围，未经 producer、
+> consumer 与 cursor 校验不得直接删除。
+
+> **2026-08-04 current topology override**：当前路径、writer、live journal 与 health artifact 只从
+> `src/strategies/runtime/production.yaml` 解析；物理 canonical 是
+> `/Volumes/jrs/pm_agents/runtime/weather.db`，仓库 `runtime/weather.db` 仅为同 inode 兼容入口。
+> API/JRS 常驻进程只由 `weather_production_ctl.py` 管理，日常 DB 更新只有 bounded
+> `start_weather_canonical_refresh_tmux.sh`。本文后续 N100/systemd/旧 live 文件名均是历史事故资料，不能作为当前命令。
+
+> 2026-06-05 更新: 同步覆盖扩展（7 个 weather model cache 家族 + output/logs + pm_agent runtime/logs + N100 tar backups），删除两个 legacy DB（weather_v2.db / weather_edge_v1_weather.db），新增 `scripts/ops/sync_n100_backups.sh`。详见 §2.3、§7。
+>
+> 2026-06-06 更新: 修正 settlement near-binary 口径。`pm_history` raw `0.9995 / 0.0005` 现在归一化为已结算 `1 / 0`；旧口径导致 `missing_bracket` 大量误标，相关历史报告需重算。
+>
+> 2026-06-07 更新: 修正 CLOB fill recovery 口径。public activity 不是逐 order 权威来源；旧 fallback 在 split child order / partial fill 场景会少算或多算。新增 `weather_clob_fill_coverage_gate.py`，refresh/rebuild 后必须 fail-closed 校验 order_id、order cap、DB/cache/fact 成本一致性。
+>
+> 2026-07-04 更新: N100 7/1 发生 ext4 emergency read-only / IO error 事故后，Mac 临时接管生产。该次接管最初使用 `targeted_output`；当前路径已由 `production.yaml` 拆分为 `strategy_snapshots`、`market_books` 与 `forecast`。live order 源为 active strategy runtime dirs。同步当前生产 market data 用 `scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only`。
+>
+> 2026-07-06 更新: Mac data-feed runtime 和本地 `runtime/weather_edge_v1/market_data` mirror 已迁到 APFS 外置盘 `/Volumes/jrs`。旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 和 `runtime/weather_edge_v1/market_data` 保留为 symlink。macOS LaunchAgent 对外置卷写入会触发 `Operation not permitted`，所以 data-feed 当前由 `tmux -L weather-data-feed-jrs` session `weather_data_feed_jrs` 常驻；重启/拔插盘后用 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh` 恢复。
+>
+> 2026-07-11 更新: forecast producer persists immutable decision-time hourly forecast curves; the current canonical path is `forecast/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl`, one row per city/target_date/snapshot. Corrected `forecast_hourly_curve_v3` rows separate source-response `forecast_detected_at_utc` from capture publication-boundary `available_at_utc`; a new exact hash first appears at detected time, or at available time only when no reliable detected time exists, and later captures preserve the earliest reliable first-seen. `available_at_utc` is sampled immediately before final serialization/fsync and atomic link, while file mtime is the external completion evidence. Rows also record explicit model fallback and an honest `forecast_run_lineage_status` when the upstream live API does not expose a run timestamp. `weather_data_feed_prod_health_check.py` fails when the latest curve capture is stale, misaligned with the latest snapshot, incomplete, missing lineage, or has impossible detected/first-seen/available ordering. `build_weather_signal_candidates.py` mirrors them into `runtime/weather.db.fact_forecast_hourly_curves`; `fact_signal_candidates.forecast_values_hash` is the join key.
+>
+> 2026-08-14 更新: 唯一周期调度入口为 Mac 内置盘 LaunchAgent 请求的 `production_reliability_supervisor.py`。它读取 controller 全量 runtime health，并调用只读 `weather_execution_semantic_health.py` 检查 executor failure、plan-without-order 等业务语义；旧 `weather_runtime_monitor` tmux/LaunchAgent 与 `weather_live_runtime_patrol` 已退场。`weather_analysis_freshness_monitor.py` 只由 canonical refresh 后验调用，检查 `fact_signal_candidates` 和 `settlement_outcomes`，不再另起常驻 monitor。
+>
+> 2026-07-18 更新: market snapshot 的交易截止时间以 Gamma event `endDate` 为第一权威口径，event 缺失时取最早的 child-market `endDate`；只有两者都不提供时才显式标记并使用城市当地 22:00 近似值。`settle_utc`、`settle_local`、`hours_to_settle`、window/time bucket 和 forecast lead 必须共用该时间，已过真实 `endDate` 的 event 不再发布可交易 snapshot rows。观察缓存仍可保留当天记录，因此“有 observation 但没有同 city/date book”在日内 roll 后属于市场日历差，不得解释成 collector 漏城。
+
+Single source of truth for **where weather strategy data lives, who produces
+it, who consumes it, and how PnL is computed**. Read this before touching
+ingest scripts, the dashboard DB, or any "why doesn't the curve update"
+question.
+
+For live-rollout operations, read [`WEATHER_STRATEGY_ENTRYPOINT.md`](WEATHER_STRATEGY_ENTRYPOINT.md).
+For field-name contracts, [`WEATHER_SYSTEM_CONTRACT.md`](WEATHER_SYSTEM_CONTRACT.md).
+
+---
+
+## 1. TL;DR
+
+Migration v1 的目标链路是：
+
+```text
+registered current raw (weather + CLOB)       registered read-only archive
+        │ strict scan / quarantine                     │ honest adapter
+        └──────────────────┬────────────────────────────┘
+                           ▼
+ EventEnvelope → DecisionContext → ModelOutput → SignalCandidate → TradeIntent
+                           │ append-only canonical + availability-aware label facts
+                           ▼
+             immutable rows + chronological target_date splits
+                           │
+                           ▼
+      replay catalog (all cases; mistakes are a derived view) + artifact verifier
+                           │
+                           ▼
+       backtest / validation / test / frozen-forward zero-notional shadow
+```
+
+物理路径不再由 consumer 猜。`src/strategies/runtime/data_products.yaml` 为产品目录，生产 loader
+将每项绑定到 owner instance、pinned release SHA、schema、root、writer/cursor、consumer 和 cutover
+state；append-only product 的 cursor 必须使用 `new_epoch_never_reset_in_place`。REST 与 reconstructed
+WS 可以投影到同一 logical-book contract，但 feature book 和 execution book 是两个显式引用，缺一即
+blocked，不能互相 fallback。
+
+这不是 big-bang rollout：每个 product 分别 dual-read/核对，只有 same input、row/key/identity/watermark
+parity、至少两个 target-date block、quarantine clear、rollover proof、旧 writer 连续两轮零写入以及
+order/fill/notional/cost/fee/PnL/coverage 全部 0-delta 才是 GO。旧数据保留 read-only，rollback 不靠删除。
+
+Current production has four explicit ownership stages:
+
+```
+                              Mac production controller
+                              ├── production.yaml desired state
+                              ├── /Volumes/jrs/weather_data_feed_service_runtime
+                              │   ├── market_books (single raw owner)
+                              │   ├── market_ladder_snapshots
+                              │   ├── strategy_snapshots (strategy consumption view)
+                              │   └── forecast/forecast_hourly_curves
+                              └── production-declared strategy runtimes
+                                  ├── health_path / live_order_path
+                                  └── host reliability supervisor
+                                      ├── execution semantic health probe
+                                      └── controller-owned proxy node recovery
+                                       │
+                     bounded canonical refresh one-shot
+                                       ▼
+                              physical canonical JRS DB
+                              ├── /Volumes/jrs/pm_agents/runtime/weather.db
+                              ├── runtime/weather.db (same-inode alias only)
+                              └── incremental order/fill/fact materializer
+                                  └── analysis freshness monitor (read-only)
+```
+
+Ownership is strict:
+
+- every mutable raw/journal target has one production-declared owner;
+- sync copies raw only;
+- bounded canonical refresh is the registered analysis DB writer path;
+- supervisor 只通过现有 controller/reconciler 做有界恢复，不直接修数据或管理业务进程；
+- `run_stack.sh --rebuild` remains an explicit full rebuild and is never a patrol action.
+
+Daily/current execution refresh:
+
+```bash
+scripts/ops/start_weather_canonical_refresh_tmux.sh
+```
+
+Read-only checks:
+
+```bash
+.venv/bin/python scripts/ops/production_reliability_supervisor.py --fail-on-degraded
+.venv/bin/python scripts/ops/weather_execution_semantic_health.py --exit-nonzero-on-alert
+.venv/bin/python scripts/ops/weather_analysis_freshness_monitor.py
+.venv/bin/python scripts/ops/weather_storage_identity_audit.py
+```
+
+N100 remains the historical source and recovery target, but after the 2026-07-01
+disk incident it is not the current production truth until disk health and
+backup integrity are verified.
+
+The unified PnL caliber is:
+
+> **one strategy identity → all its orders → all matching fills → settle
+> each fill by token via the settlements table → sum**.
+
+Every agent and every endpoint must use this caliber. It is implemented in
+`weather_dashboard.api.routers.configs._PNL_CASE` + `_base_joins()` and
+must not be reimplemented elsewhere.
+
+For live CLOB performance, the dashboard DB already has real fill-level data:
+
+- Source: `runtime/weather.db` → `fills` joined to `orders` where
+  `orders.venue = 'polymarket_clob'` and `fills.status = 'filled'`.
+- API: `weather_dashboard/api/routers/live.py`
+  (`/api/live/summary`, `/api/live/positions`, `/api/live/execution-gap`).
+- Sync: `weather_dashboard.ingest.clob_fill_sync` writes matched real CLOB
+  fills into `fills`.
+
+Do **not** infer live realized PnL from
+`runtime/weather_edge_v1/remote_pm_agent/live/live_*_orders.jsonl` alone.
+Those files are order submission/error records. A `status='submitted'` row is
+not proof of fill, and its `posted_price`/`size` is only an order-level proxy
+unless matched by a real row in `fills`.
+
+---
+
+## 2. Data sources
+
+### 2.1 Mac current production
+
+| Path | Producer | Refresh | What it is |
+|---|---|---|---|
+| `/Volumes/jrs/weather_data_feed_service_runtime/market_books/latest.json` + `batches/YYYY-MM-DD/*.jsonl.gz` | Mac tmux `weather_market_books` | 5-minute base cadence, hot tokens first | canonical raw Gamma/CLOB books; no forecast dependency; not backfillable if missed |
+| `/Volumes/jrs/weather_data_feed_service_runtime/market_ladder_snapshots/` | Mac tmux `weather_market_books` | market-books cadence | complete event/rung/two-sided book view and batch completeness |
+| `/Volumes/jrs/weather_data_feed_service_runtime/strategy_snapshots/paper_snapshots/snapshot_*.json` | Mac tmux `weather_data_feed_jrs` | strategy snapshot cadence | forecast/observation/model joined strategy view; reads canonical market books |
+| `production.yaml.historical_paper_snapshot_root` | immutable archive | historical replay only | pre-current-producer PIT strategy snapshots; consumers resolve this path through the shared production loader, never by embedding `/Volumes/...` literals |
+| `production.yaml.historical_{full_ladder,targeted}_data_root` | immutable archive | historical replay only | retired collector products; physical legacy names exist only in the production contract, while executable consumers use semantic helpers from `weather_data_feed.production_paths` |
+| `/Volumes/jrs/weather_data_feed_service_runtime/forecast/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl` | Mac tmux `weather_forecast_curve_collector_v1` | forecast cadence | point-in-time hourly forecast curve, one row per city/target_date/snapshot |
+| `/Volumes/jrs/weather_data_feed_service_runtime/output/forecast_enrichment/latest.json` + `YYYY-MM-DD/forecast_enrichment.jsonl` | Mac tmux `weather_forecast_curve_collector_v1` | forecast cadence | current enrichment cache plus shard-only append history; no root aggregate |
+| `/Volumes/jrs/weather_data_feed_service_runtime/output/high_frequency_observations/latest.json` + `YYYY-MM-DD/high_frequency_observations.jsonl` | legacy/reference HFO collector when enabled | source cadence | reference enrichment cache plus shard-only append history; no root aggregate |
+| `production.yaml.managed_runtimes[*].live_order_path` | corresponding controller-managed live runtime | live strategy cadence | complete current live order-journal set; no second hard-coded list |
+| `production.yaml.managed_runtimes[*].health_path` | corresponding controller-managed runtime | role cadence | current raw pulse/summary; the control repo is not assumed to be its storage root |
+
+These live JSONL sources are materialized into `runtime/weather.db.orders`.
+Use `orders` for live order-event questions such as city/date/bracket, YES/NO,
+sizing policy, score tier, maker/taker/lifecycle action, blocked/error state,
+price, shares, notional and execution policy. Strategy-specific fields are kept
+as original JSON in `orders.order_payload`, so active heads such as forecast
+tail, regime-routed NO, tmax distribution and exit overlays can share one order
+lineage table without per-strategy event tables. It remains submitted-order
+lineage; realized cash/PnL still comes from `fills` and `fact_trades`.
+The bounded canonical refresh resolves active journals with `--active-live-only`
+from `production.yaml`, ingests them, and then runs
+`weather_dashboard.cli.check_strategy_runtime_order_coverage`; if a raw
+strategy-runtime order `execution_id` is missing from canonical `orders`, the
+refresh fails closed instead of producing a DB where submitted orders disappear
+from fill sync.
+
+Runtime boundary: strategy runners own candidate selection, risk decision and
+sizing; shared execution glue lives in
+`src/strategies/weather_edge_v1/runtime/order_runtime.py`. Active live runners
+should use that helper for JSON/JSONL serialization and
+`weather_order_executor.py` invocation so order-field and persistence contract
+changes do not need to be duplicated per strategy. `weather_order_executor.py`
+still owns the actual paper/live CLOB order submission, while
+`weather_dashboard.cli.ingest_strategy_runtime_orders` owns canonical DB ingest.
+
+Health gate:
+
+```bash
+.venv/bin/python scripts/ops/weather_data_feed_prod_health_check.py
+```
+
+Audit current storage identity before reading or rebuilding facts:
+
+```bash
+.venv/bin/python scripts/ops/weather_storage_identity_audit.py
+```
+
+`runtime/weather_edge_v1/market_data` is a symlink to `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/market_data`, so the sync writes the canonical local mirror to the external disk as well.
+
+### 2.2 N100 historical production / recovery (`192.168.0.200`, user `jiarui`)
+
+As of 2026-07-04 this section is historical/recovery context, not current
+production. N100 had an ext4 emergency read-only / IO error incident on
+2026-07-01; do not restore it to production by just restarting services.
+
+| Path | Producer | Refresh | What it is |
+|---|---|---|---|
+| `weather-predict/output/paper_snapshots/snapshot_*.json` | live cycle | every 30 min | full market snapshot per cycle (561 records) |
+| `weather-predict/output/paper_trades/paper_orders.jsonl` | live cycle | every 30 min | append-only paper ledger of all T1+T2 paper orders |
+| `weather-predict/cache/pm_history/{City}_{date}.json` | daily_pipeline | daily | per-bracket final_price + token_id at resolution **← settlement truth** |
+| `weather-predict/cache/wu_obs/wu_obs_{ICAO}.csv` | t2 fill timer | daily | Wunderground observed temps |
+| `weather-predict/cache/iem_v2_*.csv` | t2 fill timer | daily | IEM ASOS observed temps |
+| `weather-predict/output/research/t24_paper_ledger_trades.csv` | `settle_t24_paper.py --source ledger` | **manual** ⚠ | derived: paper ledger settled into per-trade rows |
+| `weather-predict/output/research/t24_paper_snapshot_replay_trades.csv` | `settle_t24_paper.py --source snapshots` | **manual** ⚠ | derived: snapshot-replay backtest trades |
+| `pm_agent/runtime/weather_edge_v1/live/live_*_orders.jsonl` | weather_live_cycle | every 30 min | real CLOB order submissions/errors; not fill/PnL truth by itself |
+| `pm_agent/runtime/weather_edge_v1/plans/live_*_trade_plans.jsonl` | weather_trade_planner | every 30 min | plans the live executor considered |
+| `pm_agent/runtime/weather_edge_v1/signals/live_*_signals.jsonl` | weather_snapshot_signal_builder | every 30 min | signals fed into the planner |
+| `pm_agent/runtime/weather_edge_v1/live_cycle/{cycle_id}.json` | weather_live_cycle | every 30 min | cycle summary (config, alerts, executor result) |
+| `weather_data_feed_service_runtime/output/source_events/latest.json` | weather-data-feed-source-events.timer | every completed run + 2 min | latest city/source observation events for latency and crossing signals |
+| `weather_data_feed_service_runtime/output/source_events/YYYY-MM-DD/sources.jsonl` | weather-data-feed-source-events.timer | append-only daily shard | source-event history with report_ts, detect_ts, payload hashes, raw METAR; no root aggregate |
+| `weather_data_feed_service_runtime/output/observations/latest.json` | weather-data-feed-observations.timer | ~5 min | shared fast observation cache for strategy feature/state inputs |
+
+### 2.2.1 Current append-only storage classes
+
+The mutable NVMe layer distinguishes data evidence from disposable process logs:
+
+| Family | Class | Current layout | Required lifecycle |
+|---|---|---|---|
+| `output/source_events/{YYYY-MM-DD}/sources.jsonl` | raw first-seen evidence | daily partitions only; `latest.json` is the current cache | persistent readers maintain rollover-aware per-shard cursors; producer no longer writes a root aggregate |
+| `output/live_cross_observations/{YYYY-MM-DD}/high_frequency_observations.jsonl` | raw high-frequency evidence | daily partitions only; `latest.json` is the current cache and notify source | Korea/WCIR/stale-book/market-book readers follow shard rollover; producer no longer writes a root aggregate |
+| `output/knmi_open_data/{YYYY-MM-DD}/knmi_observations.jsonl` | raw KNMI first-seen evidence | daily partitions only; `latest.json` is the current cache and wake path | rollover-aware KNMI first-seen, market-book and WCIR readers consume the dated family |
+| `output/observations/{YYYY-MM-DD}/observations.jsonl` | official observation evidence | daily partitions only; `latest.json` is the current cache | readers resolve physical capture-day shards and never fall back to a deleted aggregate |
+| `output/forecast_enrichment/{YYYY-MM-DD}/*.jsonl` | reproducible forecast feature/version evidence | daily partitions only; `latest.json` is the current cache | retain dated evidence needed by frozen research; consumers must select the exact dataset filename |
+| `output/fast_source_prev_no_trial/{YYYY-MM-DD}/opportunities.jsonl` | signal/evidence journal | daily partitions only; writer records transitions and five-minute heartbeats | hot current day, archive closed days, never treat heartbeat rows as separate opportunities |
+| `weather_edge_v1/*/state_decisions.jsonl` | strategy decision evidence | per-instance append-only monolith | preserve lineage, partition by decision date, and expose one shared partition reader before moving closed days |
+| `*.log` | disposable runtime diagnostics | plain stdout/stderr summaries | controller-managed cap: 64 MiB trigger, retain roughly the last 8 MiB; logs are not raw or canonical evidence |
+
+The 2026-08-10 `fast_source_prev_no_trial/opportunities.jsonl` census found 973,463
+parse-clean chronological rows across 33 UTC days and 2,706,569,383 bytes at the dry-run checkpoint.
+About 79.3% of rows were unchanged-state heartbeats, while 84.8% of bytes came from the older
+2026-07-09..21 high-frequency writing window; since 2026-07-22 the transition/heartbeat contract has
+held current growth to roughly 20–26 MiB/day. This is unique signal evidence, not an aggregate/shard
+duplicate. During the confirmed maintenance cutover the stopped producer's final 973,506 rows and
+2,706,731,221 bytes were split into 33 dated shards with zero parse errors/date regressions. The ordered
+shards and source both hashed to `e6e86dc30f2640fb0e97666576d8ac75ab88bf4ecf3a6ccda7fcdb36aaac241b`;
+the shard-aware live-chain audit was identical before and after removing the root monolith. The dated writer
+is pinned in the dedicated `fast_source_runtime` release. The live instance was held stopped for 22m11s while
+an independently degraded market-books/proxy dependency recovered, then restarted from release
+`1cb1db431bc1a156f8e28dfb9e00dae7a4c72c2b`. Its first cycles added 13 rows/46,761 bytes to the current-day
+shard without recreating the monolith or changing the 318-row order journal; authenticated exchange open
+orders stayed at zero and the pre/post live-chain audit remained identical.
+
+The 2026-08-09/10 cleanup verified aggregate bytes against the ordered shard bytes before each deletion,
+backfilled 1,360 missing `forecast_versions` rows into the correct capture-day shard, and removed the
+verified forecast, observation, AMOS fast-lane and stopped historical/probe aggregates. On 2026-08-10 the
+KNMI producer and its first-seen, market-book and WCIR consumers completed a no-gap shard cutover; a real
+post-restart notification advanced the shard and downstream cursor while the aggregate stayed unchanged,
+after which the 23,147,593-byte root duplicate was removed. The live-cross cutover then moved market-books,
+Korea first-seen, three stale-book windows and WCIR to the dated family. After restart, the current shard grew
+from 6,376,875 to 6,384,072 bytes while the 123,715,543-byte aggregate stayed byte-for-byte unchanged; all
+consumer health remained current, and the exact duplicate was removed. The source-events live runner then
+cut over to 36 rollover-aware shard cursors with no replay; authenticated exchange evidence showed zero open
+orders and its post-restart order delta was zero. After the producer switched to shard-only, two completed
+source-event cycles grew the current shard while the 3,066,051,726-byte aggregate stayed unchanged. Its SHA-256
+matched the ordered shard prefix, no process or open handle referenced it, and it was removed. This cleanup pass
+has removed 7,348,475,335 root-file bytes without removing unique history or changing canonical facts. Of that,
+4,641,744,114 bytes were duplicate capacity actually reclaimed; the 2,706,731,221-byte opportunity monolith was
+replaced one-for-one by equally sized shards, so that part improves lifecycle/retention but does not reduce net
+storage. The runtime tree no longer contains an aggregate/daily-shard duplicate candidate.
+
+The two CSVs marked ⚠ are the only N100-side artifacts without automation —
+they go stale unless someone reruns `settle_t24_paper.py`. See
+[§7 N100 automation gap](#7-n100-automation-gap).
+
+### 2.3 Local pm_agent mirror
+
+`scripts/ops/sync_weather_remote.sh` pulls:
+
+| Remote | Local | Notes |
+|---|---|---|
+| `weather_data_feed_service_runtime/strategy_snapshots/paper_snapshots/` | `runtime/weather_edge_v1/market_data/paper_snapshots/` | current Mac production snapshots |
+| `weather_data_feed_service_runtime/market_books/batches/` | `runtime/weather_edge_v1/market_data/orderbook_snapshots/` | current Mac canonical orderbook history |
+| `weather_data_feed_service_runtime/forecast/forecast_hourly_curves/` | `runtime/weather_edge_v1/market_data/forecast_hourly_curves/` | current Mac production hourly forecast curves |
+| `weather-predict/output/paper_snapshots/` | `runtime/weather_edge_v1/market_data/paper_snapshots/` | 30-min snapshots |
+| `weather-predict/output/paper_trades/` | `runtime/weather_edge_v1/market_data/paper_trades/` | paper ledger |
+| `weather-predict/output/research/` | `runtime/weather_edge_v1/market_data/research/` | derived CSVs + analysis reports |
+| `weather-predict/cache/pm_history/` | `runtime/weather_edge_v1/market_data/cache/pm_history/` | **settlement truth** |
+| `weather-predict/cache/wu_obs/` | `runtime/weather_edge_v1/market_data/cache/wu_obs/` | observed temps |
+| `weather-predict/cache/iem_v2_*.csv` | `runtime/weather_edge_v1/market_data/cache/iem/` | IEM data |
+| `weather-predict/output/logs/` | `runtime/weather_edge_v1/market_data/logs/` | live cycle process logs（2026-06-05 起加入 sync） |
+| `weather-predict/cache/gfs_v4_*.json` | `runtime/weather_edge_v1/market_data/cache/gfs_v4/` | GFS hourly forecast cache（2026-06-05 起加入 sync）|
+| `weather-predict/cache/gfs_daily_*.json` | `runtime/weather_edge_v1/market_data/cache/gfs_daily/` | GFS daily aggregate cache（2026-06-05 起）|
+| `weather-predict/cache/ecmwf_v4_*.json` | `runtime/weather_edge_v1/market_data/cache/ecmwf_v4/` | ECMWF hourly forecast cache（2026-06-05 起）|
+| `weather-predict/cache/jma_v5_*.json` | `runtime/weather_edge_v1/market_data/cache/jma_v5/` | JMA forecast cache（2026-06-05 起）|
+| `weather-predict/cache/hrrr_v5_*.json` | `runtime/weather_edge_v1/market_data/cache/hrrr_v5/` | HRRR forecast cache（2026-06-05 起）|
+| `weather-predict/cache/icon_eu_v5_*.json` | `runtime/weather_edge_v1/market_data/cache/icon_eu_v5/` | ICON-EU forecast cache（2026-06-05 起）|
+| `weather-predict/cache/arome_v5_*.json` | `runtime/weather_edge_v1/market_data/cache/arome_v5/` | AROME forecast cache（2026-06-05 起）|
+| `pm_agent/runtime/weather_edge_v1/{live,plans,signals,live_cycle,paper}/` | `runtime/weather_edge_v1/remote_pm_agent/...` | N100 live lineage |
+| `pm_agent/runtime/logs/` | `runtime/weather_edge_v1/remote_pm_agent/logs/` | pm_agent live cycle process logs（2026-06-05 起）|
+
+Run with `--dry-run` to preview, `--market-only` / `--live-only` to skip a half.
+
+**Disaster-recovery mirror** — `scripts/ops/sync_n100_backups.sh` pulls
+N100 `/home/jiarui/weather-predict-backups/*.tar.zst` to local
+`runtime/_backups_n100/` and verifies sha256. Safe to run weekly; ~14 MB today
+growing ~4 MB/day. Independent of the main sync above.
+
+**Removed (legacy)** — `runtime/_legacy/weather_v2.db` and
+`runtime/_legacy/weather_edge_v1_weather.db` were deleted 2026-06-05. Only
+`runtime/_legacy/strategy_runtime.db` remains as historical artifact. The
+canonical analysis DB is **only** `/Volumes/jrs/pm_agents/runtime/weather.db`;
+`runtime/weather.db` must resolve to the same device/inode. N100 has **no active
+SQLite DB** — production data lives in files on N100, never in a DB.
+
+### 2.4 Dashboard DB (`runtime/weather.db`)
+
+Canonical schema in [`weather_dashboard/db/schema.sql`](../weather_dashboard/db/schema.sql).
+All lineage tables (`signals`, `plans`, `orders`, `fills`, `strategy_config`,
+`runs`, `settlements`) have `BEFORE UPDATE` and `BEFORE DELETE` triggers —
+the DB is **append-only by design**. Reconciliations happen by adding new
+rows, never by editing old ones.
+
+This is the local analysis/dashboard source for live fill-level realized PnL.
+The live CLOB path is:
+
+```text
+remote_pm_agent/live/*.jsonl
+  -> legacy_migration/live_cycle.py imports submitted/error orders
+  -> ingest/clob_fill_sync.py matches CLOB/Data API trade activity
+  -> fills(status='filled') linked by execution_id/order_id
+  -> settlements from pm_history
+  -> /api/live/* and strategy detail endpoints compute realized PnL
+```
+
+When comparing paper vs live:
+
+- Use `orders.venue='paper'` + `fills.status IN ('filled','simulated')` for
+  the parallel paper shadow.
+- Use `orders.venue='polymarket_clob'` + `fills.status='filled'` for real
+  live CLOB fills.
+- Use `orders.status='submitted'` only for pending/execution funnel analysis,
+  not as a substitute for actual fills.
+
+Side tables (mutable):
+
+| Table | Purpose |
+|---|---|
+| `config_aliases(alias_config_id, canonical_config_id)` | maps fragmented config_ids back to one canonical row per strategy identity |
+| `ingestion_log` | content-addressable idempotency for every ingest |
+
+---
+
+## 3. Pipeline flow (end-to-end)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ N100 weather_data_feed_service                                      │
+│   source-events timer ─────▶ output/source_events/latest.json       │
+│                         └──▶ output/source_events/sources.jsonl     │
+│   observations timer ──────▶ output/observations/latest.json        │
+│   full snapshot timer ─────▶ standard market/orderbook snapshots    │
+│                                                                     │
+│ N100 weather-predict (legacy/dormant-parallel during migration)     │
+│   live cycle every 30 min ──▶ paper_snapshots, paper_orders.jsonl   │
+│   daily_pipeline       ──────▶ pm_history/                          │
+│   settle_t24_paper.py  ──MANUAL──▶ t24_paper_*.csv (derived)        │
+│                                                                     │
+│ N100 pm_agent                                                       │
+│   weather_live_cycle.py every 30 min ──▶ signals/, plans/, live/    │
+│                                       ──▶ live_cycle/{id}.json      │
+│   latency/crossing runners consume weather_data_feed_service        │
+│   source_events; they do not own default weather polling            │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                       sync_weather_remote.sh
+                                 │
+┌────────────────────────────────▼────────────────────────────────────┐
+│ local pm_agent                                                      │
+│   runtime/weather_edge_v1/market_data/  (read-only mirror)          │
+│   runtime/weather_edge_v1/remote_pm_agent/  (read-only N100 mirror) │
+│                                                                     │
+│   scripts/weather_dashboard/run_stack.sh                            │
+│     ├─ make db-canonical-rebuild        (clean schema)              │
+│     ├─ make migrate-legacy-research     (legacy_migration/research_csv) │
+│     │     reads:  t24_paper_*.csv                                   │
+│     │     writes: signals, plans, orders, fills, settlements        │
+│     │             tagged config_id='legacy_research_weather_edge'   │
+│     │             state='explore' or 'paper'                        │
+│     │                                                               │
+│     ├─ make migrate-live-cycle          (legacy_migration/live_cycle) │
+│     │     reads:  live_cycle/{id}.json + sibling signals/plans/live/ │
+│     │     writes: signals, plans, orders, fills (simulated_open),   │
+│     │             strategy_config (hashed identity)                 │
+│     │             state='live'                                      │
+│     │                                                               │
+│     ├─ python -m weather_dashboard.ingest.pm_history_settlements    │
+│     │     reads:  cache/pm_history/{City}_{date}.json               │
+│     │     writes: settlements (condition_id join),                  │
+│     │             settlement_outcomes (city/date/bracket source)    │
+│     │                                                               │
+│     ├─ python -m weather_dashboard.ingest.clob_fill_sync            │
+│     │     reads:  exchange_response matched fills, authenticated    │
+│     │             CLOB order/trade data, public activity fallback   │
+│     │     writes: fills(status='filled') for matched CLOB trades    │
+│     │                                                               │
+│     ├─ python -m weather_dashboard.db.consolidate_configs           │
+│     │     writes: config_aliases (fragments → canonical)            │
+│     │                                                               │
+│     ├─ scripts/etl/build_weather_fact_trades.py   (DERIVED)    │
+│     │     reads:  orders/fills/plans/signals/settlements (canonical)│
+│     │     writes: fact_trades (每 fill 一行宽表, 已成交 PnL 唯一源) │
+│     │             + fact_trades.parquet                             │
+│     │                                                               │
+│     ├─ scripts/etl/build_weather_signal_candidates.py (DERIVED)│
+│     │     reads:  paper_snapshots/*.json, paper_orders.jsonl,       │
+│     │             fact_trades(live_real), settlements,              │
+│     │             forecast_hourly_curves/*.jsonl                    │
+│     │     writes: fact_signal_candidates (每机会一行, 全机会宇宙→   │
+│     │             paper intended→live actual 对齐, 机会 alpha 唯一源)│
+│     │             fact_forecast_hourly_curves (每 city/date/snapshot │
+│     │             一行，用 forecast_values_hash 关联候选行)          │
+│     │             + fact_signal_candidates.parquet                  │
+│     │             window: decision hts_min/max 默认 [22,24]         │
+│     │                                                               │
+│     ├─ scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py          │
+│     │     checks: order_id match, order cap, DB/cache/fact cost     │
+│     │             consistency; fail closed before metrics/reports   │
+│     │                                                               │
+│     └─ make metrics-refresh             (per-run metrics cache)     │
+│                                                                     │
+│   FastAPI + React serve from runtime/weather.db                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 4. The unified PnL caliber
+
+Implemented in `weather_dashboard.api.routers.configs`:
+
+```python
+_PNL_CASE = """
+    CASE
+        WHEN s.final_price IS NULL THEN 0
+        WHEN o.order_side = 'BUY_YES'
+            THEN CAST(f.filled_shares AS REAL)
+               * (CAST(s.final_price AS REAL) - CAST(f.filled_price AS REAL))
+        WHEN o.order_side = 'BUY_NO'
+            THEN CAST(f.filled_shares AS REAL)
+               * ((1 - CAST(s.final_price AS REAL)) - CAST(f.filled_price AS REAL))
+        ELSE 0
+    END
+"""
+
+# Standard join, alias-aware. State filter: all / live / paper / explore.
+def _base_joins(state: str = "all") -> str:
+    state_filter = "" if state == "all" else f" AND r.state = '{state}'"
+    return f"""
+        FROM config_aliases ca
+        JOIN runs r ON r.config_id = ca.alias_config_id{state_filter}
+        LEFT JOIN orders o ON o.run_id = r.run_id
+        LEFT JOIN fills f  ON f.execution_id = o.execution_id AND f.status = 'filled'
+        LEFT JOIN plans p  ON p.plan_id = o.plan_id
+        LEFT JOIN signals sig ON sig.signal_id = p.signal_id
+        LEFT JOIN settlements s ON sig.target_date = s.target_date
+                               AND sig.condition_id = s.condition_id
+                               AND sig.bracket = s.bracket
+        WHERE ca.canonical_config_id = ?
+    """
+```
+
+**Rules every consumer must follow:**
+
+1. Use the canonical `config_id` (or any alias — resolved via `config_aliases`).
+2. Join through `config_aliases`, never `WHERE r.config_id = ?` directly.
+3. Use `status='filled'` for fills (excludes `simulated`, the parallel paper
+   shadow that runs alongside live).
+4. Settlement is per-token: BUY_YES profit = `shares × (final_price - fill_price)`;
+   BUY_NO profit = `shares × ((1 - final_price) - fill_price)`.
+5. **Always specify a `state` filter.** A curve that silently blends live +
+   paper is the original bug this caliber was built to prevent. Equity
+   endpoints accept `?state=live` / `?state=paper` / `?state=all`.
+6. For live realized PnL, query the DB/API fill path first. If an analysis only
+   reads `live_*_orders.jsonl`, label it explicitly as submitted-order or
+   assumed-filled analysis, not real live PnL.
+
+### 4.1 Live CLOB fill recovery caliber
+
+N100 / 本机 `live/*.jsonl` 记录的是 CLOB 订单提交凭证，不是成交回报。`trade_class='live_real'` 只在真实成交进入 `fills(status='filled')` 后才成立。
+
+真实 CLOB fill 的权威顺序：
+
+1. `orders.exchange_response.place.status='matched'` 的即时成交回报，使用 `makingAmount` / `takingAmount` 算 fill cost / shares。
+2. authenticated CLOB order / trade 数据。
+3. Polymarket public activity / public trades API 只能作 fallback。
+
+2026-06-07 事故复盘：旧 fallback 把 public activity 当成逐 order 权威 fill 来源，这是错的。public activity 是账户级成交活动，不可靠携带本地 CLOB `order_id` 粒度；在 split child order、同 token 多笔订单、partial fill 场景下会造成：
+
+- 少算：只记录第一段 partial fill，漏掉同一 order 的后续成交。
+- 多算：把账户级 public activity 分配到错误 child order，出现 `order_id` mismatch 或 fill cost/shares 超过订单 cap。
+
+修正后，public fallback 必须同时满足 exact condition/token、side、limit price、placed time，并按 partial fill 逐条记录；任何一条 fill 都不能让同一 `(execution_id, order_id)` 超过订单 shares/cost cap。
+
+refresh/rebuild 后必须跑：
+
+```bash
+python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
+```
+
+`gate_pass=false` 时禁止发布 live_real PnL、ROI、city/side rank、近 7/15 天曲线。当前 gate 会检查：
+
+- DB `fills` 是否存在 mismatched/missing `order_id`；
+- 任一 order 的 fill shares/cost 是否超过 order cap；
+- `runtime/weather_edge_v1/clob_fills.jsonl` 与 DB fill_id 是否一致；
+- `fact_trades live_real` cost 是否等于 DB `fills` cost。
+
+2026-06-07 修正后验证状态（示例；行数会随新增真实成交变化，最终以 gate 为准）：
+
+```text
+gate_pass=true
+missing_order_rows=0
+over_order_keys=0
+db_not_in_cache=0
+cache_not_in_db=0
+db_fill_cost_minus_fact_cost=0
+```
+
+如果看到旧报告或旧 DB 中 `live_real=1316` / raw CLOB cost 约 `$3499`，那是错误 fill recovery 口径，不得用于策略结论。后续新增成交会改变行数和成本，但不能绕过 gate。
+
+### Strategy identity
+
+`live_weather_edge_v1_<hash>`. The hash is over an **identity-only**
+projection of params:
+
+- Included: `strategy_family, algorithm_version, execution_policy,
+  signal_builder_version, trade_planner_version, city_pool, universe_scope,
+  sizing_mode, max_order_notional, fixed_order_shares, min_edge,
+  min_entry_price, max_entry_price, entry_price_window` (+ active policy-specific
+  params when applicable).
+- **Excluded** (would cause fragmentation): `paper_enabled, live_enabled,
+  source` (runtime toggles); `max_order_shares` (per-order safety cap, not
+  strategy intent).
+- Defaults normalized: absent `execution_policy` ≡ `"mid_price_core_v1"`,
+  same for `sizing_mode`, `universe_scope`, etc.
+
+See `weather_dashboard/legacy_migration/live_cycle.py::_strategy_identity`.
+
+### Strategy parameter layers
+
+Weather `signal_id` is the market/model opportunity and can be shared across
+strategies. A strategy branch starts when a `strategy_config`/`run` consumes the
+same signal and writes its own `plans`:
+
+```text
+same signal_id
+  -> config/run A -> plan(execution_policy=mid_price_core_v1) -> order/fill
+  -> config/run B -> plan(execution_policy=mid_price_core_v2) -> order/fill
+```
+
+Parameter ownership:
+
+- Signal/model facts: `target_date, city, bracket, condition_id,
+  model_version, forecast_source, model_p_yes, market_price, edge`.
+  These define the opportunity and should be common in A/B execution tests.
+- Filter/sizing strategy params: `entry_price_window, min_edge,
+  sizing_mode, max_order_notional, fixed_order_shares`.
+- Execution-policy params: `execution_policy` plus maker-queue controls such
+  as `min_quote_edge, max_quote_spread, max_mid_drift,
+  adverse_selection_spread_fraction`.
+
+`execution_policy` is therefore a strategy parameter, but it does not create a
+new signal. It creates a separate plan/order/fill branch from the same signal.
+
+The legacy DB had 6 config_id rows for one strategy; running
+`python -m weather_dashboard.db.consolidate_configs` builds `config_aliases`
+so all 6 roll up to one canonical row, and new ingest produces the canonical
+id directly.
+
+---
+
+## 5. Scripts inventory
+
+### 5.1 N100 production scripts (in `~/projects/weather-predict` and `~/projects/pm_agent`)
+
+| Script | Where | When |
+|---|---|---|
+| `scripts/ops/weather_live_cycle.py` | pm_agent | live timer, every 30 min |
+| `scripts/ops/weather_snapshot_signal_builder.py` | pm_agent | inside the cycle |
+| `scripts/ops/weather_trade_planner.py` | pm_agent | inside the cycle |
+| `scripts/ops/weather_order_executor.py` | pm_agent | inside the cycle |
+| `scripts/ops/weather_live_status.py` | pm_agent | pause/resume control |
+| `scripts/ops/daily_pipeline.py` | weather-predict | daily timer |
+| `scripts/analysis/settle_t24_paper.py` | weather-predict | **manual** ⚠ |
+| `scripts/ops/fill_t2_weather_cache.py` | weather-predict | manual / weekly |
+| `scripts/ops/backup_data.sh` | weather-predict | daily timer |
+
+### 5.2 Local analysis / sync scripts (in `scripts/ops/`)
+
+| Script | Purpose |
+|---|---|
+| `sync_weather_remote.sh` | pull N100 mirror (both weather-predict and pm_agent halves) |
+| `weather_position_monitor.py` | query wallet positions + observed temps for decision journal |
+| `weather_ledger_daily_analysis.py` | daily PnL report from the paper ledger |
+| `weather_execution_policy_compare.py` | compare execution policies (mid_price vs maker_queue) |
+| `weather_decision_journal.py` | record manual notes/observations |
+| `weather_source_backtest.py` / `weather_source_probe.py` | data-source experiments |
+| `backfill_weather_pm_history.py` | Gamma events → `cache/pm_history/*.json`（Tmax，默认）或 `--extreme min` → `cache/pm_history_lowest/*.json`（Tmin，bracket 内嵌 condition/market id）。Mac 直连 gamma DNS 污染，需 `--proxy http://127.0.0.1:7890`（或 `WEATHER_PREDICT_PROXY`） |
+| `ingest_weather_lowest_settlements.py` | `pm_history_lowest` → `settlement_outcomes`（source_system=`polymarket_api`、id 带 `|lowest` 后缀，与 Tmax 分命名空间）+ `settlements`；未 closed fail-closed 跳过 |
+
+> **settlement 刷新链 ownership（2026-09-05 收口）**：Mac canonical refresh 已包含 bounded
+> `pm_history_settlements` ingest，不另建 scheduler/owner。D-1 修复确认旧 ingester 忽略 pm_history
+> bracket 内嵌的 exact condition/market identity；8/21–9/3 的 110 个文件、1210 个 brackets 中，
+> 1192 条 exact settlements 被 append，随后为全库 3258 条 pending v2 candidates 补上 label。
+> 影响只在 settlement/candidate label；没有新增或改写 plan/order/fill。embedded identity 优先，
+> legacy signals fallback 若出现多重 identity 会 fail-closed；同一 condition 的 0/1 冲突保持 unresolved。
+
+### 5.3 Dashboard ingest (in `weather_dashboard/`)
+
+| Module | Reads | Writes |
+|---|---|---|
+| `legacy_migration/research_csv.py` | `t24_paper_*.csv` | signals, plans, orders, fills, settlements (paper/explore state) |
+| `legacy_migration/live_cycle.py` | `live_cycle/*.json` + siblings | signals, plans, orders, fills (live state), strategy_config |
+| `ingest/pm_history_settlements.py` | `cache/pm_history/*.json`（Tmax only） | `settlements` for condition_id trade joins; `settlement_outcomes` for city/date/bracket source-grain research; raw near-binary prices normalized to 1/0。Tmin 走 `scripts/ops/ingest_weather_lowest_settlements.py`（id 命名空间隔离，避免 Tmax/Tmin 同 city-date-bracket 撞 id/串 market 绑定） |
+| `ingest/clob_fill_sync.py` | Polymarket data-api or CLOB | fills (status='filled') for real on-chain matches |
+| `db/consolidate_configs.py` | strategy_config | config_aliases |
+| `metrics/save.py` | the canonical caliber above | per-run cached metrics on `runs.metrics` |
+
+### 5.4 Dashboard API + UI
+
+- `weather_dashboard/api/app.py` — FastAPI app
+- `weather_dashboard/api/routers/{runs,configs,compare,live}.py` — endpoints
+- `frontend/strategy_dashboard/` — Vite + React UI (`/weather/runs`, `/weather/live`)
+
+### 5.5 Legacy / deprecated (do not use, gated behind `ALLOW_LEGACY_V1=1`)
+
+- `weather_dashboard/db/apply_schema.py` (v1 schema) — superseded by `apply_schema_canonical.py`.
+- `weather_dashboard/ingest/settlements.py` — writes `final_yes` column that doesn't exist in canonical schema. Dead code after pm_history_settlements.py.
+- `weather_dashboard/ingest/real_ledger_adapter.py` — predecessor of `legacy_migration/research_csv.py`.
+- `weather_dashboard/cli/ingest_run.py` — v1 single-run ingest.
+- The `BFF on port 8011` in `run_stack.sh` — old PMM/ARB framework, unused by the weather dashboard. Safe to drop.
+
+These can be removed in a follow-up cleanup; keeping them now to avoid breaking any leftover references.
+
+---
+
+## 6. Known data gaps
+
+These are real upstream gaps, not pipeline bugs. Don't try to "fix" them
+by re-ingesting:
+
+| Gap | Where | Workaround |
+|---|---|---|
+| Polymarket no resolution on **2026-05-17** for ~half the cities (27/52) | pm_history files exist but contain `null` | settle by REDEEM events from wallet activity (see clob_fill_sync), or accept the hole |
+| Polymarket no resolution on **2026-05-18** entirely (52/52 null) | same | same |
+| Chronic null cities (Boston, Lagos, Minneapolis, Phoenix) | Polymarket never opened markets for them | exclude from analysis or treat as "no signal" |
+| pm_history for "today" is absent until daily_pipeline runs | normal | wait until tomorrow |
+| Old near-binary settlement rule | expired rows marked `missing_bracket`; reports show values like 725/734/28 | rebuild after the 2026-06-06 fix; raw `0.9995/0.0005` must normalize to `1/0` |
+
+The `pm_history_settlements` ingest skips null files automatically.
+
+---
+
+## 7. N100 automation history
+
+旧 N100 `settle_t24_paper`、backup timer 和 systemd unit 是 2026-06 事故前设计，不再保留可复制执行块。
+当前 canonical settlement/fill 由 Mac bounded refresh 管理；N100 仅能在独立恢复合同中作为历史输入。需要追查旧部署时
+读 [WEATHER_DATA_COLLECTION_INVENTORY.md](WEATHER_DATA_COLLECTION_INVENTORY.md) 或 git history，不能把旧 timer 当当前修复。
+
+---
+
+## 8. Operations runbook
+
+### 8.1 当前日常 refresh（唯一入口）
+
+```bash
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
+.venv/bin/python scripts/ops/weather_storage_identity_audit.py
+scripts/ops/start_weather_canonical_refresh_tmux.sh
+```
+
+`run_weather_canonical_refresh_launchd.sh` 先执行 strict manifest、canonical DB same-file、canonical
+tmux/JRS write probe、data-feed semantic health 和 data-product registry preflight。DB/JRS identity 失败时
+所有写入停止；仅 migration evidence 失败时仍完成 order → coverage → alias → authenticated fill → fact →
+fill gate 的 live accounting 链，但跳过 schema/WCIR migration。每个阶段都有独立 lock、timeout、absolute
+WAL 和 WAL-growth budget，并在 `runtime/weather_edge_v1/canonical_refresh/stages/` 留 report。
+`ingest_runtime_orders` 固定使用 `--require-existing-schema`，以 `mode=rw` 复用已经存在且已是 WAL 的 DB，
+并在同一连接上校验 schema 后执行 accounting；因此不能创建 DB、切 journal mode 或间接调用 canonical
+schema initializer 绕过 migration gate。
+
+### 8.2 可重放数据与逐产品迁移工具
+
+以下命令只生成 research evidence 或 GO/NO_GO，不会切 writer、重启 runner 或删除旧数据：
+
+```bash
+# archive row -> full_decision/model_only/legacy_summary_only/source_only/blocked
+.venv/bin/python scripts/ops/materialize_weather_historical_replay_manifest.py \
+  --product-id historical_full_ladder_snapshots \
+  --output-dir "$REGISTERED_RESEARCH_ARTIFACT_DIR"
+
+# sealed rows + target_date train/validation/test/frozen-forward splits
+.venv/bin/python scripts/analysis/build_weather_replay_dataset_v1.py --help
+
+# reviewed inode rollover: immutable receipt + a distinct zero-offset state path
+.venv/bin/python scripts/ops/plan_weather_cursor_epoch_recovery.py --help
+
+# per-product parity/accounting evidence; output is only GO/NO_GO
+.venv/bin/python scripts/ops/weather_data_product_cutover_audit.py evidence.json
+```
+
+历史 adapter 会给每个 physical row 绑定 file SHA/path/line，坏 JSON/UTF-8 必须进入显式 quarantine；
+`scanned = canonical + duplicate + blocked + quarantined` 必须守恒。新 cursor epoch 需要新 inode、state
+path、receipt path、hash-identical overlap 和 offset 0；不得把旧 state 的 offset 直接清零。
+
+历史 manifest 是流式、reference-only 索引：保存 immutable source file identity、row hash 和 physical
+line/record index，不复制几十 GB 的原始 row payload；原始 archive 保持 read-only。canonical refresh 还会
+增量运行 `materialize_weather_replay_artifact_verifications.py`。只有 absolute managed path 与真实 file
+SHA-256 同时存在才是 `ready`；历史摘要是 `legacy_summary_only`，仅有 row hash、symbolic model id 或
+无 file digest 的 physical path 必须显式记为 `blocked_unverifiable_artifact`，不能用“文件还在”冒充完整重放。
+原始 weather/CLOB row 没有 decision_id 时标成 `source_only`：它能作为 PIT replay input，但不能单独冒充
+`model_only` 或 `full_decision` case；带 revision/parent 的匿名 row 会 fail closed，不能降格逃到 `source_only`。
+迁移器使用磁盘 spool 和磁盘 identity index，最终 JSONL 直接流式 seal，不在内存同时保留百万行对象与
+完整输出 bytes。坏 JSON/UTF-8 行以及损坏/截断的 gzip container 都生成 quarantine evidence；只有显式
+`--allow-quarantine` 才允许其余有效行完成 manifest，且 quarantine 仍计入守恒。
+
+候选级模型评估可先生成 sealed projection，再交给统一 split builder：
+
+```bash
+.venv/bin/python scripts/analysis/export_weather_replay_dataset_inputs_v1.py --help
+.venv/bin/python scripts/analysis/build_weather_replay_dataset_v1.py --help
+```
+
+projection 明确标为 `canonical_candidate_projection`，含 authoritative settlement-label availability、
+source rows、compact SQLite snapshot 和建议的 chronological boundaries；它支持固定分母的模型/策略
+回测与 train/validation/test/frozen-forward，但不把缺少物理 file digest 的 case 升级为 raw full replay。
+
+#### 2026-09-04 migration verification seal
+
+2026-09-04 00:42 CST 对完整迁移链做了只读复验。历史 archive 层与 sealed evaluation 层为
+**healthy**；scheduled canonical derivation 为 **degraded / fail-closed**，不能写成全绿：
+
+| product | sources | scanned | canonical | duplicate | quarantine | blocked |
+|---|---:|---:|---:|---:|---:|---:|
+| `historical_full_ladder_snapshots` | 2,843 | 2,512,860 | 2,512,860 | 0 | 0 | 0 |
+| `historical_targeted_snapshots` | 8,404 | 3,151,971 | 3,151,970 | 0 | 1 | 0 |
+| `historical_strategy_snapshots` | 6,576 | 4,800,522 | 4,800,479 | 41 | 2 | 0 |
+
+三组 manifest identity、17,823 个 source 的 device/inode/size/mtime、守恒式、quarantine SHA 和约
+7.3 GB adapted output SHA-256 全部复验通过，source stat mismatch 为 0。旧文件没有删除或覆盖。
+
+Tmax sealed projection 含 6,713 rows；`train=5,016`、`validation=1,012`、`test=216`、
+`frozen_forward=469`。四组 row identity 互斥且穷尽，PIT clock/cutoff、rows/manifest/DB snapshot SHA
+和 seal identity 全部通过；dataset hash 为
+`dbd6d05bfd45c5e429b7052057a1752031da2da24fff806a9d749e2aca820320`。
+
+同一观察点 canonical physical DB 与仓库 alias 为 samefile，`fact_signal_candidates=175,555`
+（`event_date` 到 2026-09-03），`fact_trades=5,190`；replay catalog `not_checked=0`。
+其中 128,068 个 case 是 `blocked_unverifiable_artifact`，47,487 个是 `legacy_summary_only`：这是对缺失
+历史 file digest 的 fail-closed 能力标注，不是将它们伪装成 raw full replay；candidate-level sealed replay
+仍按上面的固定数据集合同可用。
+
+持续增量目前未达 healthy：production manifest 为 warning，storage audit 还发现 core-carry live 与
+near-core controller 共用 mutable `live_orders.jsonl`；controller health 同时报告 core-carry loaded SHA /
+checkout 与 near-core live flags 漂移。canonical refresh 的 accounting stages 与 fill coverage gate 通过且
+最终 exit 0，但 preflight 正确返回 `migration_blocked`，因此该轮没有推进 WCIR candidate/replay verifier。
+恢复条件是先由独立 live 维护变更收口上述 release、依赖和 journal ownership，再观察下一轮 preflight
+`status=ready`、WCIR/replay report 时间推进且 `remaining=0`；不得为了让 migration 变绿而绕过 gate。
+
+#### 2026-09-07 protocol / replay migration progress snapshot
+
+本节是 2026-09-07 00:22 CST 的可复核进度截面，不替代运行时 manifest/controller 的实时判断。此前
+阻塞 scheduled canonical refresh 的 journal ownership、release pin 与运行依赖绑定已分别在
+`1ee6de65`、`e2bbeebd`、`8115b455` 落地：live order journal 现在有显式 owner/reader 合同，canonical
+refresh 固定到声明 release，并校验 operational venv、environment、canonical DB、目标路径及 symlink
+边界。三个 commit 均为本截面 HEAD 的祖先；相关范围测试在落地时为 89 passed。
+
+当前协议层已经统一为“所有判断都是 case，错题只是派生视图”：
+
+- `weather_replay_cases_v1` 覆盖全部 176,958 个 candidate case；`weather_replay_mistakes_v1` 从中派生
+  11,564 个 mistake case，不维护第二套不可对齐的错题事实。
+- replay capability 为 `full_decision=10,780`、`model_only=102,733`、
+  `legacy_summary_only=47,487`、`blocked=15,958`。能力等级表示逻辑材料是否齐全，不等价于物理
+  artifact 已通过 hash 验证。
+- artifact verification 已给 176,958 个 case 全量分类：129,471 个
+  `blocked_unverifiable_artifact`，47,487 个 `legacy_summary_only`，当前物理 `ready=0`。因此可以统一检索、
+  切分和回放候选级模型输入，但尚不能声称任意历史 case 都能从带真实 file SHA-256 的 raw artifact
+  完整复现。
+- outcome 分类为 `blocked_candidate=113,783`、`settled_unscored=29,052`、
+  `unselected_model_correct=26,583`、`unselected_model_error=3,921`、
+  `pending_settlement=3,106`、`live_filled_win=226`、`policy_selected_win=126`、
+  `live_filled_loss=88`、`policy_selected_loss=73`。mistake 视图保留 model error、selected loss 和 realized
+  loss 的组合标签，而不是只收集亏损单。
+
+历史迁移与数据集封印保持有效：三组 historical manifest 共索引 17,823 个 immutable sources，约
+7.3 GB adapted output，守恒与 quarantine evidence 已通过；Tmax sealed dataset 仍为 6,713 rows，按
+`target_date` 固定为 `train=5,016`、`validation=1,012`、`test=216`、`frozen_forward=469`，dataset hash
+仍为 `dbd6d05bfd45c5e429b7052057a1752031da2da24fff806a9d749e2aca820320`。这层可直接用于同口径回测、
+validation/test 与 frozen shadow，不随未来代码或样本增长自动改写。
+
+实时链路在该截面仍为 **raw fresh / canonical derivation degraded, fail-closed**：canonical DB physical
+path `/Volumes/jrs/pm_agents/runtime/weather.db` 与仓库 alias 为同一 device/inode，storage audit 为
+`healthy` 且 0 findings；raw decision bundle 已更新到 00:14 CST，market-books semantic health 在 00:22
+为 `ok`。但 `fact_signal_candidates` 的最新 decision timestamp 仅到 2026-09-06 19:00:45 CST，最近一次
+成功 WCIR materialization 到 18:59 CST，落后约 5 小时；该轮 canonical refresh preflight 因动态
+production manifest/data-feed health 未达标而返回 `migration_blocked`。`fact_trades` 独立 accounting
+链已更新到 2026-09-06 22:39:51 CST。这里记录的是可观测状态，不允许用手工绕 gate 或把 raw 新鲜
+误写成 canonical 已追平。
+
+剩余验收按以下顺序收口：
+
+1. 新 producer 对受管 raw artifact 双写真实 file SHA-256 和稳定 locator；历史只对仍有 immutable
+   physical evidence 的范围做 bounded backfill，缺证据的记录继续 blocked，不合成 digest。
+2. 恢复动态 manifest/controller/data-feed semantic health 后，连续观察 canonical refresh preflight
+   `status=ready`，并确认 WCIR materialization 与 replay verifier 的报告时间推进、`remaining=0`。
+3. 重新量化 candidate freshness lag 与 artifact `ready` 覆盖率；只有物理 hash verification 通过的
+   case 才升级为 raw full replay。sealed candidate projection 可继续承担模型回测与 frozen-forward，
+   但两种能力必须分栏报告。
+
+Core Carry near-maker 的长期运行合同如下，避免再次把 controller heartbeat 误当经济信号频率：
+
+- 小时 checkpoint 只负责 armed weather/model thesis；Core 主 runner 在每个 15 秒 loop 读取最新
+  canonical weather state 和新的 direct CLOB full book，重新计算 market feature、model probability、
+  10-share fee/depth-adjusted taker EV。
+- 连续重算变为 Core actionable 时，原始 `10 taker + 5 maker` 不变；仅当全部 Core 结构 gate
+  已通过且唯一 blocker 为 `non_positive_taker_ev`、同时 bid+1 tick 仍保留 1c model edge 时，
+  独立追加 `5-share near maker`。
+- near sleeve 使用独立 strategy/config/experiment/client prefix 和 v2 ledger/report；其 fill 不扣减
+  原 Core 的 5-share maker，因此最大自然成交量为 `10+5+5=20 shares`。near 仍 open 而 Core
+  转正时必须先完成 authenticated cancel，再放行 Core；partial fill 保留、只撤 remaining。
+- near WS controller 只拥有 authenticated order update、readiness 和异常 safety cancel，不生成经济
+  信号。其 500ms 字段名必须是 `readiness_publish_interval_ms`；经济重算 owner/cadence 必须显式报告为
+  `current_yes_core_carry_tiny_live_v2 / continuous_market_reprice_15s`。
+- Core runner 与 near controller 必须引用同一 `core_carry_runtime` immutable release；自动恢复不得把
+  Core runner 拉回另一 `core_carry_live_runtime` SHA。生产验收同时核对 pane cwd/start command、
+  summary loaded SHA、连续 rescore journal、near v2 ledger 和 authenticated exchange evidence。
+
+#### 2026-09-07 Core Carry continuous near-maker live boundary
+
+- 生产切换点：near controller 于 2026-09-07 01:06:57 CST 启动，Core runner 于 01:07:50 CST
+  启动，首个完整 healthy summary 为 01:08:17 CST。两者统一加载 immutable release
+  `core_carry_runtime/a9cc1bea44d9dacd0fcef9165446377fc001a6f3`；production pin commit 为
+  `49f96255`，功能与热修复 commits 为 `444b7aef`、`a9cc1bea`。
+- live 参数已验收为原 Core `10 taker + 5 maker` 不变，额外 near `5 maker`；continuous market
+  reprice cadence 为 15 秒，首轮 43 个 market rescore，Core/near controller 均为 live-confirmed，
+  private/authenticated REST/market WS readiness 全部 ready。
+- 此前 v1 near ledger 最后一条为 2026-09-06 16:45:55 CST；到新 v2 首个 healthy summary 的
+  无新增证据窗口为 8 小时 22 分 22 秒。v1 共 97 ledger rows、5 个 submitted projections、
+  0 matched shares；不得把该旧口径与 v2 forward denominator 混算。
+- v2 从上述 healthy boundary 独立累计；初始 report 为 0 eligible、0 submitted、0 fill、0 matched。
+  部署后 authenticated CLOB 查询仍为账户级 21 个 open orders，3 个历史 near order ids 均不在 open
+  set，说明切换本身没有误挂或遗留 near 单。
+- 该次验收同时修复两项复发根因：readiness 必须在耗时 rescore 后重新取当前时钟；confirmed cancel
+  必须投影为 terminal `cancelled`，并兼容识别旧日志中“cancel 已确认但 status 错写 submitted”的记录。
+  修复后历史误复活的 7 个 maker lifecycle plans 归零，executor `live_errors=0`。
+- 部署后 strict manifest 无缺失 session、无 Core/near release mismatch。全局仍有一个与本次切换无关、
+  且部署前已存在的 finding：`com.pm-agents.weather-canonical-refresh` 上次退出码为 75；不能据此把
+  Core/near 本身标成失败，也不能隐去该独立 canonical-refresh 运维项。
+
+### 8.3 Just check status
+
+```bash
+scripts/weather_dashboard/run_stack.sh --status
+.venv/bin/python scripts/ops/weather_production_ctl.py health
+```
+
+全量重建只在明确授权后执行 `scripts/weather_dashboard/run_stack.sh --rebuild`；它不启动或停止 API、FE、collector 或 strategy。
+
+### 8.4 Diagnose "curve doesn't extend to today"
+
+In order:
+
+1. **Mirror stale?** `ls -t runtime/weather_edge_v1/market_data/cache/pm_history/ | head`.
+   If oldest dates only, run `scripts/ops/sync_weather_remote.sh`.
+2. **Settlements stale?**
+   ```sql
+   SELECT MAX(target_date) FROM settlements;
+   SELECT MAX(target_date), COUNT(*) FROM settlement_outcomes;
+   ```
+   If older than yesterday, run `python -m weather_dashboard.ingest.pm_history_settlements`.
+3. **Fills stale or under-ingested?**
+   ```sql
+   SELECT MAX(filled_at_utc) FROM fills WHERE status='filled';
+   SELECT COUNT(DISTINCT execution_id) FROM orders WHERE status='submitted';
+   SELECT COUNT(DISTINCT f.execution_id) FROM fills f
+     JOIN orders o ON o.execution_id=f.execution_id
+     WHERE o.status='submitted' AND f.status='filled';
+   ```
+   If filled-fill count << submitted-order count, `clob_fill_sync` linking
+   is broken — see [WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md).
+4. **Config fragmented?**
+   ```sql
+   SELECT COUNT(*) FROM strategy_config
+   WHERE config_id NOT IN (SELECT DISTINCT canonical_config_id FROM config_aliases);
+   ```
+   Non-zero means the consolidate migration hasn't run.
+
+---
+
+## 9. Cleanup routing
+
+未实施的代码重构不在 current-source 数据流文档维护 TODO 清单。确认仍有效的工程债进入现有 issue/work-order；
+已经完成或被当前 controller/canonical 架构取代的事项只留在 git history，避免模型把旧建议重新实现一遍。

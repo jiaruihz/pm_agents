@@ -1,0 +1,5218 @@
+{
+  "generated_at_utc": "2026-06-12T18:40:18.085786+00:00",
+  "target_metric": "low_price_buy_yes_lottery_v0",
+  "db_path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+  "db_last_modified_utc": "2026-06-11T16:32:59.272888+00:00",
+  "self_check": {
+    "max_fact_built_at_utc": "2026-06-11T16:32:50.519182+00:00",
+    "trade_class_distribution": [
+      {
+        "trade_class": "paper",
+        "n": 2285
+      },
+      {
+        "trade_class": "live_real",
+        "n": 856
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "n": 636
+      },
+      {
+        "trade_class": "live_simulated",
+        "n": 624
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "settlement_status": "settled",
+        "n": 4233
+      },
+      {
+        "settlement_status": null,
+        "n": 168
+      }
+    ],
+    "candidate_coverage": [
+      {
+        "rows": 26817,
+        "eligible": 9011,
+        "paper_ordered": 3387,
+        "live_filled": 348
+      }
+    ],
+    "order_fill_coverage": [
+      {
+        "status": "error",
+        "orders": 33,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 962,
+        "with_fill": 856
+      }
+    ]
+  },
+  "clob_gate": {
+    "gate_pass": false,
+    "fail_reasons": [
+      "cache_fills_missing_or_mismatched_order_id:/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/clob_fills.jsonl",
+      "cache_fills_exceed_order_cap:/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/clob_fills.jsonl",
+      "db_cache_fill_id_mismatch",
+      "db_cache_cost_mismatch",
+      "db_fills_exceed_order_cap"
+    ],
+    "db_fill_cost_minus_fact_cost": 0.0,
+    "db_vs_primary_cache": {
+      "cache_not_in_db": 579,
+      "db_cost_minus_cache_cost": -1596.197286,
+      "db_not_in_cache": 0,
+      "sample_cache_not_in_db": [
+        "00124dc22361f5d596648a3873bd2791a59b2730bf280fed392db08f7b0ed819",
+        "0113330eff9c5e8b539d8816071dde9ee86ee252c53577d70eb067ff1dae733b",
+        "019962ca2838ce2a0d9197a0663a16a48ef3feb85f9d77d3d2bdf1532923707b",
+        "01e4d8cb94bf0c27388ea5a769d2346278f14466270e71a4b818b23386c80448",
+        "024e174f46c8c631355ffe2008b45fb269f04f2c10a2a284a55993375a145144",
+        "02bcd1e07b1f01e3f5104014a98a8761f3175736bec5c6c3a14227126c3dc958",
+        "0311c61bc7307ee50fd460ee9fae4aceb2b1693bb254f39a12bc4ddabc998186",
+        "034c272ce7d53d7388b0b2ddf94eca06f2e0d09d7545a6cd34eae80f206e44e2",
+        "034d2f0c4d77b93445950b7fe2cb1bc73813cbb2eb00008e55f17e3c62ca5315",
+        "0408c01413806a78a647d52c8c76f2655ed215a3098e70395e407f011ea8bfd5",
+        "048f101ce01853ddc1cd96a8a534e166ab408c66d23bca3a3824251399944c66",
+        "05b8b0a6197199d986bad028bacc84cdd6864e8106507841d6832825c73d37e4",
+        "05e88511bbe779678d1919e5b086d9a42f5006658ba4386aedb60595a6070bb0",
+        "061a386135569a9f9a2dce246017d6d089ec1680e1d69222778132053fed0ff7",
+        "066053460e6547b5886d5865926275a6e65e93d7bae5cbc70555ffa575a69022",
+        "067241a50e0ffea185e0c57f9da1d2ff9f9f3f8a3c1ed2f1deb9d12eef13e672",
+        "06d1c634c163ef46f754ce2a2153d4709e424e7d895cbca147e7a30b9136e593",
+        "0752562f15507fe5356bf99ebbf02fdf55165dd730dcd1c063237da5ed9898fd",
+        "076515b3c009b419961f15d2e7d460363bf31d2d3207acde10210f6a7b51ad69",
+        "077c9afc3f3e2caad5d0a126529b483d27619896ece8474c33f66706f991e903",
+        "07922528cd69aee7b3cef83dbc04763c298c4ee40010a4d33cc54c8e097ef85c",
+        "08d08992259a0fcf8d24b3d6c55d2de37c2a4fc545eb1f1d18d7afd4e94a3869",
+        "08f36c59c4b8ce4ff7bd26a83916390dab7059c923f4039c3b9525ff0e23521d",
+        "091fb5643cbb8e4b7482542476a063da8cd2cb4014aadb4c21634633142cc8fb",
+        "0927a2a2f6f5ab66b47c4cb95044a1e7190d09bc42e60992286072a953b06872"
+      ],
+      "sample_db_not_in_cache": []
+    },
+    "db_fills": {
+      "cost_usd": 2263.377273,
+      "distinct_executions": 498,
+      "distinct_fill_ids": 856,
+      "missing_order_cost_usd": 0.0,
+      "missing_order_rows": 0,
+      "multi_fill_executions": 230,
+      "over_order_cost_usd": 6.406,
+      "over_order_excess_cost_usd": 1.406,
+      "over_order_keys": 1,
+      "rows": 856,
+      "top_over_order": [
+        {
+          "bracket": "33",
+          "city": "Chengdu",
+          "cost_over": 1.406,
+          "execution_id": "08fde055b5f348a7277297c70f07d58206036d48437ef293658bee654e03d402",
+          "fill_cost": 6.406,
+          "fill_shares": 9.08,
+          "fills": 2,
+          "order_id": "0x465e39876551ff40e0269a74f115be216c521b32e998001fd93fe854785e80a0",
+          "order_limit_cost": 5.0,
+          "order_shares": 7.042254,
+          "shares_over": 2.037746,
+          "target_date": "2026-06-01"
+        }
+      ]
+    },
+    "fact_trades_live_real": {
+      "cost_usd": 2263.377273,
+      "executions": 498,
+      "fill_ids": 856,
+      "rows": 856
+    }
+  },
+  "filter_funnel": [
+    {
+      "step": "fact_signal_candidates rows",
+      "rows": 26817,
+      "active_dates": 39,
+      "cities": 49,
+      "drop_from_previous": null,
+      "drop_from_previous_pct": null,
+      "retained_from_full_pct": 1.0,
+      "eligible_rows": 9011,
+      "note": "full opportunity table"
+    },
+    {
+      "step": "BUY_YES rows",
+      "rows": 11845,
+      "active_dates": 39,
+      "cities": 49,
+      "drop_from_previous": -14972,
+      "drop_from_previous_pct": -0.5583025692657643,
+      "retained_from_full_pct": 0.44169743073423573,
+      "eligible_rows": 3948,
+      "note": "side only; no eligible hard gate"
+    },
+    {
+      "step": "BUY_YES with decision entry price",
+      "rows": 6351,
+      "active_dates": 38,
+      "cities": 49,
+      "drop_from_previous": -5494,
+      "drop_from_previous_pct": -0.4638243984803715,
+      "retained_from_full_pct": 0.2368273856136033,
+      "eligible_rows": 2091,
+      "note": "decision window price available"
+    },
+    {
+      "step": "low-price BUY_YES <0.25",
+      "rows": 5544,
+      "active_dates": 38,
+      "cities": 49,
+      "drop_from_previous": -807,
+      "drop_from_previous_pct": -0.12706660368445913,
+      "retained_from_full_pct": 0.206734534064213,
+      "eligible_rows": 1783,
+      "note": "natural lottery universe before settlement"
+    },
+    {
+      "step": "settled low-price BUY_YES",
+      "rows": 497,
+      "active_dates": 32,
+      "cities": 48,
+      "drop_from_previous": -5047,
+      "drop_from_previous_pct": -0.9103535353535354,
+      "retained_from_full_pct": 0.018533020099190813,
+      "eligible_rows": 151,
+      "note": "realized outcome available for counterfactual"
+    },
+    {
+      "step": "decision-window present",
+      "rows": 497,
+      "active_dates": 32,
+      "cities": 48,
+      "drop_from_previous": 0,
+      "drop_from_previous_pct": 0.0,
+      "retained_from_full_pct": 0.018533020099190813,
+      "eligible_rows": 151,
+      "note": "exclude missing decision window"
+    },
+    {
+      "step": "counterfactual evaluable",
+      "rows": 497,
+      "active_dates": 32,
+      "cities": 48,
+      "drop_from_previous": 0,
+      "drop_from_previous_pct": 0.0,
+      "retained_from_full_pct": 0.018533020099190813,
+      "eligible_rows": 151,
+      "note": "has authorized counterfactual_pnl and cost proxy"
+    }
+  ],
+  "experiment": {
+    "split": {
+      "train_dates": [
+        "2026-05-06",
+        "2026-05-07",
+        "2026-05-08",
+        "2026-05-09",
+        "2026-05-10",
+        "2026-05-11",
+        "2026-05-12",
+        "2026-05-13",
+        "2026-05-14",
+        "2026-05-15",
+        "2026-05-16",
+        "2026-05-17",
+        "2026-05-20",
+        "2026-05-21",
+        "2026-05-22",
+        "2026-05-23",
+        "2026-05-25",
+        "2026-05-26",
+        "2026-05-27",
+        "2026-05-28",
+        "2026-05-29",
+        "2026-05-30"
+      ],
+      "holdout_dates": [
+        "2026-06-01",
+        "2026-06-02",
+        "2026-06-03",
+        "2026-06-04",
+        "2026-06-05",
+        "2026-06-06",
+        "2026-06-07",
+        "2026-06-08",
+        "2026-06-09",
+        "2026-06-10"
+      ],
+      "split_index": 22,
+      "holdout_frac": 0.3
+    },
+    "results": [
+      {
+        "selector": "price_lt_010",
+        "description": "BUY_YES price <0.10",
+        "baseline": "same BUY_YES, same hour_bucket, same 5c price_bucket full opportunity",
+        "identity_baseline": true,
+        "overall": {
+          "rows": 267,
+          "active_dates": 18,
+          "cities": 46,
+          "city_dates": 182,
+          "eligible_rows": 67,
+          "paper_ordered": 201,
+          "live_filled": 0,
+          "cost": 10.366499999999998,
+          "pnl": 26.335,
+          "roi": 2.540394540105147,
+          "roi_ci": [
+            -2.6323057422145464,
+            7.9426070619889355
+          ],
+          "hit_rate": 0.04868913857677903,
+          "avg_entry_price": 0.038825842696629205,
+          "avg_abs_edge": 0.18499737827715354,
+          "baseline_rows": 267,
+          "baseline_cost": 10.366499999999998,
+          "baseline_pnl": 26.335,
+          "baseline_roi": 2.540394540105147,
+          "excess_roi": 0.0,
+          "excess_ci": [
+            0.0,
+            0.0
+          ],
+          "positive_day_rate": 0.3888888888888889,
+          "worst_day": {
+            "event_date": "2026-05-30",
+            "rows": 30,
+            "cost": 0.927,
+            "pnl": -9.27,
+            "roi": -9.999999999999998
+          },
+          "best_day": {
+            "event_date": "2026-05-07",
+            "rows": 14,
+            "cost": 0.582,
+            "pnl": 14.180000000000001,
+            "roi": 24.364261168384886
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": 1.2422709387296236,
+              "rows": 253,
+              "removed": [
+                {
+                  "event_date": "2026-05-07",
+                  "pnl": 14.180000000000001
+                }
+              ]
+            },
+            "top3": {
+              "roi": -1.5089762251334309,
+              "rows": 219,
+              "removed": [
+                {
+                  "event_date": "2026-05-07",
+                  "pnl": 14.180000000000001
+                },
+                {
+                  "event_date": "2026-05-15",
+                  "pnl": 14.09
+                },
+                {
+                  "event_date": "2026-05-13",
+                  "pnl": 10.505
+                }
+              ]
+            },
+            "top5": {
+              "roi": -3.842364532019704,
+              "rows": 173,
+              "removed": [
+                {
+                  "event_date": "2026-05-07",
+                  "pnl": 14.180000000000001
+                },
+                {
+                  "event_date": "2026-05-15",
+                  "pnl": 14.09
+                },
+                {
+                  "event_date": "2026-05-13",
+                  "pnl": 10.505
+                },
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 7.505
+                },
+                {
+                  "event_date": "2026-05-08",
+                  "pnl": 5.015
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": 1.586366708506324,
+              "rows": 266,
+              "removed": [
+                {
+                  "candidate_id": "0x1065137ef1319e44e24ec7aec505313b9f21a33e929480346941d1791dc27411|BUY_YES|2026-05-13",
+                  "pnl": 9.905000000000001
+                }
+              ]
+            },
+            "top3": {
+              "roi": -0.2837155071900507,
+              "rows": 264,
+              "removed": [
+                {
+                  "candidate_id": "0x1065137ef1319e44e24ec7aec505313b9f21a33e929480346941d1791dc27411|BUY_YES|2026-05-13",
+                  "pnl": 9.905000000000001
+                },
+                {
+                  "candidate_id": "0x1424f8fa346688433fdccc81bbb39c09b861d880e166d9f38bed6af13c5e44d0|BUY_YES|2026-05-15",
+                  "pnl": 9.695
+                },
+                {
+                  "candidate_id": "0xa196c3814d84bdd8e8ed5f08f86d0897c683b4df632a647e2d520f17f72fc8dc|BUY_YES|2026-05-29",
+                  "pnl": 9.655000000000001
+                }
+              ]
+            },
+            "top5": {
+              "roi": -2.1672296470357866,
+              "rows": 262,
+              "removed": [
+                {
+                  "candidate_id": "0x1065137ef1319e44e24ec7aec505313b9f21a33e929480346941d1791dc27411|BUY_YES|2026-05-13",
+                  "pnl": 9.905000000000001
+                },
+                {
+                  "candidate_id": "0x1424f8fa346688433fdccc81bbb39c09b861d880e166d9f38bed6af13c5e44d0|BUY_YES|2026-05-15",
+                  "pnl": 9.695
+                },
+                {
+                  "candidate_id": "0xa196c3814d84bdd8e8ed5f08f86d0897c683b4df632a647e2d520f17f72fc8dc|BUY_YES|2026-05-29",
+                  "pnl": 9.655000000000001
+                },
+                {
+                  "candidate_id": "0xb5fcb5fafaab14ba94366b4eabf88522ea215a07f7f2c3f01661f3978bbf3839|BUY_YES|2026-05-14",
+                  "pnl": 9.655000000000001
+                },
+                {
+                  "candidate_id": "0x048e656370523039785f9039443d54f03d89da62816eed6f42cbce0e63f1eb01|BUY_YES|2026-05-11",
+                  "pnl": 9.559999999999999
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "Shanghai",
+              "rows": 10,
+              "cost": 0.46099999999999997,
+              "pnl": 15.39,
+              "roi": 33.38394793926248
+            },
+            {
+              "city": "Miami",
+              "rows": 11,
+              "cost": 0.4965,
+              "pnl": 15.035,
+              "roi": 30.28197381671702
+            },
+            {
+              "city": "Singapore",
+              "rows": 1,
+              "cost": 0.0345,
+              "pnl": 9.655000000000001,
+              "roi": 279.8550724637681
+            },
+            {
+              "city": "Guangzhou",
+              "rows": 3,
+              "cost": 0.048,
+              "pnl": 9.520000000000001,
+              "roi": 198.33333333333337
+            },
+            {
+              "city": "Wellington",
+              "rows": 3,
+              "cost": 0.1505,
+              "pnl": 8.495000000000001,
+              "roi": 56.4451827242525
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "Beijing",
+              "rows": 20,
+              "cost": 0.7045,
+              "pnl": -7.045,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "rows": 16,
+              "cost": 0.4675,
+              "pnl": -4.675,
+              "roi": -9.999999999999998
+            },
+            {
+              "city": "London",
+              "rows": 14,
+              "cost": 0.4575,
+              "pnl": -4.575,
+              "roi": -10.0
+            },
+            {
+              "city": "Seoul",
+              "rows": 11,
+              "cost": 0.4545,
+              "pnl": -4.545,
+              "roi": -10.0
+            },
+            {
+              "city": "Paris",
+              "rows": 9,
+              "cost": 0.426,
+              "pnl": -4.26,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Miami",
+              "event_date": "2026-05-13",
+              "rows": 1,
+              "cost": 0.0095,
+              "pnl": 9.905000000000001,
+              "roi": 1042.6315789473686
+            },
+            {
+              "city": "Tokyo",
+              "event_date": "2026-05-15",
+              "rows": 1,
+              "cost": 0.0305,
+              "pnl": 9.695,
+              "roi": 317.8688524590164
+            },
+            {
+              "city": "Singapore",
+              "event_date": "2026-05-29",
+              "rows": 1,
+              "cost": 0.0345,
+              "pnl": 9.655000000000001,
+              "roi": 279.8550724637681
+            },
+            {
+              "city": "LA",
+              "event_date": "2026-05-11",
+              "rows": 2,
+              "cost": 0.0465,
+              "pnl": 9.534999999999998,
+              "roi": 205.0537634408602
+            },
+            {
+              "city": "Madrid",
+              "event_date": "2026-05-07",
+              "rows": 1,
+              "cost": 0.0475,
+              "pnl": 9.525,
+              "roi": 200.5263157894737
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "Chengdu",
+              "event_date": "2026-05-29",
+              "rows": 7,
+              "cost": 0.173,
+              "pnl": -1.73,
+              "roi": -10.0
+            },
+            {
+              "city": "Shanghai",
+              "event_date": "2026-05-06",
+              "rows": 3,
+              "cost": 0.152,
+              "pnl": -1.52,
+              "roi": -10.0
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-09",
+              "rows": 2,
+              "cost": 0.134,
+              "pnl": -1.3399999999999999,
+              "roi": -9.999999999999998
+            },
+            {
+              "city": "Beijing",
+              "event_date": "2026-05-07",
+              "rows": 2,
+              "cost": 0.1335,
+              "pnl": -1.335,
+              "roi": -10.0
+            },
+            {
+              "city": "Beijing",
+              "event_date": "2026-05-15",
+              "rows": 3,
+              "cost": 0.1225,
+              "pnl": -1.225,
+              "roi": -10.000000000000002
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.15616438356164383,
+            "top3_city_positive_pnl_share": 0.406697108066971,
+            "top1_date_positive_pnl_share": 0.2402371876323592,
+            "top3_date_positive_pnl_share": 0.6569250317662009,
+            "top1_city_date_positive_pnl_share": 0.08081426182025866,
+            "top3_city_date_positive_pnl_share": 0.2386896748663975
+          }
+        },
+        "train": {
+          "rows": 267,
+          "active_dates": 18,
+          "cities": 46,
+          "city_dates": 182,
+          "eligible_rows": 67,
+          "paper_ordered": 201,
+          "live_filled": 0,
+          "cost": 10.366499999999998,
+          "pnl": 26.335,
+          "roi": 2.540394540105147,
+          "roi_ci": [
+            -2.4639919075858994,
+            7.981562380490311
+          ],
+          "hit_rate": 0.04868913857677903,
+          "avg_entry_price": 0.038825842696629205,
+          "avg_abs_edge": 0.18499737827715354,
+          "baseline_rows": 267,
+          "baseline_cost": 10.366499999999998,
+          "baseline_pnl": 26.335,
+          "baseline_roi": 2.540394540105147,
+          "excess_roi": 0.0,
+          "excess_ci": [
+            0.0,
+            0.0
+          ],
+          "positive_day_rate": 0.3888888888888889,
+          "worst_day": {
+            "event_date": "2026-05-30",
+            "rows": 30,
+            "cost": 0.927,
+            "pnl": -9.27,
+            "roi": -9.999999999999998
+          },
+          "best_day": {
+            "event_date": "2026-05-07",
+            "rows": 14,
+            "cost": 0.582,
+            "pnl": 14.180000000000001,
+            "roi": 24.364261168384886
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": 1.2422709387296236,
+              "rows": 253,
+              "removed": [
+                {
+                  "event_date": "2026-05-07",
+                  "pnl": 14.180000000000001
+                }
+              ]
+            },
+            "top3": {
+              "roi": -1.5089762251334309,
+              "rows": 219,
+              "removed": [
+                {
+                  "event_date": "2026-05-07",
+                  "pnl": 14.180000000000001
+                },
+                {
+                  "event_date": "2026-05-15",
+                  "pnl": 14.09
+                },
+                {
+                  "event_date": "2026-05-13",
+                  "pnl": 10.505
+                }
+              ]
+            },
+            "top5": {
+              "roi": -3.842364532019704,
+              "rows": 173,
+              "removed": [
+                {
+                  "event_date": "2026-05-07",
+                  "pnl": 14.180000000000001
+                },
+                {
+                  "event_date": "2026-05-15",
+                  "pnl": 14.09
+                },
+                {
+                  "event_date": "2026-05-13",
+                  "pnl": 10.505
+                },
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 7.505
+                },
+                {
+                  "event_date": "2026-05-08",
+                  "pnl": 5.015
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": 1.586366708506324,
+              "rows": 266,
+              "removed": [
+                {
+                  "candidate_id": "0x1065137ef1319e44e24ec7aec505313b9f21a33e929480346941d1791dc27411|BUY_YES|2026-05-13",
+                  "pnl": 9.905000000000001
+                }
+              ]
+            },
+            "top3": {
+              "roi": -0.2837155071900507,
+              "rows": 264,
+              "removed": [
+                {
+                  "candidate_id": "0x1065137ef1319e44e24ec7aec505313b9f21a33e929480346941d1791dc27411|BUY_YES|2026-05-13",
+                  "pnl": 9.905000000000001
+                },
+                {
+                  "candidate_id": "0x1424f8fa346688433fdccc81bbb39c09b861d880e166d9f38bed6af13c5e44d0|BUY_YES|2026-05-15",
+                  "pnl": 9.695
+                },
+                {
+                  "candidate_id": "0xa196c3814d84bdd8e8ed5f08f86d0897c683b4df632a647e2d520f17f72fc8dc|BUY_YES|2026-05-29",
+                  "pnl": 9.655000000000001
+                }
+              ]
+            },
+            "top5": {
+              "roi": -2.1672296470357866,
+              "rows": 262,
+              "removed": [
+                {
+                  "candidate_id": "0x1065137ef1319e44e24ec7aec505313b9f21a33e929480346941d1791dc27411|BUY_YES|2026-05-13",
+                  "pnl": 9.905000000000001
+                },
+                {
+                  "candidate_id": "0x1424f8fa346688433fdccc81bbb39c09b861d880e166d9f38bed6af13c5e44d0|BUY_YES|2026-05-15",
+                  "pnl": 9.695
+                },
+                {
+                  "candidate_id": "0xa196c3814d84bdd8e8ed5f08f86d0897c683b4df632a647e2d520f17f72fc8dc|BUY_YES|2026-05-29",
+                  "pnl": 9.655000000000001
+                },
+                {
+                  "candidate_id": "0xb5fcb5fafaab14ba94366b4eabf88522ea215a07f7f2c3f01661f3978bbf3839|BUY_YES|2026-05-14",
+                  "pnl": 9.655000000000001
+                },
+                {
+                  "candidate_id": "0x048e656370523039785f9039443d54f03d89da62816eed6f42cbce0e63f1eb01|BUY_YES|2026-05-11",
+                  "pnl": 9.559999999999999
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "Shanghai",
+              "rows": 10,
+              "cost": 0.46099999999999997,
+              "pnl": 15.39,
+              "roi": 33.38394793926248
+            },
+            {
+              "city": "Miami",
+              "rows": 11,
+              "cost": 0.4965,
+              "pnl": 15.035,
+              "roi": 30.28197381671702
+            },
+            {
+              "city": "Singapore",
+              "rows": 1,
+              "cost": 0.0345,
+              "pnl": 9.655000000000001,
+              "roi": 279.8550724637681
+            },
+            {
+              "city": "Guangzhou",
+              "rows": 3,
+              "cost": 0.048,
+              "pnl": 9.520000000000001,
+              "roi": 198.33333333333337
+            },
+            {
+              "city": "Wellington",
+              "rows": 3,
+              "cost": 0.1505,
+              "pnl": 8.495000000000001,
+              "roi": 56.4451827242525
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "Beijing",
+              "rows": 20,
+              "cost": 0.7045,
+              "pnl": -7.045,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "rows": 16,
+              "cost": 0.4675,
+              "pnl": -4.675,
+              "roi": -9.999999999999998
+            },
+            {
+              "city": "London",
+              "rows": 14,
+              "cost": 0.4575,
+              "pnl": -4.575,
+              "roi": -10.0
+            },
+            {
+              "city": "Seoul",
+              "rows": 11,
+              "cost": 0.4545,
+              "pnl": -4.545,
+              "roi": -10.0
+            },
+            {
+              "city": "Paris",
+              "rows": 9,
+              "cost": 0.426,
+              "pnl": -4.26,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Miami",
+              "event_date": "2026-05-13",
+              "rows": 1,
+              "cost": 0.0095,
+              "pnl": 9.905000000000001,
+              "roi": 1042.6315789473686
+            },
+            {
+              "city": "Tokyo",
+              "event_date": "2026-05-15",
+              "rows": 1,
+              "cost": 0.0305,
+              "pnl": 9.695,
+              "roi": 317.8688524590164
+            },
+            {
+              "city": "Singapore",
+              "event_date": "2026-05-29",
+              "rows": 1,
+              "cost": 0.0345,
+              "pnl": 9.655000000000001,
+              "roi": 279.8550724637681
+            },
+            {
+              "city": "LA",
+              "event_date": "2026-05-11",
+              "rows": 2,
+              "cost": 0.0465,
+              "pnl": 9.534999999999998,
+              "roi": 205.0537634408602
+            },
+            {
+              "city": "Madrid",
+              "event_date": "2026-05-07",
+              "rows": 1,
+              "cost": 0.0475,
+              "pnl": 9.525,
+              "roi": 200.5263157894737
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "Chengdu",
+              "event_date": "2026-05-29",
+              "rows": 7,
+              "cost": 0.173,
+              "pnl": -1.73,
+              "roi": -10.0
+            },
+            {
+              "city": "Shanghai",
+              "event_date": "2026-05-06",
+              "rows": 3,
+              "cost": 0.152,
+              "pnl": -1.52,
+              "roi": -10.0
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-09",
+              "rows": 2,
+              "cost": 0.134,
+              "pnl": -1.3399999999999999,
+              "roi": -9.999999999999998
+            },
+            {
+              "city": "Beijing",
+              "event_date": "2026-05-07",
+              "rows": 2,
+              "cost": 0.1335,
+              "pnl": -1.335,
+              "roi": -10.0
+            },
+            {
+              "city": "Beijing",
+              "event_date": "2026-05-15",
+              "rows": 3,
+              "cost": 0.1225,
+              "pnl": -1.225,
+              "roi": -10.000000000000002
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.15616438356164383,
+            "top3_city_positive_pnl_share": 0.406697108066971,
+            "top1_date_positive_pnl_share": 0.2402371876323592,
+            "top3_date_positive_pnl_share": 0.6569250317662009,
+            "top1_city_date_positive_pnl_share": 0.08081426182025866,
+            "top3_city_date_positive_pnl_share": 0.2386896748663975
+          }
+        },
+        "holdout": {
+          "rows": 0,
+          "active_dates": 0,
+          "cities": 0,
+          "city_dates": 0,
+          "eligible_rows": 0,
+          "paper_ordered": 0,
+          "live_filled": 0,
+          "cost": 0.0,
+          "pnl": 0.0,
+          "roi": null,
+          "roi_ci": [
+            null,
+            null
+          ],
+          "hit_rate": null,
+          "avg_entry_price": null,
+          "avg_abs_edge": null,
+          "baseline_rows": 0,
+          "baseline_cost": 0.0,
+          "baseline_pnl": 0.0,
+          "baseline_roi": null,
+          "excess_roi": null,
+          "excess_ci": [
+            null,
+            null
+          ],
+          "positive_day_rate": null,
+          "worst_day": null,
+          "best_day": null,
+          "top_day_removed": {
+            "top1": {
+              "roi": null,
+              "rows": 0,
+              "removed": []
+            },
+            "top3": {
+              "roi": null,
+              "rows": 0,
+              "removed": []
+            },
+            "top5": {
+              "roi": null,
+              "rows": 0,
+              "removed": []
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": null,
+              "rows": 0,
+              "removed": []
+            },
+            "top3": {
+              "roi": null,
+              "rows": 0,
+              "removed": []
+            },
+            "top5": {
+              "roi": null,
+              "rows": 0,
+              "removed": []
+            }
+          },
+          "top_cities": [],
+          "worst_cities": [],
+          "top_city_dates": [],
+          "worst_city_dates": [],
+          "concentration": {
+            "top1_city_positive_pnl_share": null,
+            "top3_city_positive_pnl_share": null,
+            "top1_date_positive_pnl_share": null,
+            "top3_date_positive_pnl_share": null,
+            "top1_city_date_positive_pnl_share": null,
+            "top3_city_date_positive_pnl_share": null
+          }
+        },
+        "gates": {
+          "significance": "NA",
+          "baseline": "NA",
+          "forward": "FAIL",
+          "conclusion": "inconclusive"
+        }
+      },
+      {
+        "selector": "price_010_020",
+        "description": "BUY_YES price 0.10-0.20",
+        "baseline": "same BUY_YES, same hour_bucket, same 5c price_bucket full opportunity",
+        "identity_baseline": true,
+        "overall": {
+          "rows": 148,
+          "active_dates": 24,
+          "cities": 46,
+          "city_dates": 143,
+          "eligible_rows": 48,
+          "paper_ordered": 97,
+          "live_filled": 3,
+          "cost": 21.582500000000003,
+          "pnl": 4.17499999999999,
+          "roi": 0.19344376230742452,
+          "roi_ci": [
+            -4.0243252419545055,
+            3.9949600955507507
+          ],
+          "hit_rate": 0.14864864864864866,
+          "avg_entry_price": 0.14582770270270273,
+          "avg_abs_edge": 0.16629391891891893,
+          "baseline_rows": 148,
+          "baseline_cost": 21.582500000000003,
+          "baseline_pnl": 4.17499999999999,
+          "baseline_roi": 0.19344376230742452,
+          "excess_roi": 0.0,
+          "excess_ci": [
+            0.0,
+            0.0
+          ],
+          "positive_day_rate": 0.3333333333333333,
+          "worst_day": {
+            "event_date": "2026-05-15",
+            "rows": 8,
+            "cost": 1.2355,
+            "pnl": -12.355,
+            "roi": -10.0
+          },
+          "best_day": {
+            "event_date": "2026-05-14",
+            "rows": 20,
+            "cost": 2.944,
+            "pnl": 20.56,
+            "roi": 6.983695652173913
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": -0.8790943477211152,
+              "rows": 128,
+              "removed": [
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 20.56
+                }
+              ]
+            },
+            "top3": {
+              "roi": -3.6657634514551143,
+              "rows": 97,
+              "removed": [
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 20.56
+                },
+                {
+                  "event_date": "2026-05-13",
+                  "pnl": 19.889999999999997
+                },
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 15.809999999999999
+                }
+              ]
+            },
+            "top5": {
+              "roi": -5.45918946531956,
+              "rows": 90,
+              "removed": [
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 20.56
+                },
+                {
+                  "event_date": "2026-05-13",
+                  "pnl": 19.889999999999997
+                },
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 15.809999999999999
+                },
+                {
+                  "event_date": "2026-05-20",
+                  "pnl": 11.549999999999997
+                },
+                {
+                  "event_date": "2026-05-23",
+                  "pnl": 8.5
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": -0.21321216357916833,
+              "rows": 147,
+              "removed": [
+                {
+                  "candidate_id": "0x4cbeceb0c15b05fe148bb4bd618e274d840d9bc0655df6b2096d515dd215ce24|BUY_YES|2026-05-14",
+                  "pnl": 8.75
+                }
+              ]
+            },
+            "top3": {
+              "roi": -1.0354101299865535,
+              "rows": 145,
+              "removed": [
+                {
+                  "candidate_id": "0x4cbeceb0c15b05fe148bb4bd618e274d840d9bc0655df6b2096d515dd215ce24|BUY_YES|2026-05-14",
+                  "pnl": 8.75
+                },
+                {
+                  "candidate_id": "0x81a0e4674706599d8380ac5df803986ffed1a8bcc4e89902a287780065f3039c|BUY_YES|2026-05-20",
+                  "pnl": 8.7
+                },
+                {
+                  "candidate_id": "0x120e7d702f47482e22666365a2fb245634e6a80886ce6583eda48afae3533fff|BUY_YES|2026-05-13",
+                  "pnl": 8.67
+                }
+              ]
+            },
+            "top5": {
+              "roi": -1.871279317187463,
+              "rows": 143,
+              "removed": [
+                {
+                  "candidate_id": "0x4cbeceb0c15b05fe148bb4bd618e274d840d9bc0655df6b2096d515dd215ce24|BUY_YES|2026-05-14",
+                  "pnl": 8.75
+                },
+                {
+                  "candidate_id": "0x81a0e4674706599d8380ac5df803986ffed1a8bcc4e89902a287780065f3039c|BUY_YES|2026-05-20",
+                  "pnl": 8.7
+                },
+                {
+                  "candidate_id": "0x120e7d702f47482e22666365a2fb245634e6a80886ce6583eda48afae3533fff|BUY_YES|2026-05-13",
+                  "pnl": 8.67
+                },
+                {
+                  "candidate_id": "0x27d6c4f0dd59839e65b90310d77d148338ea73f56d3d4caa291551ae3a5196d7|BUY_YES|2026-05-30",
+                  "pnl": 8.6
+                },
+                {
+                  "candidate_id": "0x27e8e50835df00a560cf6d8fb06e6ab452fcf954e64c5bb5b6e83bb3669e3f0c|BUY_YES|2026-05-13",
+                  "pnl": 8.59
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "Chengdu",
+              "rows": 3,
+              "cost": 0.445,
+              "pnl": 15.549999999999999,
+              "roi": 34.9438202247191
+            },
+            {
+              "city": "Busan",
+              "rows": 3,
+              "cost": 0.498,
+              "pnl": 15.02,
+              "roi": 30.160642570281123
+            },
+            {
+              "city": "Moscow",
+              "rows": 5,
+              "cost": 0.74,
+              "pnl": 12.6,
+              "roi": 17.027027027027028
+            },
+            {
+              "city": "Madrid",
+              "rows": 4,
+              "cost": 0.745,
+              "pnl": 12.55,
+              "roi": 16.845637583892618
+            },
+            {
+              "city": "NYC",
+              "rows": 8,
+              "cost": 1.041,
+              "pnl": 9.589999999999998,
+              "roi": 9.212295869356387
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "Shanghai",
+              "rows": 6,
+              "cost": 0.913,
+              "pnl": -9.13,
+              "roi": -10.0
+            },
+            {
+              "city": "Wuhan",
+              "rows": 6,
+              "cost": 0.892,
+              "pnl": -8.92,
+              "roi": -10.0
+            },
+            {
+              "city": "London",
+              "rows": 5,
+              "cost": 0.795,
+              "pnl": -7.95,
+              "roi": -10.0
+            },
+            {
+              "city": "Chongqing",
+              "rows": 5,
+              "cost": 0.76,
+              "pnl": -7.6,
+              "roi": -10.0
+            },
+            {
+              "city": "Chicago",
+              "rows": 4,
+              "cost": 0.625,
+              "pnl": -6.25,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Jeddah",
+              "event_date": "2026-05-14",
+              "rows": 1,
+              "cost": 0.125,
+              "pnl": 8.75,
+              "roi": 70.0
+            },
+            {
+              "city": "Ankara",
+              "event_date": "2026-05-20",
+              "rows": 1,
+              "cost": 0.13,
+              "pnl": 8.7,
+              "roi": 66.92307692307692
+            },
+            {
+              "city": "Helsinki",
+              "event_date": "2026-05-13",
+              "rows": 1,
+              "cost": 0.133,
+              "pnl": 8.67,
+              "roi": 65.18796992481202
+            },
+            {
+              "city": "Chengdu",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.14,
+              "pnl": 8.6,
+              "roi": 61.42857142857142
+            },
+            {
+              "city": "NYC",
+              "event_date": "2026-05-13",
+              "rows": 1,
+              "cost": 0.141,
+              "pnl": 8.59,
+              "roi": 60.921985815602845
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "KualaLumpur",
+              "event_date": "2026-05-14",
+              "rows": 2,
+              "cost": 0.365,
+              "pnl": -3.6500000000000004,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "Wuhan",
+              "event_date": "2026-05-28",
+              "rows": 2,
+              "cost": 0.28500000000000003,
+              "pnl": -2.85,
+              "roi": -10.0
+            },
+            {
+              "city": "BuenosAires",
+              "event_date": "2026-05-29",
+              "rows": 1,
+              "cost": 0.195,
+              "pnl": -1.9500000000000002,
+              "roi": -10.0
+            },
+            {
+              "city": "Madrid",
+              "event_date": "2026-05-21",
+              "rows": 1,
+              "cost": 0.195,
+              "pnl": -1.9500000000000002,
+              "roi": -10.0
+            },
+            {
+              "city": "Seoul",
+              "event_date": "2026-05-11",
+              "rows": 1,
+              "cost": 0.195,
+              "pnl": -1.9500000000000002,
+              "roi": -10.0
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.1325547694143722,
+            "top3_city_positive_pnl_share": 0.3679993180462024,
+            "top1_date_positive_pnl_share": 0.2313751969390052,
+            "top3_date_positive_pnl_share": 0.6331307674994373,
+            "top1_city_date_positive_pnl_share": 0.048270535665030055,
+            "top3_city_date_positive_pnl_share": 0.14409444475092398
+          }
+        },
+        "train": {
+          "rows": 143,
+          "active_dates": 20,
+          "cities": 45,
+          "city_dates": 138,
+          "eligible_rows": 43,
+          "paper_ordered": 95,
+          "live_filled": 1,
+          "cost": 20.7375,
+          "pnl": 12.624999999999998,
+          "roi": 0.6088004822182036,
+          "roi_ci": [
+            -4.292692667518244,
+            4.649104704388594
+          ],
+          "hit_rate": 0.15384615384615385,
+          "avg_entry_price": 0.14501748251748253,
+          "avg_abs_edge": 0.16815594405594403,
+          "baseline_rows": 143,
+          "baseline_cost": 20.7375,
+          "baseline_pnl": 12.624999999999998,
+          "baseline_roi": 0.6088004822182036,
+          "excess_roi": 0.0,
+          "excess_ci": [
+            0.0,
+            0.0
+          ],
+          "positive_day_rate": 0.4,
+          "worst_day": {
+            "event_date": "2026-05-15",
+            "rows": 8,
+            "cost": 1.2355,
+            "pnl": -12.355,
+            "roi": -10.0
+          },
+          "best_day": {
+            "event_date": "2026-05-14",
+            "rows": 20,
+            "cost": 2.944,
+            "pnl": 20.56,
+            "roi": 6.983695652173913
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": -0.44594936353162723,
+              "rows": 123,
+              "removed": [
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 20.56
+                }
+              ]
+            },
+            "top3": {
+              "roi": -3.265237400381639,
+              "rows": 92,
+              "removed": [
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 20.56
+                },
+                {
+                  "event_date": "2026-05-13",
+                  "pnl": 19.889999999999997
+                },
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 15.809999999999999
+                }
+              ]
+            },
+            "top5": {
+              "roi": -5.148967134252336,
+              "rows": 85,
+              "removed": [
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 20.56
+                },
+                {
+                  "event_date": "2026-05-13",
+                  "pnl": 19.889999999999997
+                },
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 15.809999999999999
+                },
+                {
+                  "event_date": "2026-05-20",
+                  "pnl": 11.549999999999997
+                },
+                {
+                  "event_date": "2026-05-23",
+                  "pnl": 8.5
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": 0.18799272286234067,
+              "rows": 142,
+              "removed": [
+                {
+                  "candidate_id": "0x4cbeceb0c15b05fe148bb4bd618e274d840d9bc0655df6b2096d515dd215ce24|BUY_YES|2026-05-14",
+                  "pnl": 8.75
+                }
+              ]
+            },
+            "top3": {
+              "roi": -0.6631612570333427,
+              "rows": 140,
+              "removed": [
+                {
+                  "candidate_id": "0x4cbeceb0c15b05fe148bb4bd618e274d840d9bc0655df6b2096d515dd215ce24|BUY_YES|2026-05-14",
+                  "pnl": 8.75
+                },
+                {
+                  "candidate_id": "0x81a0e4674706599d8380ac5df803986ffed1a8bcc4e89902a287780065f3039c|BUY_YES|2026-05-20",
+                  "pnl": 8.7
+                },
+                {
+                  "candidate_id": "0x120e7d702f47482e22666365a2fb245634e6a80886ce6583eda48afae3533fff|BUY_YES|2026-05-13",
+                  "pnl": 8.67
+                }
+              ]
+            },
+            "top5": {
+              "roi": -1.529013130029649,
+              "rows": 138,
+              "removed": [
+                {
+                  "candidate_id": "0x4cbeceb0c15b05fe148bb4bd618e274d840d9bc0655df6b2096d515dd215ce24|BUY_YES|2026-05-14",
+                  "pnl": 8.75
+                },
+                {
+                  "candidate_id": "0x81a0e4674706599d8380ac5df803986ffed1a8bcc4e89902a287780065f3039c|BUY_YES|2026-05-20",
+                  "pnl": 8.7
+                },
+                {
+                  "candidate_id": "0x120e7d702f47482e22666365a2fb245634e6a80886ce6583eda48afae3533fff|BUY_YES|2026-05-13",
+                  "pnl": 8.67
+                },
+                {
+                  "candidate_id": "0x27d6c4f0dd59839e65b90310d77d148338ea73f56d3d4caa291551ae3a5196d7|BUY_YES|2026-05-30",
+                  "pnl": 8.6
+                },
+                {
+                  "candidate_id": "0x27e8e50835df00a560cf6d8fb06e6ab452fcf954e64c5bb5b6e83bb3669e3f0c|BUY_YES|2026-05-13",
+                  "pnl": 8.59
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "Chengdu",
+              "rows": 3,
+              "cost": 0.445,
+              "pnl": 15.549999999999999,
+              "roi": 34.9438202247191
+            },
+            {
+              "city": "Busan",
+              "rows": 3,
+              "cost": 0.498,
+              "pnl": 15.02,
+              "roi": 30.160642570281123
+            },
+            {
+              "city": "Moscow",
+              "rows": 4,
+              "cost": 0.565,
+              "pnl": 14.35,
+              "roi": 25.398230088495577
+            },
+            {
+              "city": "Madrid",
+              "rows": 4,
+              "cost": 0.745,
+              "pnl": 12.55,
+              "roi": 16.845637583892618
+            },
+            {
+              "city": "NYC",
+              "rows": 7,
+              "cost": 0.926,
+              "pnl": 10.739999999999998,
+              "roi": 11.598272138228939
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "Wuhan",
+              "rows": 6,
+              "cost": 0.892,
+              "pnl": -8.92,
+              "roi": -10.0
+            },
+            {
+              "city": "London",
+              "rows": 5,
+              "cost": 0.795,
+              "pnl": -7.95,
+              "roi": -10.0
+            },
+            {
+              "city": "Chongqing",
+              "rows": 5,
+              "cost": 0.76,
+              "pnl": -7.6,
+              "roi": -10.0
+            },
+            {
+              "city": "Shanghai",
+              "rows": 5,
+              "cost": 0.728,
+              "pnl": -7.28,
+              "roi": -10.0
+            },
+            {
+              "city": "Chicago",
+              "rows": 4,
+              "cost": 0.625,
+              "pnl": -6.25,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Jeddah",
+              "event_date": "2026-05-14",
+              "rows": 1,
+              "cost": 0.125,
+              "pnl": 8.75,
+              "roi": 70.0
+            },
+            {
+              "city": "Ankara",
+              "event_date": "2026-05-20",
+              "rows": 1,
+              "cost": 0.13,
+              "pnl": 8.7,
+              "roi": 66.92307692307692
+            },
+            {
+              "city": "Helsinki",
+              "event_date": "2026-05-13",
+              "rows": 1,
+              "cost": 0.133,
+              "pnl": 8.67,
+              "roi": 65.18796992481202
+            },
+            {
+              "city": "Chengdu",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.14,
+              "pnl": 8.6,
+              "roi": 61.42857142857142
+            },
+            {
+              "city": "NYC",
+              "event_date": "2026-05-13",
+              "rows": 1,
+              "cost": 0.141,
+              "pnl": 8.59,
+              "roi": 60.921985815602845
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "KualaLumpur",
+              "event_date": "2026-05-14",
+              "rows": 2,
+              "cost": 0.365,
+              "pnl": -3.6500000000000004,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "Wuhan",
+              "event_date": "2026-05-28",
+              "rows": 2,
+              "cost": 0.28500000000000003,
+              "pnl": -2.85,
+              "roi": -10.0
+            },
+            {
+              "city": "Shenzhen",
+              "event_date": "2026-05-15",
+              "rows": 1,
+              "cost": 0.195,
+              "pnl": -1.9500000000000002,
+              "roi": -10.0
+            },
+            {
+              "city": "KualaLumpur",
+              "event_date": "2026-05-28",
+              "rows": 1,
+              "cost": 0.195,
+              "pnl": -1.9500000000000002,
+              "roi": -10.0
+            },
+            {
+              "city": "Seoul",
+              "event_date": "2026-05-11",
+              "rows": 1,
+              "cost": 0.195,
+              "pnl": -1.9500000000000002,
+              "roi": -10.0
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.12734419785439358,
+            "top3_city_positive_pnl_share": 0.3678650397182868,
+            "top1_date_positive_pnl_share": 0.2313751969390052,
+            "top3_date_positive_pnl_share": 0.6331307674994373,
+            "top1_city_date_positive_pnl_share": 0.048270535665030055,
+            "top3_city_date_positive_pnl_share": 0.14409444475092398
+          }
+        },
+        "holdout": {
+          "rows": 5,
+          "active_dates": 4,
+          "cities": 5,
+          "city_dates": 5,
+          "eligible_rows": 5,
+          "paper_ordered": 2,
+          "live_filled": 2,
+          "cost": 0.845,
+          "pnl": -8.45,
+          "roi": -10.0,
+          "roi_ci": [
+            -10.000000000000002,
+            -9.999999999999998
+          ],
+          "hit_rate": 0.0,
+          "avg_entry_price": 0.16899999999999998,
+          "avg_abs_edge": 0.11304,
+          "baseline_rows": 5,
+          "baseline_cost": 0.845,
+          "baseline_pnl": -8.45,
+          "baseline_roi": -10.0,
+          "excess_roi": 0.0,
+          "excess_ci": [
+            0.0,
+            0.0
+          ],
+          "positive_day_rate": 0.0,
+          "worst_day": {
+            "event_date": "2026-06-05",
+            "rows": 2,
+            "cost": 0.37,
+            "pnl": -3.6999999999999997,
+            "roi": -10.0
+          },
+          "best_day": {
+            "event_date": "2026-06-02",
+            "rows": 1,
+            "cost": 0.115,
+            "pnl": -1.1500000000000001,
+            "roi": -10.0
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": -10.0,
+              "rows": 4,
+              "removed": [
+                {
+                  "event_date": "2026-06-02",
+                  "pnl": -1.1500000000000001
+                }
+              ]
+            },
+            "top3": {
+              "roi": -10.0,
+              "rows": 2,
+              "removed": [
+                {
+                  "event_date": "2026-06-02",
+                  "pnl": -1.1500000000000001
+                },
+                {
+                  "event_date": "2026-06-04",
+                  "pnl": -1.75
+                },
+                {
+                  "event_date": "2026-06-03",
+                  "pnl": -1.85
+                }
+              ]
+            },
+            "top5": {
+              "roi": null,
+              "rows": 0,
+              "removed": [
+                {
+                  "event_date": "2026-06-02",
+                  "pnl": -1.1500000000000001
+                },
+                {
+                  "event_date": "2026-06-04",
+                  "pnl": -1.75
+                },
+                {
+                  "event_date": "2026-06-03",
+                  "pnl": -1.85
+                },
+                {
+                  "event_date": "2026-06-05",
+                  "pnl": -3.6999999999999997
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": -10.0,
+              "rows": 4,
+              "removed": [
+                {
+                  "candidate_id": "0xe8fe76118103ae25c847b596219a538d615d8db8df3b72386114700f6eb595ba|BUY_YES|2026-06-02",
+                  "pnl": -1.1500000000000001
+                }
+              ]
+            },
+            "top3": {
+              "roi": -10.0,
+              "rows": 2,
+              "removed": [
+                {
+                  "candidate_id": "0xe8fe76118103ae25c847b596219a538d615d8db8df3b72386114700f6eb595ba|BUY_YES|2026-06-02",
+                  "pnl": -1.1500000000000001
+                },
+                {
+                  "candidate_id": "0xe5e308c1c9bfd59cbcd88b964e8e2641d43affb83fc11cba1d5a34b1b4519c4c|BUY_YES|2026-06-04",
+                  "pnl": -1.75
+                },
+                {
+                  "candidate_id": "0xfce29ce5ccd78d4f1ef635e4ff4dbc652f3d9af562ca7e21ffc267ae7f22bd0e|BUY_YES|2026-06-05",
+                  "pnl": -1.7999999999999998
+                }
+              ]
+            },
+            "top5": {
+              "roi": null,
+              "rows": 0,
+              "removed": [
+                {
+                  "candidate_id": "0xe8fe76118103ae25c847b596219a538d615d8db8df3b72386114700f6eb595ba|BUY_YES|2026-06-02",
+                  "pnl": -1.1500000000000001
+                },
+                {
+                  "candidate_id": "0xe5e308c1c9bfd59cbcd88b964e8e2641d43affb83fc11cba1d5a34b1b4519c4c|BUY_YES|2026-06-04",
+                  "pnl": -1.75
+                },
+                {
+                  "candidate_id": "0xfce29ce5ccd78d4f1ef635e4ff4dbc652f3d9af562ca7e21ffc267ae7f22bd0e|BUY_YES|2026-06-05",
+                  "pnl": -1.7999999999999998
+                },
+                {
+                  "candidate_id": "0x59aced635427fb27f8457ac3f2ae4157579fdaae0843983de5a87328b3f5ca7f|BUY_YES|2026-06-03",
+                  "pnl": -1.85
+                },
+                {
+                  "candidate_id": "0xe320f1b0291444cecd68c6aafb51a3aeff4e4eff976509a1fa75ba3c8557f5bf|BUY_YES|2026-06-05",
+                  "pnl": -1.9
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "NYC",
+              "rows": 1,
+              "cost": 0.115,
+              "pnl": -1.1500000000000001,
+              "roi": -10.0
+            },
+            {
+              "city": "Moscow",
+              "rows": 1,
+              "cost": 0.175,
+              "pnl": -1.75,
+              "roi": -10.0
+            },
+            {
+              "city": "Guangzhou",
+              "rows": 1,
+              "cost": 0.18,
+              "pnl": -1.7999999999999998,
+              "roi": -10.0
+            },
+            {
+              "city": "Shanghai",
+              "rows": 1,
+              "cost": 0.185,
+              "pnl": -1.85,
+              "roi": -10.0
+            },
+            {
+              "city": "Warsaw",
+              "rows": 1,
+              "cost": 0.19,
+              "pnl": -1.9,
+              "roi": -10.0
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "Warsaw",
+              "rows": 1,
+              "cost": 0.19,
+              "pnl": -1.9,
+              "roi": -10.0
+            },
+            {
+              "city": "Shanghai",
+              "rows": 1,
+              "cost": 0.185,
+              "pnl": -1.85,
+              "roi": -10.0
+            },
+            {
+              "city": "Guangzhou",
+              "rows": 1,
+              "cost": 0.18,
+              "pnl": -1.7999999999999998,
+              "roi": -10.0
+            },
+            {
+              "city": "Moscow",
+              "rows": 1,
+              "cost": 0.175,
+              "pnl": -1.75,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "rows": 1,
+              "cost": 0.115,
+              "pnl": -1.1500000000000001,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "NYC",
+              "event_date": "2026-06-02",
+              "rows": 1,
+              "cost": 0.115,
+              "pnl": -1.1500000000000001,
+              "roi": -10.0
+            },
+            {
+              "city": "Moscow",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.175,
+              "pnl": -1.75,
+              "roi": -10.0
+            },
+            {
+              "city": "Guangzhou",
+              "event_date": "2026-06-05",
+              "rows": 1,
+              "cost": 0.18,
+              "pnl": -1.7999999999999998,
+              "roi": -10.0
+            },
+            {
+              "city": "Shanghai",
+              "event_date": "2026-06-03",
+              "rows": 1,
+              "cost": 0.185,
+              "pnl": -1.85,
+              "roi": -10.0
+            },
+            {
+              "city": "Warsaw",
+              "event_date": "2026-06-05",
+              "rows": 1,
+              "cost": 0.19,
+              "pnl": -1.9,
+              "roi": -10.0
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "Warsaw",
+              "event_date": "2026-06-05",
+              "rows": 1,
+              "cost": 0.19,
+              "pnl": -1.9,
+              "roi": -10.0
+            },
+            {
+              "city": "Shanghai",
+              "event_date": "2026-06-03",
+              "rows": 1,
+              "cost": 0.185,
+              "pnl": -1.85,
+              "roi": -10.0
+            },
+            {
+              "city": "Guangzhou",
+              "event_date": "2026-06-05",
+              "rows": 1,
+              "cost": 0.18,
+              "pnl": -1.7999999999999998,
+              "roi": -10.0
+            },
+            {
+              "city": "Moscow",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.175,
+              "pnl": -1.75,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "event_date": "2026-06-02",
+              "rows": 1,
+              "cost": 0.115,
+              "pnl": -1.1500000000000001,
+              "roi": -10.0
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": null,
+            "top3_city_positive_pnl_share": null,
+            "top1_date_positive_pnl_share": null,
+            "top3_date_positive_pnl_share": null,
+            "top1_city_date_positive_pnl_share": null,
+            "top3_city_date_positive_pnl_share": null
+          }
+        },
+        "gates": {
+          "significance": "NA",
+          "baseline": "NA",
+          "forward": "FAIL",
+          "conclusion": "inconclusive"
+        }
+      },
+      {
+        "selector": "price_020_025",
+        "description": "BUY_YES price 0.20-0.25",
+        "baseline": "same BUY_YES, same hour_bucket, same 5c price_bucket full opportunity",
+        "identity_baseline": true,
+        "overall": {
+          "rows": 82,
+          "active_dates": 30,
+          "cities": 31,
+          "city_dates": 80,
+          "eligible_rows": 36,
+          "paper_ordered": 50,
+          "live_filled": 12,
+          "cost": 18.185999999999996,
+          "pnl": -21.860000000000007,
+          "roi": -1.2020235345870456,
+          "roi_ci": [
+            -5.477405529482846,
+            3.637004887004885
+          ],
+          "hit_rate": 0.1951219512195122,
+          "avg_entry_price": 0.221780487804878,
+          "avg_abs_edge": 0.1588,
+          "baseline_rows": 82,
+          "baseline_cost": 18.185999999999996,
+          "baseline_pnl": -21.860000000000007,
+          "baseline_roi": -1.2020235345870456,
+          "excess_roi": 0.0,
+          "excess_ci": [
+            0.0,
+            0.0
+          ],
+          "positive_day_rate": 0.3,
+          "worst_day": {
+            "event_date": "2026-05-27",
+            "rows": 5,
+            "cost": 1.131,
+            "pnl": -11.31,
+            "roi": -10.0
+          },
+          "best_day": {
+            "event_date": "2026-05-30",
+            "rows": 5,
+            "cost": 1.09,
+            "pnl": 29.1,
+            "roi": 26.69724770642202
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": -2.9808142255498358,
+              "rows": 77,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 29.1
+                }
+              ]
+            },
+            "top3": {
+              "roi": -4.296939357455168,
+              "rows": 71,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 29.1
+                },
+                {
+                  "event_date": "2026-05-16",
+                  "pnl": 8.9
+                },
+                {
+                  "event_date": "2026-05-15",
+                  "pnl": 7.95
+                }
+              ]
+            },
+            "top5": {
+              "roi": -5.431107630050257,
+              "rows": 69,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 29.1
+                },
+                {
+                  "event_date": "2026-05-16",
+                  "pnl": 8.9
+                },
+                {
+                  "event_date": "2026-05-15",
+                  "pnl": 7.95
+                },
+                {
+                  "event_date": "2026-06-07",
+                  "pnl": 7.75
+                },
+                {
+                  "event_date": "2026-06-03",
+                  "pnl": 7.65
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": -1.660180140108974,
+              "rows": 81,
+              "removed": [
+                {
+                  "candidate_id": "0xcda65f93910bd858aebd66c91478ba8442c4aadcd31eb49865e287a6322de140|BUY_YES|2026-05-30",
+                  "pnl": 8.0
+                }
+              ]
+            },
+            "top3": {
+              "roi": -2.603550295857988,
+              "rows": 79,
+              "removed": [
+                {
+                  "candidate_id": "0xcda65f93910bd858aebd66c91478ba8442c4aadcd31eb49865e287a6322de140|BUY_YES|2026-05-30",
+                  "pnl": 8.0
+                },
+                {
+                  "candidate_id": "0x3ef92ed76e9dbd5fde49ca981a90bb0a3e0501a7af9165299f2d9a446c89d0d1|BUY_YES|2026-05-15",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                }
+              ]
+            },
+            "top5": {
+              "roi": -3.586379802926943,
+              "rows": 77,
+              "removed": [
+                {
+                  "candidate_id": "0xcda65f93910bd858aebd66c91478ba8442c4aadcd31eb49865e287a6322de140|BUY_YES|2026-05-30",
+                  "pnl": 8.0
+                },
+                {
+                  "candidate_id": "0x3ef92ed76e9dbd5fde49ca981a90bb0a3e0501a7af9165299f2d9a446c89d0d1|BUY_YES|2026-05-15",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x1b29a0e92477478b53e0e5ec944f15a1319e7670f716fa69e2055df2bc5c58f4|BUY_YES|2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "candidate_id": "0xfd7f8a07cc712f4aabba724f3c4c9dfabf81d2a7b484df394a95fa2d626161f7|BUY_YES|2026-05-16",
+                  "pnl": 7.8500000000000005
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "London",
+              "rows": 7,
+              "cost": 1.54,
+              "pnl": 14.6,
+              "roi": 9.48051948051948
+            },
+            {
+              "city": "Atlanta",
+              "rows": 4,
+              "cost": 0.905,
+              "pnl": 10.95,
+              "roi": 12.099447513812153
+            },
+            {
+              "city": "Miami",
+              "rows": 10,
+              "cost": 2.165,
+              "pnl": 8.35,
+              "roi": 3.8568129330254037
+            },
+            {
+              "city": "Wuhan",
+              "rows": 1,
+              "cost": 0.23,
+              "pnl": 7.7,
+              "roi": 33.47826086956522
+            },
+            {
+              "city": "Warsaw",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "Seoul",
+              "rows": 6,
+              "cost": 1.325,
+              "pnl": -13.25,
+              "roi": -10.0
+            },
+            {
+              "city": "Beijing",
+              "rows": 4,
+              "cost": 0.9199999999999999,
+              "pnl": -9.2,
+              "roi": -10.0
+            },
+            {
+              "city": "BuenosAires",
+              "rows": 4,
+              "cost": 0.84,
+              "pnl": -8.399999999999999,
+              "roi": -9.999999999999998
+            },
+            {
+              "city": "NYC",
+              "rows": 3,
+              "cost": 0.681,
+              "pnl": -6.8100000000000005,
+              "roi": -10.0
+            },
+            {
+              "city": "Ankara",
+              "rows": 3,
+              "cost": 0.64,
+              "pnl": -6.4,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Jeddah",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.2,
+              "pnl": 8.0,
+              "roi": 40.0
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-15",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "Madrid",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "London",
+              "event_date": "2026-06-01",
+              "rows": 1,
+              "cost": 0.21,
+              "pnl": 7.9,
+              "roi": 37.61904761904762
+            },
+            {
+              "city": "Atlanta",
+              "event_date": "2026-05-16",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": 7.8500000000000005,
+              "roi": 36.51162790697675
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "Helsinki",
+              "event_date": "2026-05-13",
+              "rows": 2,
+              "cost": 0.445,
+              "pnl": -4.45,
+              "roi": -10.0
+            },
+            {
+              "city": "Lagos",
+              "event_date": "2026-05-14",
+              "rows": 2,
+              "cost": 0.425,
+              "pnl": -4.25,
+              "roi": -10.0
+            },
+            {
+              "city": "CapeTown",
+              "event_date": "2026-05-22",
+              "rows": 1,
+              "cost": 0.245,
+              "pnl": -2.45,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "Seoul",
+              "event_date": "2026-05-25",
+              "rows": 1,
+              "cost": 0.245,
+              "pnl": -2.45,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "Seoul",
+              "event_date": "2026-05-22",
+              "rows": 1,
+              "cost": 0.245,
+              "pnl": -2.45,
+              "roi": -10.000000000000002
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.21159420289855072,
+            "top3_city_positive_pnl_share": 0.49130434782608695,
+            "top1_date_positive_pnl_share": 0.3642052565707134,
+            "top3_date_positive_pnl_share": 0.5750938673341677,
+            "top1_city_date_positive_pnl_share": 0.064464141821112,
+            "top3_city_date_positive_pnl_share": 0.19258662369057208
+          }
+        },
+        "train": {
+          "rows": 69,
+          "active_dates": 21,
+          "cities": 31,
+          "city_dates": 67,
+          "eligible_rows": 24,
+          "paper_ordered": 39,
+          "live_filled": 0,
+          "cost": 15.405999999999999,
+          "pnl": -34.059999999999995,
+          "roi": -2.210826950538751,
+          "roi_ci": [
+            -7.05368909341304,
+            3.3806273053401728
+          ],
+          "hit_rate": 0.17391304347826086,
+          "avg_entry_price": 0.22327536231884057,
+          "avg_abs_edge": 0.14815942028985507,
+          "baseline_rows": 69,
+          "baseline_cost": 15.405999999999999,
+          "baseline_pnl": -34.059999999999995,
+          "baseline_roi": -2.210826950538751,
+          "excess_roi": 0.0,
+          "excess_ci": [
+            0.0,
+            0.0
+          ],
+          "positive_day_rate": 0.23809523809523808,
+          "worst_day": {
+            "event_date": "2026-05-27",
+            "rows": 5,
+            "cost": 1.131,
+            "pnl": -11.31,
+            "roi": -10.0
+          },
+          "best_day": {
+            "event_date": "2026-05-30",
+            "rows": 5,
+            "cost": 1.09,
+            "pnl": 29.1,
+            "roi": 26.69724770642202
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": -4.411846884604638,
+              "rows": 64,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 29.1
+                }
+              ]
+            },
+            "top3": {
+              "roi": -6.154141989077764,
+              "rows": 58,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 29.1
+                },
+                {
+                  "event_date": "2026-05-16",
+                  "pnl": 8.9
+                },
+                {
+                  "event_date": "2026-05-15",
+                  "pnl": 7.95
+                }
+              ]
+            },
+            "top5": {
+              "roi": -7.4802620527465145,
+              "rows": 53,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 29.1
+                },
+                {
+                  "event_date": "2026-05-16",
+                  "pnl": 8.9
+                },
+                {
+                  "event_date": "2026-05-15",
+                  "pnl": 7.95
+                },
+                {
+                  "event_date": "2026-05-26",
+                  "pnl": 5.45
+                },
+                {
+                  "event_date": "2026-05-23",
+                  "pnl": 3.6000000000000005
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": -2.766013415756938,
+              "rows": 68,
+              "removed": [
+                {
+                  "candidate_id": "0xcda65f93910bd858aebd66c91478ba8442c4aadcd31eb49865e287a6322de140|BUY_YES|2026-05-30",
+                  "pnl": 8.0
+                }
+              ]
+            },
+            "top3": {
+              "roi": -3.9131610983362646,
+              "rows": 66,
+              "removed": [
+                {
+                  "candidate_id": "0xcda65f93910bd858aebd66c91478ba8442c4aadcd31eb49865e287a6322de140|BUY_YES|2026-05-30",
+                  "pnl": 8.0
+                },
+                {
+                  "candidate_id": "0x3ef92ed76e9dbd5fde49ca981a90bb0a3e0501a7af9165299f2d9a446c89d0d1|BUY_YES|2026-05-15",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0xfd7f8a07cc712f4aabba724f3c4c9dfabf81d2a7b484df394a95fa2d626161f7|BUY_YES|2026-05-16",
+                  "pnl": 7.8500000000000005
+                }
+              ]
+            },
+            "top5": {
+              "roi": -5.1171875,
+              "rows": 64,
+              "removed": [
+                {
+                  "candidate_id": "0xcda65f93910bd858aebd66c91478ba8442c4aadcd31eb49865e287a6322de140|BUY_YES|2026-05-30",
+                  "pnl": 8.0
+                },
+                {
+                  "candidate_id": "0x3ef92ed76e9dbd5fde49ca981a90bb0a3e0501a7af9165299f2d9a446c89d0d1|BUY_YES|2026-05-15",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0xfd7f8a07cc712f4aabba724f3c4c9dfabf81d2a7b484df394a95fa2d626161f7|BUY_YES|2026-05-16",
+                  "pnl": 7.8500000000000005
+                },
+                {
+                  "candidate_id": "0xeb1df1dbd34ca9154673ff80ae05b7bad94ec1e7bf9eef997295acf9d23f7474|BUY_YES|2026-05-30",
+                  "pnl": 7.75
+                },
+                {
+                  "candidate_id": "0x67e17fda24b0a4dd52fa4189ad5c4a63a4b7490d21702d0b110f9cfd27c8e141|BUY_YES|2026-05-30",
+                  "pnl": 7.75
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "Miami",
+              "rows": 6,
+              "cost": 1.3,
+              "pnl": 17.0,
+              "roi": 13.076923076923077
+            },
+            {
+              "city": "Atlanta",
+              "rows": 4,
+              "cost": 0.905,
+              "pnl": 10.95,
+              "roi": 12.099447513812153
+            },
+            {
+              "city": "Wuhan",
+              "rows": 1,
+              "cost": 0.23,
+              "pnl": 7.7,
+              "roi": 33.47826086956522
+            },
+            {
+              "city": "Warsaw",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            },
+            {
+              "city": "Seattle",
+              "rows": 2,
+              "cost": 0.46499999999999997,
+              "pnl": 5.35,
+              "roi": 11.505376344086022
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "Seoul",
+              "rows": 6,
+              "cost": 1.325,
+              "pnl": -13.25,
+              "roi": -10.0
+            },
+            {
+              "city": "Beijing",
+              "rows": 4,
+              "cost": 0.9199999999999999,
+              "pnl": -9.2,
+              "roi": -10.0
+            },
+            {
+              "city": "Shanghai",
+              "rows": 3,
+              "cost": 0.635,
+              "pnl": -6.35,
+              "roi": -10.0
+            },
+            {
+              "city": "BuenosAires",
+              "rows": 3,
+              "cost": 0.625,
+              "pnl": -6.25,
+              "roi": -10.0
+            },
+            {
+              "city": "KualaLumpur",
+              "rows": 2,
+              "cost": 0.485,
+              "pnl": -4.85,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Jeddah",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.2,
+              "pnl": 8.0,
+              "roi": 40.0
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-15",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "Atlanta",
+              "event_date": "2026-05-16",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": 7.8500000000000005,
+              "roi": 36.51162790697675
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": 7.75,
+              "roi": 34.44444444444444
+            },
+            {
+              "city": "London",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": 7.75,
+              "roi": 34.44444444444444
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "Helsinki",
+              "event_date": "2026-05-13",
+              "rows": 2,
+              "cost": 0.445,
+              "pnl": -4.45,
+              "roi": -10.0
+            },
+            {
+              "city": "Lagos",
+              "event_date": "2026-05-14",
+              "rows": 2,
+              "cost": 0.425,
+              "pnl": -4.25,
+              "roi": -10.0
+            },
+            {
+              "city": "CapeTown",
+              "event_date": "2026-05-22",
+              "rows": 1,
+              "cost": 0.245,
+              "pnl": -2.45,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "Busan",
+              "event_date": "2026-05-21",
+              "rows": 1,
+              "cost": 0.245,
+              "pnl": -2.45,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "Seoul",
+              "event_date": "2026-05-22",
+              "rows": 1,
+              "cost": 0.245,
+              "pnl": -2.45,
+              "roi": -10.000000000000002
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.308529945553539,
+            "top3_city_positive_pnl_share": 0.647005444646098,
+            "top1_date_positive_pnl_share": 0.5290909090909092,
+            "top3_date_positive_pnl_share": 0.8354545454545456,
+            "top1_city_date_positive_pnl_share": 0.08616047388260635,
+            "top3_city_date_positive_pnl_share": 0.2563274098007539
+          }
+        },
+        "holdout": {
+          "rows": 13,
+          "active_dates": 9,
+          "cities": 8,
+          "city_dates": 13,
+          "eligible_rows": 12,
+          "paper_ordered": 11,
+          "live_filled": 12,
+          "cost": 2.7800000000000002,
+          "pnl": 12.2,
+          "roi": 4.388489208633093,
+          "roi_ci": [
+            -5.717344753747324,
+            14.937915087541018
+          ],
+          "hit_rate": 0.3076923076923077,
+          "avg_entry_price": 0.21384615384615385,
+          "avg_abs_edge": 0.2152769230769231,
+          "baseline_rows": 13,
+          "baseline_cost": 2.7800000000000002,
+          "baseline_pnl": 12.2,
+          "baseline_roi": 4.388489208633093,
+          "excess_roi": 0.0,
+          "excess_ci": [
+            0.0,
+            0.0
+          ],
+          "positive_day_rate": 0.4444444444444444,
+          "worst_day": {
+            "event_date": "2026-06-05",
+            "rows": 2,
+            "cost": 0.43,
+            "pnl": -4.3,
+            "roi": -10.0
+          },
+          "best_day": {
+            "event_date": "2026-06-07",
+            "rows": 1,
+            "cost": 0.225,
+            "pnl": 7.75,
+            "roi": 34.44444444444444
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": 1.7416829745596871,
+              "rows": 12,
+              "removed": [
+                {
+                  "event_date": "2026-06-07",
+                  "pnl": 7.75
+                }
+              ]
+            },
+            "top3": {
+              "roi": -4.736842105263158,
+              "rows": 9,
+              "removed": [
+                {
+                  "event_date": "2026-06-07",
+                  "pnl": 7.75
+                },
+                {
+                  "event_date": "2026-06-03",
+                  "pnl": 7.65
+                },
+                {
+                  "event_date": "2026-06-01",
+                  "pnl": 5.800000000000001
+                }
+              ]
+            },
+            "top5": {
+              "roi": -10.0,
+              "rows": 5,
+              "removed": [
+                {
+                  "event_date": "2026-06-07",
+                  "pnl": 7.75
+                },
+                {
+                  "event_date": "2026-06-03",
+                  "pnl": 7.65
+                },
+                {
+                  "event_date": "2026-06-01",
+                  "pnl": 5.800000000000001
+                },
+                {
+                  "event_date": "2026-06-04",
+                  "pnl": 3.7
+                },
+                {
+                  "event_date": "2026-06-08",
+                  "pnl": -2.05
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": 1.6504854368932045,
+              "rows": 12,
+              "removed": [
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                }
+              ]
+            },
+            "top3": {
+              "roi": -5.327102803738317,
+              "rows": 10,
+              "removed": [
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x1b29a0e92477478b53e0e5ec944f15a1319e7670f716fa69e2055df2bc5c58f4|BUY_YES|2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "candidate_id": "0x72d6ee4d3368fec54c8dd0d39397f9209c5e89d79046faec78ff3112eb4352d2|BUY_YES|2026-06-07",
+                  "pnl": 7.75
+                }
+              ]
+            },
+            "top5": {
+              "roi": -9.999999999999998,
+              "rows": 8,
+              "removed": [
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x1b29a0e92477478b53e0e5ec944f15a1319e7670f716fa69e2055df2bc5c58f4|BUY_YES|2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "candidate_id": "0x72d6ee4d3368fec54c8dd0d39397f9209c5e89d79046faec78ff3112eb4352d2|BUY_YES|2026-06-07",
+                  "pnl": 7.75
+                },
+                {
+                  "candidate_id": "0x7b65cfb273f5dfd91c1828b5777d9299101e694dc69c4b1f9aaefc5d37c3368e|BUY_YES|2026-06-03",
+                  "pnl": 7.65
+                },
+                {
+                  "candidate_id": "0x91314467ac3d855f001bfa92aa36154a35c5d30b04f917ded5053e48af289b23|BUY_YES|2026-06-04",
+                  "pnl": -2.0
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "London",
+              "rows": 3,
+              "cost": 0.635,
+              "pnl": 13.65,
+              "roi": 21.496062992125985
+            },
+            {
+              "city": "Madrid",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "Munich",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            },
+            {
+              "city": "Ankara",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": -2.05,
+              "roi": -10.0
+            },
+            {
+              "city": "LA",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": -2.05,
+              "roi": -10.0
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "Miami",
+              "rows": 4,
+              "cost": 0.865,
+              "pnl": -8.65,
+              "roi": -10.0
+            },
+            {
+              "city": "BuenosAires",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": -2.15,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": -2.15,
+              "roi": -10.0
+            },
+            {
+              "city": "Ankara",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": -2.05,
+              "roi": -10.0
+            },
+            {
+              "city": "LA",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": -2.05,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Madrid",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "London",
+              "event_date": "2026-06-01",
+              "rows": 1,
+              "cost": 0.21,
+              "pnl": 7.9,
+              "roi": 37.61904761904762
+            },
+            {
+              "city": "London",
+              "event_date": "2026-06-07",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": 7.75,
+              "roi": 34.44444444444444
+            },
+            {
+              "city": "Munich",
+              "event_date": "2026-06-03",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            },
+            {
+              "city": "London",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.2,
+              "pnl": -2.0,
+              "roi": -10.0
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "Miami",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": -2.25,
+              "roi": -10.0
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-06-06",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": -2.25,
+              "roi": -10.0
+            },
+            {
+              "city": "BuenosAires",
+              "event_date": "2026-06-05",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": -2.15,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "event_date": "2026-06-05",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": -2.15,
+              "roi": -10.0
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-06-01",
+              "rows": 1,
+              "cost": 0.21,
+              "pnl": -2.1,
+              "roi": -10.0
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.4666666666666667,
+            "top3_city_positive_pnl_share": 1.0,
+            "top1_date_positive_pnl_share": 0.3112449799196787,
+            "top3_date_positive_pnl_share": 0.8514056224899599,
+            "top1_city_date_positive_pnl_share": 0.2544,
+            "top3_city_date_positive_pnl_share": 0.7552000000000001
+          }
+        },
+        "gates": {
+          "significance": "NA",
+          "baseline": "NA",
+          "forward": "FAIL",
+          "conclusion": "inconclusive"
+        }
+      },
+      {
+        "selector": "old_side_band_lottery_leg",
+        "description": "old side-band lottery leg: BUY_YES 0.20-0.25 and abs_edge>=0.20",
+        "baseline": "same BUY_YES, same hour_bucket, same 5c price_bucket full opportunity",
+        "identity_baseline": false,
+        "overall": {
+          "rows": 25,
+          "active_dates": 15,
+          "cities": 12,
+          "city_dates": 25,
+          "eligible_rows": 15,
+          "paper_ordered": 20,
+          "live_filled": 8,
+          "cost": 5.5009999999999994,
+          "pnl": 4.990000000000003,
+          "roi": 0.9071077985820766,
+          "roi_ci": [
+            -6.274638170920144,
+            8.441563165866755
+          ],
+          "hit_rate": 0.24,
+          "avg_entry_price": 0.22003999999999999,
+          "avg_abs_edge": 0.295228,
+          "baseline_rows": 82,
+          "baseline_cost": 18.185999999999996,
+          "baseline_pnl": -21.860000000000007,
+          "baseline_roi": -1.2020235345870456,
+          "excess_roi": 2.109131333169122,
+          "excess_ci": [
+            -3.7854099773714265,
+            8.745946308548618
+          ],
+          "positive_day_rate": 0.3333333333333333,
+          "worst_day": {
+            "event_date": "2026-05-11",
+            "rows": 2,
+            "cost": 0.44999999999999996,
+            "pnl": -4.5,
+            "roi": -10.000000000000002
+          },
+          "best_day": {
+            "event_date": "2026-05-30",
+            "rows": 3,
+            "cost": 0.665,
+            "pnl": 13.350000000000001,
+            "roi": 20.075187969924812
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": -1.72870140612076,
+              "rows": 22,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 13.350000000000001
+                }
+              ]
+            },
+            "top3": {
+              "roi": -5.445228877248918,
+              "rows": 20,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 13.350000000000001
+                },
+                {
+                  "event_date": "2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "event_date": "2026-05-23",
+                  "pnl": 7.65
+                }
+              ]
+            },
+            "top5": {
+              "roi": -10.0,
+              "rows": 15,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 13.350000000000001
+                },
+                {
+                  "event_date": "2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "event_date": "2026-05-23",
+                  "pnl": 7.65
+                },
+                {
+                  "event_date": "2026-05-26",
+                  "pnl": 5.45
+                },
+                {
+                  "event_date": "2026-06-04",
+                  "pnl": 3.7
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": -0.558912386706948,
+              "rows": 24,
+              "removed": [
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                }
+              ]
+            },
+            "top3": {
+              "roi": -3.8284303641226085,
+              "rows": 22,
+              "removed": [
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x1b29a0e92477478b53e0e5ec944f15a1319e7670f716fa69e2055df2bc5c58f4|BUY_YES|2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "candidate_id": "0xeb1df1dbd34ca9154673ff80ae05b7bad94ec1e7bf9eef997295acf9d23f7474|BUY_YES|2026-05-30",
+                  "pnl": 7.75
+                }
+              ]
+            },
+            "top5": {
+              "roi": -7.725204731574157,
+              "rows": 20,
+              "removed": [
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x1b29a0e92477478b53e0e5ec944f15a1319e7670f716fa69e2055df2bc5c58f4|BUY_YES|2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "candidate_id": "0xeb1df1dbd34ca9154673ff80ae05b7bad94ec1e7bf9eef997295acf9d23f7474|BUY_YES|2026-05-30",
+                  "pnl": 7.75
+                },
+                {
+                  "candidate_id": "0x46e877c67adadd62e738382704a39c8eaa2692b7167ccb56a6a8a167834bd638|BUY_YES|2026-05-26",
+                  "pnl": 7.7
+                },
+                {
+                  "candidate_id": "0xa59ceeea7692546bcccf3be250a0ecd69fc55c92d5fc76be6db9d21f236ebb61|BUY_YES|2026-05-23",
+                  "pnl": 7.65
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "Madrid",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "Warsaw",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            },
+            {
+              "city": "Miami",
+              "rows": 6,
+              "cost": 1.32,
+              "pnl": 6.8,
+              "roi": 5.151515151515151
+            },
+            {
+              "city": "Houston",
+              "rows": 2,
+              "cost": 0.47,
+              "pnl": 5.300000000000001,
+              "roi": 11.276595744680852
+            },
+            {
+              "city": "London",
+              "rows": 3,
+              "cost": 0.62,
+              "pnl": 3.8000000000000007,
+              "roi": 6.129032258064517
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "NYC",
+              "rows": 3,
+              "cost": 0.681,
+              "pnl": -6.8100000000000005,
+              "roi": -10.0
+            },
+            {
+              "city": "BuenosAires",
+              "rows": 3,
+              "cost": 0.625,
+              "pnl": -6.25,
+              "roi": -10.0
+            },
+            {
+              "city": "LA",
+              "rows": 2,
+              "cost": 0.43,
+              "pnl": -4.3,
+              "roi": -10.0
+            },
+            {
+              "city": "Chicago",
+              "rows": 1,
+              "cost": 0.24,
+              "pnl": -2.4,
+              "roi": -10.0
+            },
+            {
+              "city": "Amsterdam",
+              "rows": 1,
+              "cost": 0.23,
+              "pnl": -2.3000000000000003,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Madrid",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "London",
+              "event_date": "2026-06-01",
+              "rows": 1,
+              "cost": 0.21,
+              "pnl": 7.9,
+              "roi": 37.61904761904762
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": 7.75,
+              "roi": 34.44444444444444
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-26",
+              "rows": 1,
+              "cost": 0.23,
+              "pnl": 7.7,
+              "roi": 33.47826086956522
+            },
+            {
+              "city": "Warsaw",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "Chicago",
+              "event_date": "2026-05-11",
+              "rows": 1,
+              "cost": 0.24,
+              "pnl": -2.4,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "event_date": "2026-05-27",
+              "rows": 1,
+              "cost": 0.236,
+              "pnl": -2.36,
+              "roi": -10.0
+            },
+            {
+              "city": "Houston",
+              "event_date": "2026-05-28",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": -2.3499999999999996,
+              "roi": -9.999999999999998
+            },
+            {
+              "city": "Amsterdam",
+              "event_date": "2026-05-14",
+              "rows": 1,
+              "cost": 0.23,
+              "pnl": -2.3000000000000003,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "event_date": "2026-05-07",
+              "rows": 1,
+              "cost": 0.23,
+              "pnl": -2.3000000000000003,
+              "roi": -10.0
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.2523809523809524,
+            "top3_city_positive_pnl_share": 0.7111111111111111,
+            "top1_date_positive_pnl_share": 0.3508541392904074,
+            "top3_date_positive_pnl_share": 0.7595269382391588,
+            "top1_city_date_positive_pnl_share": 0.17060085836909872,
+            "top3_city_date_positive_pnl_share": 0.5064377682403434
+          }
+        },
+        "train": {
+          "rows": 17,
+          "active_dates": 10,
+          "cities": 11,
+          "city_dates": 17,
+          "eligible_rows": 8,
+          "paper_ordered": 13,
+          "live_filled": 0,
+          "cost": 3.8209999999999997,
+          "pnl": 1.7900000000000027,
+          "roi": 0.4684637529442562,
+          "roi_ci": [
+            -9.999999999999998,
+            10.156887801177616
+          ],
+          "hit_rate": 0.23529411764705882,
+          "avg_entry_price": 0.22476470588235292,
+          "avg_abs_edge": 0.3088882352941176,
+          "baseline_rows": 69,
+          "baseline_cost": 15.405999999999999,
+          "baseline_pnl": -34.059999999999995,
+          "baseline_roi": -2.210826950538751,
+          "excess_roi": 2.679290703483007,
+          "excess_ci": [
+            -4.501370368619531,
+            10.5208945518211
+          ],
+          "positive_day_rate": 0.3,
+          "worst_day": {
+            "event_date": "2026-05-11",
+            "rows": 2,
+            "cost": 0.44999999999999996,
+            "pnl": -4.5,
+            "roi": -10.000000000000002
+          },
+          "best_day": {
+            "event_date": "2026-05-30",
+            "rows": 3,
+            "cost": 0.665,
+            "pnl": 13.350000000000001,
+            "roi": 20.075187969924812
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": -3.6628643852978455,
+              "rows": 14,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 13.350000000000001
+                }
+              ]
+            },
+            "top3": {
+              "roi": -10.0,
+              "rows": 11,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 13.350000000000001
+                },
+                {
+                  "event_date": "2026-05-23",
+                  "pnl": 7.65
+                },
+                {
+                  "event_date": "2026-05-26",
+                  "pnl": 5.45
+                }
+              ]
+            },
+            "top5": {
+              "roi": -10.0,
+              "rows": 9,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 13.350000000000001
+                },
+                {
+                  "event_date": "2026-05-23",
+                  "pnl": 7.65
+                },
+                {
+                  "event_date": "2026-05-26",
+                  "pnl": 5.45
+                },
+                {
+                  "event_date": "2026-05-16",
+                  "pnl": -2.2
+                },
+                {
+                  "event_date": "2026-05-25",
+                  "pnl": -2.25
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": -1.6573971078976633,
+              "rows": 16,
+              "removed": [
+                {
+                  "candidate_id": "0xeb1df1dbd34ca9154673ff80ae05b7bad94ec1e7bf9eef997295acf9d23f7474|BUY_YES|2026-05-30",
+                  "pnl": 7.75
+                }
+              ]
+            },
+            "top3": {
+              "roi": -6.806132226125839,
+              "rows": 14,
+              "removed": [
+                {
+                  "candidate_id": "0xeb1df1dbd34ca9154673ff80ae05b7bad94ec1e7bf9eef997295acf9d23f7474|BUY_YES|2026-05-30",
+                  "pnl": 7.75
+                },
+                {
+                  "candidate_id": "0x46e877c67adadd62e738382704a39c8eaa2692b7167ccb56a6a8a167834bd638|BUY_YES|2026-05-26",
+                  "pnl": 7.7
+                },
+                {
+                  "candidate_id": "0x946a4694ebab87b0d4c0381db220b3062a0e68f38a868f56763e85a1d23e421c|BUY_YES|2026-05-30",
+                  "pnl": 7.65
+                }
+              ]
+            },
+            "top5": {
+              "roi": -9.999999999999998,
+              "rows": 12,
+              "removed": [
+                {
+                  "candidate_id": "0xeb1df1dbd34ca9154673ff80ae05b7bad94ec1e7bf9eef997295acf9d23f7474|BUY_YES|2026-05-30",
+                  "pnl": 7.75
+                },
+                {
+                  "candidate_id": "0x46e877c67adadd62e738382704a39c8eaa2692b7167ccb56a6a8a167834bd638|BUY_YES|2026-05-26",
+                  "pnl": 7.7
+                },
+                {
+                  "candidate_id": "0x946a4694ebab87b0d4c0381db220b3062a0e68f38a868f56763e85a1d23e421c|BUY_YES|2026-05-30",
+                  "pnl": 7.65
+                },
+                {
+                  "candidate_id": "0xa59ceeea7692546bcccf3be250a0ecd69fc55c92d5fc76be6db9d21f236ebb61|BUY_YES|2026-05-23",
+                  "pnl": 7.65
+                },
+                {
+                  "candidate_id": "0x9b47650d6388b3033773f8cda1fc4e7898d321f4c70d42c78b51b86915401986|BUY_YES|2026-05-30",
+                  "pnl": -2.05
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "Miami",
+              "rows": 4,
+              "cost": 0.89,
+              "pnl": 11.1,
+              "roi": 12.47191011235955
+            },
+            {
+              "city": "Warsaw",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            },
+            {
+              "city": "Houston",
+              "rows": 2,
+              "cost": 0.47,
+              "pnl": 5.300000000000001,
+              "roi": 11.276595744680852
+            },
+            {
+              "city": "London",
+              "rows": 1,
+              "cost": 0.21,
+              "pnl": -2.1,
+              "roi": -10.0
+            },
+            {
+              "city": "Munich",
+              "rows": 1,
+              "cost": 0.22,
+              "pnl": -2.2,
+              "roi": -10.0
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "NYC",
+              "rows": 2,
+              "cost": 0.46599999999999997,
+              "pnl": -4.66,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "BuenosAires",
+              "rows": 2,
+              "cost": 0.41,
+              "pnl": -4.1,
+              "roi": -10.0
+            },
+            {
+              "city": "Chicago",
+              "rows": 1,
+              "cost": 0.24,
+              "pnl": -2.4,
+              "roi": -10.0
+            },
+            {
+              "city": "Amsterdam",
+              "rows": 1,
+              "cost": 0.23,
+              "pnl": -2.3000000000000003,
+              "roi": -10.0
+            },
+            {
+              "city": "Atlanta",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": -2.25,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Miami",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": 7.75,
+              "roi": 34.44444444444444
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-26",
+              "rows": 1,
+              "cost": 0.23,
+              "pnl": 7.7,
+              "roi": 33.47826086956522
+            },
+            {
+              "city": "Warsaw",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            },
+            {
+              "city": "Houston",
+              "event_date": "2026-05-23",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            },
+            {
+              "city": "BuenosAires",
+              "event_date": "2026-05-28",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": -2.05,
+              "roi": -10.0
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "Chicago",
+              "event_date": "2026-05-11",
+              "rows": 1,
+              "cost": 0.24,
+              "pnl": -2.4,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "event_date": "2026-05-27",
+              "rows": 1,
+              "cost": 0.236,
+              "pnl": -2.36,
+              "roi": -10.0
+            },
+            {
+              "city": "Houston",
+              "event_date": "2026-05-28",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": -2.3499999999999996,
+              "roi": -9.999999999999998
+            },
+            {
+              "city": "Amsterdam",
+              "event_date": "2026-05-14",
+              "rows": 1,
+              "cost": 0.23,
+              "pnl": -2.3000000000000003,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "event_date": "2026-05-07",
+              "rows": 1,
+              "cost": 0.23,
+              "pnl": -2.3000000000000003,
+              "roi": -10.0
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.46153846153846156,
+            "top3_city_positive_pnl_share": 1.0000000000000002,
+            "top1_date_positive_pnl_share": 0.504725897920605,
+            "top3_date_positive_pnl_share": 0.9999999999999999,
+            "top1_city_date_positive_pnl_share": 0.25203252032520324,
+            "top3_city_date_positive_pnl_share": 0.751219512195122
+          }
+        },
+        "holdout": {
+          "rows": 8,
+          "active_dates": 5,
+          "cities": 6,
+          "city_dates": 8,
+          "eligible_rows": 7,
+          "paper_ordered": 7,
+          "live_filled": 8,
+          "cost": 1.6800000000000002,
+          "pnl": 3.200000000000003,
+          "roi": 1.9047619047619062,
+          "roi_ci": [
+            -10.0,
+            17.303754266211605
+          ],
+          "hit_rate": 0.25,
+          "avg_entry_price": 0.21000000000000002,
+          "avg_abs_edge": 0.2662,
+          "baseline_rows": 13,
+          "baseline_cost": 2.7800000000000002,
+          "baseline_pnl": 12.2,
+          "baseline_roi": 4.388489208633093,
+          "excess_roi": -2.483727303871187,
+          "excess_ci": [
+            -16.56983173443007,
+            10.3350477254005
+          ],
+          "positive_day_rate": 0.4,
+          "worst_day": {
+            "event_date": "2026-06-05",
+            "rows": 2,
+            "cost": 0.43,
+            "pnl": -4.3,
+            "roi": -10.0
+          },
+          "best_day": {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.21,
+            "pnl": 7.9,
+            "roi": 37.61904761904762
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": -3.197278911564625,
+              "rows": 7,
+              "removed": [
+                {
+                  "event_date": "2026-06-01",
+                  "pnl": 7.9
+                }
+              ]
+            },
+            "top3": {
+              "roi": -10.0,
+              "rows": 3,
+              "removed": [
+                {
+                  "event_date": "2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "event_date": "2026-06-04",
+                  "pnl": 3.7
+                },
+                {
+                  "event_date": "2026-06-09",
+                  "pnl": -2.05
+                }
+              ]
+            },
+            "top5": {
+              "roi": null,
+              "rows": 0,
+              "removed": [
+                {
+                  "event_date": "2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "event_date": "2026-06-04",
+                  "pnl": 3.7
+                },
+                {
+                  "event_date": "2026-06-09",
+                  "pnl": -2.05
+                },
+                {
+                  "event_date": "2026-06-10",
+                  "pnl": -2.05
+                },
+                {
+                  "event_date": "2026-06-05",
+                  "pnl": -4.3
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": -3.220338983050847,
+              "rows": 7,
+              "removed": [
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                }
+              ]
+            },
+            "top3": {
+              "roi": -10.000000000000002,
+              "rows": 5,
+              "removed": [
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x1b29a0e92477478b53e0e5ec944f15a1319e7670f716fa69e2055df2bc5c58f4|BUY_YES|2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "candidate_id": "0x91314467ac3d855f001bfa92aa36154a35c5d30b04f917ded5053e48af289b23|BUY_YES|2026-06-04",
+                  "pnl": -2.0
+                }
+              ]
+            },
+            "top5": {
+              "roi": -10.0,
+              "rows": 3,
+              "removed": [
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x1b29a0e92477478b53e0e5ec944f15a1319e7670f716fa69e2055df2bc5c58f4|BUY_YES|2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "candidate_id": "0x91314467ac3d855f001bfa92aa36154a35c5d30b04f917ded5053e48af289b23|BUY_YES|2026-06-04",
+                  "pnl": -2.0
+                },
+                {
+                  "candidate_id": "0x7ebdd57908fb12fd43fcfff459f7b58dd7ea538f332d0d2f6f9ebf2286a9793c|BUY_YES|2026-06-10",
+                  "pnl": -2.05
+                },
+                {
+                  "candidate_id": "0xe1f5560545a85ebf514c6ac77c9a711af9926a191da0b513e5f6bf4f0421d13f|BUY_YES|2026-06-09",
+                  "pnl": -2.05
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "Madrid",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "London",
+              "rows": 2,
+              "cost": 0.41000000000000003,
+              "pnl": 5.9,
+              "roi": 14.390243902439025
+            },
+            {
+              "city": "LA",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": -2.05,
+              "roi": -10.0
+            },
+            {
+              "city": "BuenosAires",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": -2.15,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": -2.15,
+              "roi": -10.0
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "Miami",
+              "rows": 2,
+              "cost": 0.43,
+              "pnl": -4.3,
+              "roi": -10.0
+            },
+            {
+              "city": "BuenosAires",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": -2.15,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": -2.15,
+              "roi": -10.0
+            },
+            {
+              "city": "LA",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": -2.05,
+              "roi": -10.0
+            },
+            {
+              "city": "London",
+              "rows": 2,
+              "cost": 0.41000000000000003,
+              "pnl": 5.9,
+              "roi": 14.390243902439025
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Madrid",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "London",
+              "event_date": "2026-06-01",
+              "rows": 1,
+              "cost": 0.21,
+              "pnl": 7.9,
+              "roi": 37.61904761904762
+            },
+            {
+              "city": "London",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.2,
+              "pnl": -2.0,
+              "roi": -10.0
+            },
+            {
+              "city": "LA",
+              "event_date": "2026-06-10",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": -2.05,
+              "roi": -10.0
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-06-09",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": -2.05,
+              "roi": -10.0
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "Miami",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": -2.25,
+              "roi": -10.0
+            },
+            {
+              "city": "BuenosAires",
+              "event_date": "2026-06-05",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": -2.15,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "event_date": "2026-06-05",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": -2.15,
+              "roi": -10.0
+            },
+            {
+              "city": "LA",
+              "event_date": "2026-06-10",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": -2.05,
+              "roi": -10.0
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-06-09",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": -2.05,
+              "roi": -10.0
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.5740072202166064,
+            "top3_city_positive_pnl_share": 1.0,
+            "top1_date_positive_pnl_share": 0.6810344827586207,
+            "top3_date_positive_pnl_share": 1.0,
+            "top1_city_date_positive_pnl_share": 0.501577287066246,
+            "top3_city_date_positive_pnl_share": 1.0
+          }
+        },
+        "gates": {
+          "significance": "FAIL",
+          "baseline": "FAIL",
+          "forward": "FAIL",
+          "conclusion": "inconclusive"
+        }
+      }
+    ],
+    "eligible_control": [
+      {
+        "selector": "price_lt_010",
+        "description": "BUY_YES price <0.10",
+        "note": "eligible=1 control only; not used as main denominator",
+        "overall": {
+          "rows": 67,
+          "active_dates": 10,
+          "cities": 18,
+          "city_dates": 42,
+          "eligible_rows": 67,
+          "paper_ordered": 58,
+          "live_filled": 0,
+          "cost": 2.4155,
+          "pnl": 25.845000000000002,
+          "roi": 10.699648105982199,
+          "roi_ci": [
+            -4.391710562428911,
+            28.38088818800203
+          ],
+          "hit_rate": 0.07462686567164178,
+          "avg_entry_price": 0.03605223880597015,
+          "avg_abs_edge": 0.1952298507462686,
+          "baseline_rows": 67,
+          "baseline_cost": 2.4155,
+          "baseline_pnl": 25.845000000000002,
+          "baseline_roi": 10.699648105982199,
+          "excess_roi": 0.0,
+          "excess_ci": [
+            0.0,
+            0.0
+          ],
+          "positive_day_rate": 0.4,
+          "worst_day": {
+            "event_date": "2026-05-30",
+            "rows": 13,
+            "cost": 0.365,
+            "pnl": -3.6500000000000004,
+            "roi": -10.000000000000002
+          },
+          "best_day": {
+            "event_date": "2026-05-13",
+            "rows": 10,
+            "cost": 0.301,
+            "pnl": 16.990000000000002,
+            "roi": 56.4451827242525
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": 4.187751241428233,
+              "rows": 57,
+              "removed": [
+                {
+                  "event_date": "2026-05-13",
+                  "pnl": 16.990000000000002
+                }
+              ]
+            },
+            "top3": {
+              "roi": -3.970455230630086,
+              "rows": 47,
+              "removed": [
+                {
+                  "event_date": "2026-05-13",
+                  "pnl": 16.990000000000002
+                },
+                {
+                  "event_date": "2026-05-15",
+                  "pnl": 8.47
+                },
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 6.97
+                }
+              ]
+            },
+            "top5": {
+              "roi": -10.0,
+              "rows": 29,
+              "removed": [
+                {
+                  "event_date": "2026-05-13",
+                  "pnl": 16.990000000000002
+                },
+                {
+                  "event_date": "2026-05-15",
+                  "pnl": 8.47
+                },
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 6.97
+                },
+                {
+                  "event_date": "2026-05-29",
+                  "pnl": 3.9400000000000013
+                },
+                {
+                  "event_date": "2026-05-22",
+                  "pnl": -0.05
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": 6.625103906899418,
+              "rows": 66,
+              "removed": [
+                {
+                  "candidate_id": "0x1065137ef1319e44e24ec7aec505313b9f21a33e929480346941d1791dc27411|BUY_YES|2026-05-13",
+                  "pnl": 9.905000000000001
+                }
+              ]
+            },
+            "top3": {
+              "roi": -1.4566424604869725,
+              "rows": 64,
+              "removed": [
+                {
+                  "candidate_id": "0x1065137ef1319e44e24ec7aec505313b9f21a33e929480346941d1791dc27411|BUY_YES|2026-05-13",
+                  "pnl": 9.905000000000001
+                },
+                {
+                  "candidate_id": "0x1424f8fa346688433fdccc81bbb39c09b861d880e166d9f38bed6af13c5e44d0|BUY_YES|2026-05-15",
+                  "pnl": 9.695
+                },
+                {
+                  "candidate_id": "0xa196c3814d84bdd8e8ed5f08f86d0897c683b4df632a647e2d520f17f72fc8dc|BUY_YES|2026-05-29",
+                  "pnl": 9.655000000000001
+                }
+              ]
+            },
+            "top5": {
+              "roi": -10.000000000000002,
+              "rows": 62,
+              "removed": [
+                {
+                  "candidate_id": "0x1065137ef1319e44e24ec7aec505313b9f21a33e929480346941d1791dc27411|BUY_YES|2026-05-13",
+                  "pnl": 9.905000000000001
+                },
+                {
+                  "candidate_id": "0x1424f8fa346688433fdccc81bbb39c09b861d880e166d9f38bed6af13c5e44d0|BUY_YES|2026-05-15",
+                  "pnl": 9.695
+                },
+                {
+                  "candidate_id": "0xa196c3814d84bdd8e8ed5f08f86d0897c683b4df632a647e2d520f17f72fc8dc|BUY_YES|2026-05-29",
+                  "pnl": 9.655000000000001
+                },
+                {
+                  "candidate_id": "0xb246d18ea6d3ca54a945d9b7269b70adf0b9b9b4a1d9a63cefcfd69e86524a6c|BUY_YES|2026-05-13",
+                  "pnl": 9.325
+                },
+                {
+                  "candidate_id": "0x96ae6de357c289bffdfcc2d182ae26cfb2644fea6eae8c4dc125934af324446d|BUY_YES|2026-05-14",
+                  "pnl": 9.245
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "Miami",
+              "rows": 7,
+              "cost": 0.2465,
+              "pnl": 17.535,
+              "roi": 71.13590263691684
+            },
+            {
+              "city": "Singapore",
+              "rows": 1,
+              "cost": 0.0345,
+              "pnl": 9.655000000000001,
+              "roi": 279.8550724637681
+            },
+            {
+              "city": "Chicago",
+              "rows": 2,
+              "cost": 0.07550000000000001,
+              "pnl": 9.245,
+              "roi": 122.45033112582779
+            },
+            {
+              "city": "Tokyo",
+              "rows": 7,
+              "cost": 0.257,
+              "pnl": 7.430000000000001,
+              "roi": 28.910505836575876
+            },
+            {
+              "city": "BuenosAires",
+              "rows": 1,
+              "cost": 0.0145,
+              "pnl": -0.14500000000000002,
+              "roi": -10.0
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "Beijing",
+              "rows": 9,
+              "cost": 0.284,
+              "pnl": -2.8400000000000003,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "NYC",
+              "rows": 8,
+              "cost": 0.242,
+              "pnl": -2.42,
+              "roi": -10.0
+            },
+            {
+              "city": "Chengdu",
+              "rows": 8,
+              "cost": 0.2025,
+              "pnl": -2.025,
+              "roi": -9.999999999999998
+            },
+            {
+              "city": "Munich",
+              "rows": 3,
+              "cost": 0.16949999999999998,
+              "pnl": -1.6949999999999998,
+              "roi": -10.0
+            },
+            {
+              "city": "Paris",
+              "rows": 3,
+              "cost": 0.1655,
+              "pnl": -1.655,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Miami",
+              "event_date": "2026-05-13",
+              "rows": 1,
+              "cost": 0.0095,
+              "pnl": 9.905000000000001,
+              "roi": 1042.6315789473686
+            },
+            {
+              "city": "Tokyo",
+              "event_date": "2026-05-15",
+              "rows": 1,
+              "cost": 0.0305,
+              "pnl": 9.695,
+              "roi": 317.8688524590164
+            },
+            {
+              "city": "Singapore",
+              "event_date": "2026-05-29",
+              "rows": 1,
+              "cost": 0.0345,
+              "pnl": 9.655000000000001,
+              "roi": 279.8550724637681
+            },
+            {
+              "city": "Chicago",
+              "event_date": "2026-05-13",
+              "rows": 2,
+              "cost": 0.07550000000000001,
+              "pnl": 9.245,
+              "roi": 122.45033112582779
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-14",
+              "rows": 1,
+              "cost": 0.0755,
+              "pnl": 9.245,
+              "roi": 122.4503311258278
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "Chengdu",
+              "event_date": "2026-05-29",
+              "rows": 7,
+              "cost": 0.173,
+              "pnl": -1.73,
+              "roi": -10.0
+            },
+            {
+              "city": "Beijing",
+              "event_date": "2026-05-15",
+              "rows": 3,
+              "cost": 0.1225,
+              "pnl": -1.225,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "Munich",
+              "event_date": "2026-05-29",
+              "rows": 2,
+              "cost": 0.108,
+              "pnl": -1.0799999999999998,
+              "roi": -9.999999999999998
+            },
+            {
+              "city": "Paris",
+              "event_date": "2026-05-28",
+              "rows": 1,
+              "cost": 0.0965,
+              "pnl": -0.9650000000000001,
+              "roi": -10.0
+            },
+            {
+              "city": "Beijing",
+              "event_date": "2026-05-14",
+              "rows": 3,
+              "cost": 0.0955,
+              "pnl": -0.9550000000000001,
+              "roi": -10.0
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.3997492305938675,
+            "top3_city_positive_pnl_share": 0.8306166647668984,
+            "top1_date_positive_pnl_share": 0.46714324993126205,
+            "top3_date_positive_pnl_share": 0.8916689579323617,
+            "top1_city_date_positive_pnl_share": 0.20745627814430834,
+            "top3_city_date_positive_pnl_share": 0.6127343177296053
+          }
+        }
+      },
+      {
+        "selector": "price_010_020",
+        "description": "BUY_YES price 0.10-0.20",
+        "note": "eligible=1 control only; not used as main denominator",
+        "overall": {
+          "rows": 48,
+          "active_dates": 14,
+          "cities": 23,
+          "city_dates": 47,
+          "eligible_rows": 48,
+          "paper_ordered": 35,
+          "live_filled": 3,
+          "cost": 7.0905000000000005,
+          "pnl": -0.9050000000000011,
+          "roi": -0.1276355687187083,
+          "roi_ci": [
+            -6.393309303878992,
+            5.361009918404763
+          ],
+          "hit_rate": 0.14583333333333334,
+          "avg_entry_price": 0.14771875,
+          "avg_abs_edge": 0.18182500000000001,
+          "baseline_rows": 48,
+          "baseline_cost": 7.0905000000000005,
+          "baseline_pnl": -0.9050000000000011,
+          "baseline_roi": -0.1276355687187083,
+          "excess_roi": 0.0,
+          "excess_ci": [
+            0.0,
+            0.0
+          ],
+          "positive_day_rate": 0.35714285714285715,
+          "worst_day": {
+            "event_date": "2026-05-28",
+            "rows": 6,
+            "cost": 0.745,
+            "pnl": -7.45,
+            "roi": -10.0
+          },
+          "best_day": {
+            "event_date": "2026-05-14",
+            "rows": 7,
+            "cost": 1.08,
+            "pnl": 9.2,
+            "roi": 8.518518518518517
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": -1.681224523750105,
+              "rows": 41,
+              "removed": [
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 9.2
+                }
+              ]
+            },
+            "top3": {
+              "roi": -5.781925550985974,
+              "rows": 32,
+              "removed": [
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 9.2
+                },
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 9.01
+                },
+                {
+                  "event_date": "2026-05-22",
+                  "pnl": 8.299999999999999
+                }
+              ]
+            },
+            "top5": {
+              "roi": -9.999999999999998,
+              "rows": 22,
+              "removed": [
+                {
+                  "event_date": "2026-05-14",
+                  "pnl": 9.2
+                },
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 9.01
+                },
+                {
+                  "event_date": "2026-05-22",
+                  "pnl": 8.299999999999999
+                },
+                {
+                  "event_date": "2026-05-13",
+                  "pnl": 4.784999999999999
+                },
+                {
+                  "event_date": "2026-05-29",
+                  "pnl": 0.19999999999999907
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": -1.3675275160060434,
+              "rows": 47,
+              "removed": [
+                {
+                  "candidate_id": "0x27d6c4f0dd59839e65b90310d77d148338ea73f56d3d4caa291551ae3a5196d7|BUY_YES|2026-05-30",
+                  "pnl": 8.6
+                }
+              ]
+            },
+            "top3": {
+              "roi": -3.9980493660439658,
+              "rows": 45,
+              "removed": [
+                {
+                  "candidate_id": "0x27d6c4f0dd59839e65b90310d77d148338ea73f56d3d4caa291551ae3a5196d7|BUY_YES|2026-05-30",
+                  "pnl": 8.6
+                },
+                {
+                  "candidate_id": "0x27e8e50835df00a560cf6d8fb06e6ab452fcf954e64c5bb5b6e83bb3669e3f0c|BUY_YES|2026-05-13",
+                  "pnl": 8.59
+                },
+                {
+                  "candidate_id": "0xca8d84938e6878847aa5f2391e297ce3ff650eafcdecb9eb27e5cf80d7313188|BUY_YES|2026-05-30",
+                  "pnl": 8.55
+                }
+              ]
+            },
+            "top5": {
+              "roi": -6.845177064437259,
+              "rows": 43,
+              "removed": [
+                {
+                  "candidate_id": "0x27d6c4f0dd59839e65b90310d77d148338ea73f56d3d4caa291551ae3a5196d7|BUY_YES|2026-05-30",
+                  "pnl": 8.6
+                },
+                {
+                  "candidate_id": "0x27e8e50835df00a560cf6d8fb06e6ab452fcf954e64c5bb5b6e83bb3669e3f0c|BUY_YES|2026-05-13",
+                  "pnl": 8.59
+                },
+                {
+                  "candidate_id": "0xca8d84938e6878847aa5f2391e297ce3ff650eafcdecb9eb27e5cf80d7313188|BUY_YES|2026-05-30",
+                  "pnl": 8.55
+                },
+                {
+                  "candidate_id": "0x020f2526eea6330508907b5e34b778558b195d9d2acbeccb66be78b363cd3eda|BUY_YES|2026-05-29",
+                  "pnl": 8.45
+                },
+                {
+                  "candidate_id": "0x3c475a59038bdfb300f86163721b9fd228660ceadc023bc5e0bb3f421faebc67|BUY_YES|2026-05-14",
+                  "pnl": 8.299999999999999
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "Chengdu",
+              "rows": 2,
+              "cost": 0.29500000000000004,
+              "pnl": 17.049999999999997,
+              "roi": 57.79661016949151
+            },
+            {
+              "city": "NYC",
+              "rows": 5,
+              "cost": 0.636,
+              "pnl": 13.639999999999999,
+              "roi": 21.446540880503143
+            },
+            {
+              "city": "Beijing",
+              "rows": 1,
+              "cost": 0.17,
+              "pnl": 8.299999999999999,
+              "roi": 48.823529411764696
+            },
+            {
+              "city": "Madrid",
+              "rows": 2,
+              "cost": 0.37,
+              "pnl": 6.3,
+              "roi": 17.027027027027028
+            },
+            {
+              "city": "Moscow",
+              "rows": 3,
+              "cost": 0.47,
+              "pnl": 5.300000000000001,
+              "roi": 11.276595744680852
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "Shanghai",
+              "rows": 5,
+              "cost": 0.788,
+              "pnl": -7.880000000000001,
+              "roi": -10.0
+            },
+            {
+              "city": "Tokyo",
+              "rows": 3,
+              "cost": 0.445,
+              "pnl": -4.45,
+              "roi": -10.0
+            },
+            {
+              "city": "Karachi",
+              "rows": 2,
+              "cost": 0.355,
+              "pnl": -3.55,
+              "roi": -10.0
+            },
+            {
+              "city": "Warsaw",
+              "rows": 2,
+              "cost": 0.35,
+              "pnl": -3.5,
+              "roi": -10.0
+            },
+            {
+              "city": "Munich",
+              "rows": 2,
+              "cost": 0.32999999999999996,
+              "pnl": -3.3,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Chengdu",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.14,
+              "pnl": 8.6,
+              "roi": 61.42857142857142
+            },
+            {
+              "city": "NYC",
+              "event_date": "2026-05-13",
+              "rows": 1,
+              "cost": 0.141,
+              "pnl": 8.59,
+              "roi": 60.921985815602845
+            },
+            {
+              "city": "Moscow",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.145,
+              "pnl": 8.55,
+              "roi": 58.96551724137932
+            },
+            {
+              "city": "Chengdu",
+              "event_date": "2026-05-29",
+              "rows": 1,
+              "cost": 0.155,
+              "pnl": 8.45,
+              "roi": 54.51612903225806
+            },
+            {
+              "city": "Beijing",
+              "event_date": "2026-05-22",
+              "rows": 1,
+              "cost": 0.17,
+              "pnl": 8.299999999999999,
+              "roi": 48.823529411764696
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "Madrid",
+              "event_date": "2026-05-21",
+              "rows": 1,
+              "cost": 0.195,
+              "pnl": -1.9500000000000002,
+              "roi": -10.0
+            },
+            {
+              "city": "BuenosAires",
+              "event_date": "2026-05-29",
+              "rows": 1,
+              "cost": 0.195,
+              "pnl": -1.9500000000000002,
+              "roi": -10.0
+            },
+            {
+              "city": "Warsaw",
+              "event_date": "2026-06-05",
+              "rows": 1,
+              "cost": 0.19,
+              "pnl": -1.9,
+              "roi": -10.0
+            },
+            {
+              "city": "Shanghai",
+              "event_date": "2026-06-03",
+              "rows": 1,
+              "cost": 0.185,
+              "pnl": -1.85,
+              "roi": -10.0
+            },
+            {
+              "city": "Shanghai",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.185,
+              "pnl": -1.85,
+              "roi": -10.0
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.3370231271002174,
+            "top3_city_positive_pnl_share": 0.7707056730579165,
+            "top1_date_positive_pnl_share": 0.2921098587077314,
+            "top3_date_positive_pnl_share": 0.8417209080806477,
+            "top1_city_date_positive_pnl_share": 0.14830143128125536,
+            "top3_city_date_positive_pnl_share": 0.44386963269529217
+          }
+        }
+      },
+      {
+        "selector": "price_020_025",
+        "description": "BUY_YES price 0.20-0.25",
+        "note": "eligible=1 control only; not used as main denominator",
+        "overall": {
+          "rows": 36,
+          "active_dates": 20,
+          "cities": 16,
+          "city_dates": 36,
+          "eligible_rows": 36,
+          "paper_ordered": 29,
+          "live_filled": 11,
+          "cost": 7.860999999999999,
+          "pnl": 31.390000000000004,
+          "roi": 3.9931306449561137,
+          "roi_ci": [
+            -3.6470117203478174,
+            12.075229281133138
+          ],
+          "hit_rate": 0.3055555555555556,
+          "avg_entry_price": 0.2183611111111111,
+          "avg_abs_edge": 0.1923527777777778,
+          "baseline_rows": 36,
+          "baseline_cost": 7.860999999999999,
+          "baseline_pnl": 31.390000000000004,
+          "baseline_roi": 3.9931306449561137,
+          "excess_roi": 0.0,
+          "excess_ci": [
+            0.0,
+            0.0
+          ],
+          "positive_day_rate": 0.4,
+          "worst_day": {
+            "event_date": "2026-05-27",
+            "rows": 3,
+            "cost": 0.696,
+            "pnl": -6.96,
+            "roi": -10.0
+          },
+          "best_day": {
+            "event_date": "2026-05-30",
+            "rows": 5,
+            "cost": 1.09,
+            "pnl": 29.1,
+            "roi": 26.69724770642202
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": 0.33820705951853525,
+              "rows": 31,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 29.1
+                }
+              ]
+            },
+            "top3": {
+              "roi": -2.1148083898438736,
+              "rows": 29,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 29.1
+                },
+                {
+                  "event_date": "2026-05-15",
+                  "pnl": 7.95
+                },
+                {
+                  "event_date": "2026-06-07",
+                  "pnl": 7.75
+                }
+              ]
+            },
+            "top5": {
+              "roi": -4.723883221948646,
+              "rows": 26,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 29.1
+                },
+                {
+                  "event_date": "2026-05-15",
+                  "pnl": 7.95
+                },
+                {
+                  "event_date": "2026-06-07",
+                  "pnl": 7.75
+                },
+                {
+                  "event_date": "2026-06-03",
+                  "pnl": 7.65
+                },
+                {
+                  "event_date": "2026-06-01",
+                  "pnl": 5.800000000000001
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": 3.0531262237305836,
+              "rows": 35,
+              "removed": [
+                {
+                  "candidate_id": "0xcda65f93910bd858aebd66c91478ba8442c4aadcd31eb49865e287a6322de140|BUY_YES|2026-05-30",
+                  "pnl": 8.0
+                }
+              ]
+            },
+            "top3": {
+              "roi": 1.0329609709005658,
+              "rows": 33,
+              "removed": [
+                {
+                  "candidate_id": "0xcda65f93910bd858aebd66c91478ba8442c4aadcd31eb49865e287a6322de140|BUY_YES|2026-05-30",
+                  "pnl": 8.0
+                },
+                {
+                  "candidate_id": "0x3ef92ed76e9dbd5fde49ca981a90bb0a3e0501a7af9165299f2d9a446c89d0d1|BUY_YES|2026-05-15",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                }
+              ]
+            },
+            "top5": {
+              "roi": -1.1971830985915488,
+              "rows": 31,
+              "removed": [
+                {
+                  "candidate_id": "0xcda65f93910bd858aebd66c91478ba8442c4aadcd31eb49865e287a6322de140|BUY_YES|2026-05-30",
+                  "pnl": 8.0
+                },
+                {
+                  "candidate_id": "0x3ef92ed76e9dbd5fde49ca981a90bb0a3e0501a7af9165299f2d9a446c89d0d1|BUY_YES|2026-05-15",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x1b29a0e92477478b53e0e5ec944f15a1319e7670f716fa69e2055df2bc5c58f4|BUY_YES|2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "candidate_id": "0x72d6ee4d3368fec54c8dd0d39397f9209c5e89d79046faec78ff3112eb4352d2|BUY_YES|2026-06-07",
+                  "pnl": 7.75
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "London",
+              "rows": 6,
+              "cost": 1.33,
+              "pnl": 16.7,
+              "roi": 12.556390977443607
+            },
+            {
+              "city": "Miami",
+              "rows": 9,
+              "cost": 1.95,
+              "pnl": 10.5,
+              "roi": 5.384615384615385
+            },
+            {
+              "city": "Jeddah",
+              "rows": 1,
+              "cost": 0.2,
+              "pnl": 8.0,
+              "roi": 40.0
+            },
+            {
+              "city": "Madrid",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "Munich",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "BuenosAires",
+              "rows": 3,
+              "cost": 0.625,
+              "pnl": -6.25,
+              "roi": -10.0
+            },
+            {
+              "city": "Beijing",
+              "rows": 2,
+              "cost": 0.47,
+              "pnl": -4.7,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "NYC",
+              "rows": 2,
+              "cost": 0.45099999999999996,
+              "pnl": -4.51,
+              "roi": -10.0
+            },
+            {
+              "city": "Moscow",
+              "rows": 1,
+              "cost": 0.245,
+              "pnl": -2.45,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "Paris",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": -2.25,
+              "roi": -10.0
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Jeddah",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.2,
+              "pnl": 8.0,
+              "roi": 40.0
+            },
+            {
+              "city": "Madrid",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-15",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "London",
+              "event_date": "2026-06-01",
+              "rows": 1,
+              "cost": 0.21,
+              "pnl": 7.9,
+              "roi": 37.61904761904762
+            },
+            {
+              "city": "London",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": 7.75,
+              "roi": 34.44444444444444
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "Moscow",
+              "event_date": "2026-05-27",
+              "rows": 1,
+              "cost": 0.245,
+              "pnl": -2.45,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "London",
+              "event_date": "2026-05-21",
+              "rows": 1,
+              "cost": 0.245,
+              "pnl": -2.45,
+              "roi": -10.000000000000002
+            },
+            {
+              "city": "Beijing",
+              "event_date": "2026-05-22",
+              "rows": 1,
+              "cost": 0.24,
+              "pnl": -2.4,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "event_date": "2026-05-27",
+              "rows": 1,
+              "cost": 0.236,
+              "pnl": -2.36,
+              "roi": -10.0
+            },
+            {
+              "city": "Beijing",
+              "event_date": "2026-05-13",
+              "rows": 1,
+              "cost": 0.23,
+              "pnl": -2.3000000000000003,
+              "roi": -10.0
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.2792642140468227,
+            "top3_city_positive_pnl_share": 0.5886287625418061,
+            "top1_date_positive_pnl_share": 0.424507658643326,
+            "top3_date_positive_pnl_share": 0.6535375638220277,
+            "top1_city_date_positive_pnl_share": 0.0932944606413994,
+            "top3_city_date_positive_pnl_share": 0.2787172011661807
+          }
+        }
+      },
+      {
+        "selector": "old_side_band_lottery_leg",
+        "description": "old side-band lottery leg: BUY_YES 0.20-0.25 and abs_edge>=0.20",
+        "note": "eligible=1 control only; not used as main denominator",
+        "overall": {
+          "rows": 15,
+          "active_dates": 10,
+          "cities": 7,
+          "city_dates": 15,
+          "eligible_rows": 15,
+          "paper_ordered": 14,
+          "live_filled": 7,
+          "cost": 3.246,
+          "pnl": 17.540000000000003,
+          "roi": 5.403573629081948,
+          "roi_ci": [
+            -5.4303425338772975,
+            13.256566082012094
+          ],
+          "hit_rate": 0.3333333333333333,
+          "avg_entry_price": 0.2164,
+          "avg_abs_edge": 0.29239333333333334,
+          "baseline_rows": 36,
+          "baseline_cost": 7.860999999999999,
+          "baseline_pnl": 31.390000000000004,
+          "baseline_roi": 3.9931306449561137,
+          "excess_roi": 1.4104429841258344,
+          "excess_ci": [
+            -5.146560582856098,
+            7.27763622513167
+          ],
+          "positive_day_rate": 0.4,
+          "worst_day": {
+            "event_date": "2026-05-27",
+            "rows": 1,
+            "cost": 0.236,
+            "pnl": -2.36,
+            "roi": -10.0
+          },
+          "best_day": {
+            "event_date": "2026-05-30",
+            "rows": 3,
+            "cost": 0.665,
+            "pnl": 13.350000000000001,
+            "roi": 20.075187969924812
+          },
+          "top_day_removed": {
+            "top1": {
+              "roi": 1.6234017822549403,
+              "rows": 12,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 13.350000000000001
+                }
+              ]
+            },
+            "top3": {
+              "roi": -4.780793319415448,
+              "rows": 9,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 13.350000000000001
+                },
+                {
+                  "event_date": "2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "event_date": "2026-05-26",
+                  "pnl": 5.45
+                }
+              ]
+            },
+            "top5": {
+              "roi": -10.000000000000002,
+              "rows": 5,
+              "removed": [
+                {
+                  "event_date": "2026-05-30",
+                  "pnl": 13.350000000000001
+                },
+                {
+                  "event_date": "2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "event_date": "2026-05-26",
+                  "pnl": 5.45
+                },
+                {
+                  "event_date": "2026-06-04",
+                  "pnl": 3.7
+                },
+                {
+                  "event_date": "2026-05-28",
+                  "pnl": -2.05
+                }
+              ]
+            }
+          },
+          "top_candidate_removed": {
+            "top1": {
+              "roi": 3.153567905294312,
+              "rows": 14,
+              "removed": [
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                }
+              ]
+            },
+            "top3": {
+              "roi": -2.325402916346891,
+              "rows": 12,
+              "removed": [
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x1b29a0e92477478b53e0e5ec944f15a1319e7670f716fa69e2055df2bc5c58f4|BUY_YES|2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "candidate_id": "0xeb1df1dbd34ca9154673ff80ae05b7bad94ec1e7bf9eef997295acf9d23f7474|BUY_YES|2026-05-30",
+                  "pnl": 7.75
+                }
+              ]
+            },
+            "top5": {
+              "roi": -10.0,
+              "rows": 10,
+              "removed": [
+                {
+                  "candidate_id": "0x781f0c364ba3e681df717c9b6739ab1ecd8d3dbd7af6755a0f66502cc2fac84c|BUY_YES|2026-06-04",
+                  "pnl": 7.95
+                },
+                {
+                  "candidate_id": "0x1b29a0e92477478b53e0e5ec944f15a1319e7670f716fa69e2055df2bc5c58f4|BUY_YES|2026-06-01",
+                  "pnl": 7.9
+                },
+                {
+                  "candidate_id": "0xeb1df1dbd34ca9154673ff80ae05b7bad94ec1e7bf9eef997295acf9d23f7474|BUY_YES|2026-05-30",
+                  "pnl": 7.75
+                },
+                {
+                  "candidate_id": "0x46e877c67adadd62e738382704a39c8eaa2692b7167ccb56a6a8a167834bd638|BUY_YES|2026-05-26",
+                  "pnl": 7.7
+                },
+                {
+                  "candidate_id": "0x946a4694ebab87b0d4c0381db220b3062a0e68f38a868f56763e85a1d23e421c|BUY_YES|2026-05-30",
+                  "pnl": 7.65
+                }
+              ]
+            }
+          },
+          "top_cities": [
+            {
+              "city": "Miami",
+              "rows": 5,
+              "cost": 1.105,
+              "pnl": 8.95,
+              "roi": 8.099547511312217
+            },
+            {
+              "city": "Madrid",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "Warsaw",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            },
+            {
+              "city": "London",
+              "rows": 2,
+              "cost": 0.41000000000000003,
+              "pnl": 5.9,
+              "roi": 14.390243902439025
+            },
+            {
+              "city": "BuenosAires",
+              "rows": 2,
+              "cost": 0.41,
+              "pnl": -4.1,
+              "roi": -10.0
+            }
+          ],
+          "worst_cities": [
+            {
+              "city": "NYC",
+              "rows": 2,
+              "cost": 0.45099999999999996,
+              "pnl": -4.51,
+              "roi": -10.0
+            },
+            {
+              "city": "LA",
+              "rows": 2,
+              "cost": 0.43,
+              "pnl": -4.3,
+              "roi": -10.0
+            },
+            {
+              "city": "BuenosAires",
+              "rows": 2,
+              "cost": 0.41,
+              "pnl": -4.1,
+              "roi": -10.0
+            },
+            {
+              "city": "London",
+              "rows": 2,
+              "cost": 0.41000000000000003,
+              "pnl": 5.9,
+              "roi": 14.390243902439025
+            },
+            {
+              "city": "Warsaw",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            }
+          ],
+          "top_city_dates": [
+            {
+              "city": "Madrid",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.205,
+              "pnl": 7.95,
+              "roi": 38.78048780487805
+            },
+            {
+              "city": "London",
+              "event_date": "2026-06-01",
+              "rows": 1,
+              "cost": 0.21,
+              "pnl": 7.9,
+              "roi": 37.61904761904762
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": 7.75,
+              "roi": 34.44444444444444
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-26",
+              "rows": 1,
+              "cost": 0.23,
+              "pnl": 7.7,
+              "roi": 33.47826086956522
+            },
+            {
+              "city": "Warsaw",
+              "event_date": "2026-05-30",
+              "rows": 1,
+              "cost": 0.235,
+              "pnl": 7.65,
+              "roi": 32.55319148936171
+            }
+          ],
+          "worst_city_dates": [
+            {
+              "city": "NYC",
+              "event_date": "2026-05-27",
+              "rows": 1,
+              "cost": 0.236,
+              "pnl": -2.36,
+              "roi": -10.0
+            },
+            {
+              "city": "LA",
+              "event_date": "2026-05-26",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": -2.25,
+              "roi": -10.0
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-06-04",
+              "rows": 1,
+              "cost": 0.225,
+              "pnl": -2.25,
+              "roi": -10.0
+            },
+            {
+              "city": "Miami",
+              "event_date": "2026-05-16",
+              "rows": 1,
+              "cost": 0.22,
+              "pnl": -2.2,
+              "roi": -10.0
+            },
+            {
+              "city": "NYC",
+              "event_date": "2026-06-05",
+              "rows": 1,
+              "cost": 0.215,
+              "pnl": -2.15,
+              "roi": -10.0
+            }
+          ],
+          "concentration": {
+            "top1_city_positive_pnl_share": 0.2939244663382594,
+            "top3_city_positive_pnl_share": 0.8062397372742198,
+            "top1_date_positive_pnl_share": 0.43914473684210525,
+            "top3_date_positive_pnl_share": 0.8782894736842104,
+            "top1_city_date_positive_pnl_share": 0.20410783055198972,
+            "top3_city_date_positive_pnl_share": 0.6059050064184852
+          }
+        }
+      }
+    ]
+  },
+  "out_json": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-06/2026-06-12-low-price-buy-yes-lottery-v0.json",
+  "out_md": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-06/2026-06-12-low-price-buy-yes-lottery-v0.md"
+}

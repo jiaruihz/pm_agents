@@ -1,0 +1,31 @@
+# P0-06C focused module (final, post self-review fixes)
+cd /Users/deepsleep/projects/pm_agents
+python -m pytest tests/polymarket_alpha/test_controversy_recall_p0_06c.py -q
+# -> 17 passed (15 original + 2 review-pass tests)
+
+# Complete polymarket_alpha suite (final verification run)
+python -m pytest tests/polymarket_alpha -q
+# -> 371 passed (suite grew during the task as parallel workers landed
+#    P0-08A and other tests: 221 -> 226 -> 370/371)
+
+# Focused module with junit seal artifact (final)
+python -m pytest tests/polymarket_alpha/test_controversy_recall_p0_06c.py -q \
+  --junitxml=docs/design/polymarket_alpha_p0/P0_06C-evidence-seal/junit.xml
+# -> 17 passed, junit.xml written
+
+# P0-11 source audit over src/polymarket_alpha (owned module included)
+python - <<'PY'
+import sys
+sys.path.insert(0, ".")
+from src.polymarket_alpha.security import audit_source_tree
+result = audit_source_tree("src/polymarket_alpha")
+print(f"passed={result.passed}")
+print(f"violations={len(result.violations)}")
+PY
+# -> passed=True, violations=0  (see source-audit.txt)
+
+# Review-pass evidence probes (context in SELF_REVIEW.md)
+# - storage append-only conflict: AlphaRepository.save_contract raises
+#   ContractConflictError for same record_id with different canonical bytes
+#   (verifies the run-attempt-scoped record_id convention).
+# - duplicate/PIT/path-alias probes over the frozen fixture payloads.

@@ -1,0 +1,24 @@
+{
+  "schema_version": "weather_research_prereg_v1",
+  "research_id": "core_carry_llm_transition_card_v1",
+  "frozen_before_formal_run": true,
+  "created_at_utc": "2026-08-07T01:45:00Z",
+  "hypothesis": "A weather-only, versioned LLM transition card adds proper-score information to the current Core Carry probability beyond same-row market and deterministic transition features, without acting as a gate or directly producing probability.",
+  "denominator": "All first-valid Core Carry pre-live checkpoints in the frozen market-mid domain 0.80..0.9895; packet and card coverage are reported separately and all models are compared only on identical card-covered rows.",
+  "target": "Current exact bracket holds at official settlement (label=1).",
+  "candidates": [
+    "same_row_market_mid",
+    "frozen_core_probability",
+    "market_plus_deterministic_transition_features",
+    "market_plus_deterministic_and_llm_transition_card"
+  ],
+  "card_contract": "intraday_state_transition_card_v1; weather-only input; LLM outputs categorical process/scenario/conflict/invalidation fields and never probability, EV, eligibility, sizing, or order action.",
+  "forward_protocol": "Begin append-only prospective collection on 2026-08-07. Freeze packet input hash, prompt version, card schema, and LLM model identity before settlement. Do not score retrospective cards as forward evidence.",
+  "primary_metrics": [
+    "city_day_equal_weight_brier",
+    "city_day_equal_weight_logloss"
+  ],
+  "uncertainty": "Target-date block bootstrap after at least 10 new settled target dates.",
+  "decision_rule": "Promotion requires both Brier and logloss improvement versus frozen Core on frozen forward, with target-date 95% intervals excluding zero, and same-row market comparison reported. Otherwise retain as explanation/collector only.",
+  "live_action": "None; zero-notional forward research only."
+}

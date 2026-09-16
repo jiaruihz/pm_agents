@@ -1,0 +1,352 @@
+{
+  "evidence_funnel": {
+    "actual_fills": 0,
+    "actual_orders": 0,
+    "errors_during_decision_window": 0,
+    "paper_only": true,
+    "post_last_decision_stale_book_errors": 94,
+    "same_rows_market_baseline": true,
+    "settlement_available": true,
+    "target_date_block_bootstrap": "not_applicable_one_target_date"
+  },
+  "outcome_semantics": "NO wins iff current bracket differs from final exact bracket",
+  "paper_intents": [
+    {
+      "ask": 0.993,
+      "bracket": 21,
+      "decision_ts_utc": "2026-08-01T07:53:37.713146+00:00",
+      "edge_after_fee": 0.0015090534432997682,
+      "effective_cost_per_share": 0.99334755,
+      "five_share_cost_usd": 4.96673775,
+      "five_share_pnl_usd": 0.03326224999999994,
+      "market_probability": 0.9864999999999999,
+      "model_id": "helsinki_market_expression_v2_research_challenger",
+      "model_probability": 0.9948566034432997,
+      "path_state": "fresh_runway",
+      "side": "NO",
+      "source_obs_ts_utc": "2026-08-01T07:50:00+00:00",
+      "won": true
+    },
+    {
+      "ask": 0.993,
+      "bracket": 21,
+      "decision_ts_utc": "2026-08-01T07:53:37.713146+00:00",
+      "edge_after_fee": 0.004923565351823811,
+      "effective_cost_per_share": 0.99334755,
+      "five_share_cost_usd": 4.96673775,
+      "five_share_pnl_usd": 0.03326224999999994,
+      "market_probability": 0.9864999999999999,
+      "model_id": "helsinki_market_offset_fade_v1",
+      "model_probability": 0.9982711153518238,
+      "path_state": "fresh_runway",
+      "side": "NO",
+      "source_obs_ts_utc": "2026-08-01T07:50:00+00:00",
+      "won": true
+    },
+    {
+      "ask": 0.94,
+      "bracket": 22,
+      "decision_ts_utc": "2026-08-01T10:44:16.908572+00:00",
+      "edge_after_fee": 0.01538682539747549,
+      "effective_cost_per_share": 0.94282,
+      "five_share_cost_usd": 4.7141,
+      "five_share_pnl_usd": 0.2858999999999998,
+      "market_probability": 0.925,
+      "model_id": "helsinki_market_expression_v2_research_challenger",
+      "model_probability": 0.9582068253974755,
+      "path_state": "pullback",
+      "side": "NO",
+      "source_obs_ts_utc": "2026-08-01T10:40:00+00:00",
+      "won": true
+    },
+    {
+      "ask": 0.94,
+      "bracket": 22,
+      "decision_ts_utc": "2026-08-01T10:44:16.908572+00:00",
+      "edge_after_fee": 0.03235621860899052,
+      "effective_cost_per_share": 0.94282,
+      "five_share_cost_usd": 4.7141,
+      "five_share_pnl_usd": 0.2858999999999998,
+      "market_probability": 0.925,
+      "model_id": "helsinki_market_offset_fade_v1",
+      "model_probability": 0.9751762186089905,
+      "path_state": "pullback",
+      "side": "NO",
+      "source_obs_ts_utc": "2026-08-01T10:40:00+00:00",
+      "won": true
+    },
+    {
+      "ask": 0.39,
+      "bracket": 23,
+      "decision_ts_utc": "2026-08-01T10:53:17.042986+00:00",
+      "edge_after_fee": 0.1708541560611685,
+      "effective_cost_per_share": 0.401895,
+      "five_share_cost_usd": 2.009475,
+      "five_share_pnl_usd": -2.009475,
+      "market_probability": 0.36,
+      "model_id": "helsinki_market_expression_v2_research_challenger",
+      "model_probability": 0.5727491560611685,
+      "path_state": "fresh_runway",
+      "side": "NO",
+      "source_obs_ts_utc": "2026-08-01T10:50:00+00:00",
+      "won": false
+    },
+    {
+      "ask": 0.39,
+      "bracket": 23,
+      "decision_ts_utc": "2026-08-01T10:53:17.042986+00:00",
+      "edge_after_fee": 0.21814257431022,
+      "effective_cost_per_share": 0.401895,
+      "five_share_cost_usd": 2.009475,
+      "five_share_pnl_usd": -2.009475,
+      "market_probability": 0.36,
+      "model_id": "helsinki_market_offset_fade_v1",
+      "model_probability": 0.62003757431022,
+      "path_state": "fresh_runway",
+      "side": "NO",
+      "source_obs_ts_utc": "2026-08-01T10:50:00+00:00",
+      "won": false
+    }
+  ],
+  "paper_strategy_by_model": {
+    "helsinki_market_expression_v2_research_challenger": {
+      "five_share_cost_usd": 11.69031275,
+      "five_share_pnl_usd": -1.6903127500000004,
+      "five_share_roi": -0.14459089214700438,
+      "intents": 3,
+      "win_rate": 0.6666666666666666,
+      "wins": 2
+    },
+    "helsinki_market_offset_fade_v1": {
+      "five_share_cost_usd": 11.69031275,
+      "five_share_pnl_usd": -1.6903127500000004,
+      "five_share_roi": -0.14459089214700438,
+      "intents": 3,
+      "win_rate": 0.6666666666666666,
+      "wins": 2
+    }
+  },
+  "probability_by_model": {
+    "helsinki_market_expression_v2_research_challenger": {
+      "market_accuracy": 0.9777777777777777,
+      "market_auc": 1.0,
+      "market_brier": 0.025930405555555557,
+      "market_logloss": 0.12685249642904967,
+      "model_accuracy": 0.9333333333333333,
+      "model_auc": 1.0,
+      "model_brier": 0.03962085029255262,
+      "model_logloss": 0.14576954871705036,
+      "positive_labels": 18,
+      "rows": 45
+    },
+    "helsinki_market_offset_fade_v1": {
+      "market_accuracy": 0.9777777777777777,
+      "market_auc": 1.0,
+      "market_brier": 0.025930405555555557,
+      "market_logloss": 0.12685249642904967,
+      "model_accuracy": 0.9111111111111111,
+      "model_auc": 1.0,
+      "model_brier": 0.045024078081692065,
+      "model_logloss": 0.1422185088937607,
+      "positive_labels": 18,
+      "rows": 45
+    }
+  },
+  "schema_version": "helsinki_probability_shadow_day_audit_v1",
+  "signal_funnel": {
+    "evaluation_rows": 170,
+    "expression_checkpoints": 85,
+    "first_positive_edge_intents": 6,
+    "models": {
+      "helsinki_market_expression_v2_research_challenger": 85,
+      "helsinki_market_offset_fade_v1": 85
+    },
+    "not_scorable_one_sided_checkpoints": 40,
+    "scored_two_sided_checkpoints": 45,
+    "would_enter_rows": 46
+  },
+  "slices_by_model": {
+    "helsinki_market_expression_v2_research_challenger": {
+      "bracket": {
+        "21": {
+          "market_accuracy": 1.0,
+          "market_auc": null,
+          "market_brier": 0.0001490833333333341,
+          "market_logloss": 0.012241827371053761,
+          "model_accuracy": 1.0,
+          "model_auc": null,
+          "model_brier": 2.8450534502007518e-05,
+          "model_logloss": 0.005183080645108176,
+          "positive_labels": 3,
+          "rows": 3
+        },
+        "22": {
+          "market_accuracy": 1.0,
+          "market_auc": null,
+          "market_brier": 0.006388333333333333,
+          "market_logloss": 0.07775716401548403,
+          "model_accuracy": 1.0,
+          "model_auc": null,
+          "model_brier": 0.0018657577659183344,
+          "model_logloss": 0.03991797849155881,
+          "positive_labels": 15,
+          "rows": 15
+        },
+        "23": {
+          "market_accuracy": 0.9629629629629629,
+          "market_auc": null,
+          "market_brier": 0.03965170370370371,
+          "market_logloss": 0.16686219988747453,
+          "model_accuracy": 0.8888888888888888,
+          "model_auc": null,
+          "model_brier": 0.06499505722491061,
+          "model_logloss": 0.2201966952947615,
+          "positive_labels": 0,
+          "rows": 27
+        }
+      },
+      "path_state": {
+        "fade": {
+          "market_accuracy": 1.0,
+          "market_auc": 1.0,
+          "market_brier": 0.015263700000000002,
+          "market_logloss": 0.0905795553446644,
+          "model_accuracy": 1.0,
+          "model_auc": 1.0,
+          "model_brier": 0.011806201212792378,
+          "model_logloss": 0.07565771632058085,
+          "positive_labels": 2,
+          "rows": 15
+        },
+        "fresh_runway": {
+          "market_accuracy": 0.9375,
+          "market_auc": 1.0,
+          "market_brier": 0.039148265625,
+          "market_logloss": 0.16124111987273987,
+          "model_accuracy": 0.8125,
+          "model_auc": 1.0,
+          "model_brier": 0.06959734009484242,
+          "model_logloss": 0.20602429759382998,
+          "positive_labels": 12,
+          "rows": 16
+        },
+        "plateau": {
+          "market_accuracy": 1.0,
+          "market_auc": null,
+          "market_brier": 0.1369,
+          "market_logloss": 0.4620354595965587,
+          "model_accuracy": 1.0,
+          "model_auc": null,
+          "model_brier": 0.24435217804054354,
+          "model_logloss": 0.6818510520774047,
+          "positive_labels": 0,
+          "rows": 1
+        },
+        "pullback": {
+          "market_accuracy": 1.0,
+          "market_auc": 1.0,
+          "market_brier": 0.013433884615384618,
+          "market_logloss": 0.10059812550591324,
+          "model_accuracy": 1.0,
+          "model_auc": 1.0,
+          "model_brier": 0.019071971185766153,
+          "model_logloss": 0.11127108722152847,
+          "positive_labels": 4,
+          "rows": 13
+        }
+      }
+    },
+    "helsinki_market_offset_fade_v1": {
+      "bracket": {
+        "21": {
+          "market_accuracy": 1.0,
+          "market_auc": null,
+          "market_brier": 0.0001490833333333341,
+          "market_logloss": 0.012241827371053761,
+          "model_accuracy": 1.0,
+          "model_auc": null,
+          "model_brier": 4.653612121707331e-06,
+          "model_logloss": 0.001984734675785645,
+          "positive_labels": 3,
+          "rows": 3
+        },
+        "22": {
+          "market_accuracy": 1.0,
+          "market_auc": null,
+          "market_brier": 0.006388333333333333,
+          "market_logloss": 0.07775716401548403,
+          "model_accuracy": 1.0,
+          "model_auc": null,
+          "model_brier": 0.0010794772723570695,
+          "model_logloss": 0.026816248645556755,
+          "positive_labels": 15,
+          "rows": 15
+        },
+        "23": {
+          "market_accuracy": 0.9629629629629629,
+          "market_auc": null,
+          "market_brier": 0.03965170370370371,
+          "market_logloss": 0.16686219988747453,
+          "model_accuracy": 0.8518518518518519,
+          "model_auc": null,
+          "model_brier": 0.074439903472386,
+          "model_logloss": 0.22191240616698235,
+          "positive_labels": 0,
+          "rows": 27
+        }
+      },
+      "path_state": {
+        "fade": {
+          "market_accuracy": 1.0,
+          "market_auc": 1.0,
+          "market_brier": 0.015263700000000002,
+          "market_logloss": 0.0905795553446644,
+          "model_accuracy": 1.0,
+          "model_auc": 1.0,
+          "model_brier": 0.0016995615583037971,
+          "model_logloss": 0.028559480142500853,
+          "positive_labels": 2,
+          "rows": 15
+        },
+        "fresh_runway": {
+          "market_accuracy": 0.9375,
+          "market_auc": 1.0,
+          "market_brier": 0.039148265625,
+          "market_logloss": 0.16124111987273987,
+          "model_accuracy": 0.8125,
+          "model_auc": 1.0,
+          "model_brier": 0.0807430450326768,
+          "model_logloss": 0.22335718828569234,
+          "positive_labels": 12,
+          "rows": 16
+        },
+        "plateau": {
+          "market_accuracy": 1.0,
+          "market_auc": null,
+          "market_brier": 0.1369,
+          "market_logloss": 0.4620354595965587,
+          "model_accuracy": 0.0,
+          "model_auc": null,
+          "model_brier": 0.47538997238389824,
+          "model_logloss": 1.1695240204787436,
+          "positive_labels": 0,
+          "rows": 1
+        },
+        "pullback": {
+          "market_accuracy": 1.0,
+          "market_auc": 1.0,
+          "market_brier": 0.013433884615384618,
+          "market_logloss": 0.10059812550591324,
+          "model_accuracy": 1.0,
+          "model_auc": 1.0,
+          "model_brier": 0.017947030568835308,
+          "model_logloss": 0.09447705115629984,
+          "positive_labels": 4,
+          "rows": 13
+        }
+      }
+    }
+  },
+  "target_date": "2026-08-01",
+  "winning_bracket": 23
+}

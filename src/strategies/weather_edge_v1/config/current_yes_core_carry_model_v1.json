@@ -1,0 +1,85 @@
+{
+  "artifact_version": "current_yes_core_carry_model_v1",
+  "lifecycle": "pre_live_frozen_zero_notional_only",
+  "frozen_at_utc": "2026-07-23T10:30:04+00:00",
+  "target": "current exact bracket remains final winning bracket",
+  "numeric_features": [
+    "market_logit",
+    "decision_hour_local",
+    "forecast_peak_delta_hours_local",
+    "dewpoint_depression_f",
+    "wind_speed_kt",
+    "obs_age_min"
+  ],
+  "numeric_medians": [
+    1.3249254147435987,
+    14.0,
+    0.0,
+    16.200000000000003,
+    9.0,
+    31.883333333333333
+  ],
+  "numeric_means": [
+    1.0839591035461542,
+    14.590248707214972,
+    0.15587293770007388,
+    18.62459985225314,
+    9.190787983255357,
+    34.88166297299516
+  ],
+  "numeric_scales": [
+    2.061387119364978,
+    1.2663288411813927,
+    2.628913748729785,
+    11.860476252678458,
+    4.739452387499991,
+    7.7912964258330115
+  ],
+  "coef": [
+    1.8412002241807401,
+    0.03807693677598679,
+    0.33814325078147756,
+    -0.16620294553674061,
+    0.29456325421324403,
+    0.06779003938490198
+  ],
+  "intercept": 1.1029120935621124,
+  "estimator": {
+    "type": "median_imputer+standard_scaler+logistic_regression",
+    "C": 0.1,
+    "random_state": 20260722,
+    "sample_weight": "each city-target_date has total training weight one"
+  },
+  "training_snapshot": {
+    "rows": 4061,
+    "city_days": 1305,
+    "cities": 36,
+    "dates": 46,
+    "date_min": "2026-05-19",
+    "date_max": "2026-07-08",
+    "source": "current_yes_carry_residual_entry_v2.prepare_universe"
+  },
+  "entry_policy": {
+    "expression": "current_bracket_BUY_YES",
+    "bounded_exact_bracket_only": true,
+    "local_hour_start": 13,
+    "local_hour_end": 17,
+    "checkpoint": "first successfully scored fresh book at or after local minute 30 in each local hour",
+    "one_scored_checkpoint_per_city_day_local_hour": true,
+    "first_positive_ev_locks_city_day": true,
+    "wait_for_second_confirmation": false,
+    "market_mid_floor": 0.8,
+    "taker_shares": 5,
+    "min_edge_after_fee_and_depth": 0.0,
+    "price_input": "fresh direct two-sided CLOB book",
+    "cost_input": "full five-share ask-ladder principal plus official per-level fee",
+    "d1_no_required": false,
+    "maker_enabled": false
+  },
+  "research_lineage": [
+    "docs/analysis/2026-07/2026-07-22-current-yes-carry-residual-entry-v2.json",
+    "docs/analysis/2026-07/2026-07-22-current-yes-carry-clean-exhaustion-backfill-v3.json",
+    "docs/analysis/2026-07/2026-07-23-current-yes-core-carry-freeze-pre-live-v4.json"
+  ],
+  "artifact_hash": "fa422059692f87f8d90f13cc41dad3b5be7284684a747428b8d17ebf38fa590e"
+}

@@ -1,0 +1,6 @@
+[Unit]
+Description=Retired weather data-feed systemd entrypoint (Mac controller owns production)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/false

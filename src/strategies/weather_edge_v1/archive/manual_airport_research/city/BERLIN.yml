@@ -1,0 +1,86 @@
+identity:
+  city_key: berlin
+  display_name: Berlin
+  market_unit: C
+  timezone: Europe/Berlin
+
+station:
+  station_name: Berlin Brandenburg Airport
+  station_code: EDDB
+  iata_code: BER
+  object_type: airport
+  settlement_scope: Only the Berlin Brandenburg airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values for Berlin-style airport temperature contracts.
+  station_match_rule: Must match Berlin Brandenburg Airport Station / EDDB. Do not substitute a generic Berlin city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: EDDB
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not resolve from city pages or provisional history.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: EDDB
+    role: trading_anchor
+    use_for: Record target-day high, peak hour, and whether the airport path is drifting.
+    do_not_use_for: Do not treat the forecast integer as a guaranteed settlement bucket.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain same-stack market consensus.
+      do_not_use_for: Do not replace EDDB with a generic Berlin page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check wind and cloud on transition days.
+    - family: checkwx
+      page_type: metar_taf
+      location_object: airport
+      use_for: Check the current airport observation.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and whether support pages are warmer or cooler.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: A Berlin city page is not the EDDB airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Urban warmth can diverge from the airport.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only to explain market noise.
+
+operator_notes:
+  summary: Berlin is a reasonable extension market because the airport object is clean and data coverage is broad. It is more stable than alpine setups, but still sensitive to cloud and wind on shoulder-season days.
+  why_this_station: EDDB is a clean airport settlement object across the major weather stacks and maps well to a city-level temperature market.
+  main_risks:
+    - Frontal cloud knocking one bucket off the warm side.
+    - Wind direction shifts on transition days.
+    - Berlin city pages overstating urban warmth.
+  common_wrong_anchor:
+    - Generic Berlin city pages instead of EDDB.
+    - Metro pages without an airport station match.
+  usage_order:
+    - Open Polymarket rules and confirm EDDB plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check airport observation pages if the day looks borderline.
+    - Use city pages only as market-noise diagnostics.

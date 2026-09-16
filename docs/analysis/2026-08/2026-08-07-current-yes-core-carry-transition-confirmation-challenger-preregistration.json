@@ -1,0 +1,45 @@
+{
+  "schema_version": "weather_research_prereg_v1",
+  "research_id": "current_yes_core_carry_transition_confirmation_challenger_v1",
+  "run_id": "historical_parent_1349_state_entry_offset_ridge_20260807",
+  "frozen_before_formal_run": true,
+  "created_at_utc": "2026-08-07T08:15:00Z",
+  "hypothesis": "A fixed-Core-logit residual using settlement-native next-bracket geometry, observation-path transition confirmation, remaining heat, forecast-observation conflict and contextual damping of the incumbent wind contribution improves exact-bracket hold probability versus frozen Core on the same PIT state entries.",
+  "target": "Current bounded exact bracket remains the final settlement bracket (hold=1; upward or downward exit=0).",
+  "denominator": "Archived frozen Core Carry parent: 1,349 PIT checkpoints, 801 city-date-current-bracket state entries, 36 cities and 31 target dates from 2026-06-02 through 2026-07-08. No outcome, edge, city or price selection is added.",
+  "grain": {
+    "training": "target-date-equal and state-entry-equal checkpoint weights",
+    "primary_evaluation": "city x target_date x current_bracket state entry, averaged within state entry then within target date",
+    "secondary_evaluation": "checkpoint, averaged within target date"
+  },
+  "pit_boundary": "Only fields already present in the frozen parent at decision_snapshot_ts_utc are used. Final settlement is label-only. Historical forecast/source fields retain their parent PIT/report-time limitations.",
+  "feature_families": [
+    "settlement_native_boundary_margin",
+    "fresh_high_and_dip_rebound_path",
+    "forecast_exit_vs_observed_pullback_conflict",
+    "remaining_daylight_solar_and_peak_clock",
+    "plateau_confirmation",
+    "incumbent_wind_logit_contribution_x_transition_risk"
+  ],
+  "known_unavailable_features": [
+    "historical first-seen cloud/rain transition confirmation",
+    "historical wind-direction x city-terrain transport role",
+    "historical dewpoint trend"
+  ],
+  "model": "One strongly L2-regularized logistic residual with frozen Core hold logit as a fixed offset; train-fold median imputation and standardization; no eligibility gate.",
+  "development_protocol": "First 8 target dates are warm-up; the next 15 dates are expanding OOF diagnostics. There is one preregistered model and no candidate/hyperparameter selection.",
+  "forward_protocol": "Last 8 historical target dates are scored by one fit using only prior dates. This slice was frozen by earlier Core studies but is not clean to the overall research program because its outcomes have been seen previously; it cannot authorize live promotion.",
+  "primary_baselines": [
+    "frozen_core_no_obs_age",
+    "same_row_market_mid"
+  ],
+  "primary_metrics": [
+    "target_date_equal_state_entry_brier",
+    "target_date_equal_state_entry_logloss"
+  ],
+  "uncertainty": "Target-date block bootstrap, 5000 repetitions, seed 20260807.",
+  "decision_rule": "Historical research-positive only if forward Brier and logloss deltas versus frozen Core are both negative and both 95% target-date block bootstrap intervals exclude zero. Any result remains research-only pending new post-2026-08-07 frozen forward.",
+  "multiple_testing": "K=1 primary challenger. Feature-family summaries and coefficients are descriptive only.",
+  "unique_action": "Build and evaluate the transition-confirmation probability challenger; do not change selector, sizing, execution or live configuration.",
+  "live_action": "None"
+}

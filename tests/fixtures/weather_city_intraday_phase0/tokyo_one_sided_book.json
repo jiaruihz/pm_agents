@@ -1,0 +1,34 @@
+{
+  "fixture_kind": "one_sided_book",
+  "note": "valid book snapshot with exactly one quoted side",
+  "raw_ref": {
+    "line_numbers": [
+      147
+    ],
+    "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/active_bracket_books/2026-08-01.jsonl",
+    "source_file_sha256_at_census": "1c29a186d7196c89cfb3194c8c736a7842127f69ae01530b3ac0286f997c254b"
+  },
+  "record_schema_fingerprint": "6a80405d33e6ae23ee32ce205fd83c43f7274950f930d9383b8fbb040866669b",
+  "records": {
+    "book_fetched_at_utc": "2026-07-31T22:14:03.568408+00:00",
+    "book_status": "ok",
+    "city": "Tokyo",
+    "condition_id": "0x2dd3f6e44fc801c9d2a79eeada28f1cde3016a6ab665eeefe35083de4aab619a",
+    "outcome": "no",
+    "reference_market_value": 28,
+    "relative_offset": 0,
+    "schema_version": "fast_source_active_bracket_book_v1",
+    "source": "jma_amedas",
+    "summary": {
+      "ask_size": null,
+      "best_ask": null,
+      "best_bid": 0.999,
+      "bid_size": 8.0,
+      "spread": null,
+      "tick_size": 0.001
+    },
+    "target_date": "2026-08-01",
+    "token_id": "28605251341357843175356060948338961132648617941086723164304743793806700788650"
+  },
+  "schema_version": "weather_city_intraday_phase0_fixture_v1"
+}

@@ -1,0 +1,2248 @@
+{
+  "generated_at_utc": "2026-06-05T18:19:26+00:00",
+  "strategy_id": "weather_edge_engine_blended_single_v0",
+  "strategy_spec": "weather_dashboard/strategy_specs/weather_edge_engine_blended_single_v0.json",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "data_self_check": {
+    "fact_trades_freshness": [
+      {
+        "max_fact_built_at_utc": "2026-06-05T17:01:41.251360+00:00"
+      }
+    ],
+    "fact_trades_by_class": [
+      {
+        "trade_class": "live_real",
+        "rows": 792
+      },
+      {
+        "trade_class": "live_simulated",
+        "rows": 1014
+      },
+      {
+        "trade_class": "paper",
+        "rows": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "rows": 636
+      }
+    ],
+    "fact_trades_by_settlement": [
+      {
+        "settlement_status": null,
+        "rows": 288
+      },
+      {
+        "settlement_status": "missing_bracket",
+        "rows": 725
+      },
+      {
+        "settlement_status": "settled",
+        "rows": 3714
+      }
+    ],
+    "fact_signal_candidates_coverage": [
+      {
+        "rows": 21788,
+        "eligible": 6982,
+        "paper_ordered": 2551,
+        "live_filled": 452
+      }
+    ],
+    "clob_orders_with_fills": [
+      {
+        "status": "error",
+        "orders": 151,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 946,
+        "with_fill": 792
+      }
+    ]
+  },
+  "opportunity_backtest": {
+    "full": {
+      "n_rows": 1878,
+      "date_range": [
+        "2026-05-06",
+        "2026-06-04"
+      ],
+      "rules": {
+        "raw_single": {
+          "rule": "raw_single",
+          "n_legs": 1696,
+          "n_wins": 867,
+          "win_rate": 0.5112028301886793,
+          "total_cost_usd": 8480.0,
+          "total_pnl_usd": 549.6445271366056,
+          "roi": 0.06481657159629783,
+          "avg_pnl_usd": 0.3240828579814891,
+          "worst_single_leg_pnl": -5.0,
+          "best_single_leg_pnl": 521.3157894736843,
+          "roi_excl_top1": 0.003342623913029063,
+          "roi_excl_top5": -0.06139528381628843,
+          "by_side": {
+            "BUY_YES": {
+              "n_legs": 610,
+              "n_wins": 113,
+              "win_rate": 0.18524590163934426,
+              "total_cost_usd": 3050.0,
+              "total_pnl_usd": 453.25223388223657
+            },
+            "BUY_NO": {
+              "n_legs": 1086,
+              "n_wins": 754,
+              "win_rate": 0.6942909760589319,
+              "total_cost_usd": 5430.0,
+              "total_pnl_usd": 96.39229325436902
+            }
+          },
+          "by_city": {
+            "Amsterdam": {
+              "n_legs": 34,
+              "total_cost_usd": 170.0,
+              "total_pnl_usd": 36.8578395173243,
+              "win_rate": 0.6176470588235294
+            },
+            "Ankara": {
+              "n_legs": 43,
+              "total_cost_usd": 215.0,
+              "total_pnl_usd": -25.80482481000816,
+              "win_rate": 0.5116279069767442
+            },
+            "Atlanta": {
+              "n_legs": 32,
+              "total_cost_usd": 160.0,
+              "total_pnl_usd": 18.08558131340057,
+              "win_rate": 0.625
+            },
+            "Austin": {
+              "n_legs": 35,
+              "total_cost_usd": 175.0,
+              "total_pnl_usd": -48.9667953244323,
+              "win_rate": 0.4857142857142857
+            },
+            "Beijing": {
+              "n_legs": 60,
+              "total_cost_usd": 300.0,
+              "total_pnl_usd": -154.43752752968487,
+              "win_rate": 0.2833333333333333
+            },
+            "BuenosAires": {
+              "n_legs": 28,
+              "total_cost_usd": 140.0,
+              "total_pnl_usd": 24.077595921337934,
+              "win_rate": 0.6071428571428571
+            },
+            "Busan": {
+              "n_legs": 29,
+              "total_cost_usd": 145.0,
+              "total_pnl_usd": 50.81349264047365,
+              "win_rate": 0.6206896551724138
+            },
+            "CapeTown": {
+              "n_legs": 31,
+              "total_cost_usd": 155.0,
+              "total_pnl_usd": 60.79092993112377,
+              "win_rate": 0.4838709677419355
+            },
+            "Chengdu": {
+              "n_legs": 37,
+              "total_cost_usd": 185.0,
+              "total_pnl_usd": 0.5358940210800653,
+              "win_rate": 0.5945945945945946
+            },
+            "Chicago": {
+              "n_legs": 27,
+              "total_cost_usd": 135.0,
+              "total_pnl_usd": 21.81102390982466,
+              "win_rate": 0.48148148148148145
+            },
+            "Chongqing": {
+              "n_legs": 27,
+              "total_cost_usd": 135.0,
+              "total_pnl_usd": -60.229193031085636,
+              "win_rate": 0.4074074074074074
+            },
+            "Dallas": {
+              "n_legs": 14,
+              "total_cost_usd": 70.0,
+              "total_pnl_usd": -28.235878911286704,
+              "win_rate": 0.42857142857142855
+            },
+            "Denver": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": 8.796296296296296,
+              "win_rate": 0.6
+            },
+            "Guangzhou": {
+              "n_legs": 27,
+              "total_cost_usd": 135.0,
+              "total_pnl_usd": 127.71618670688846,
+              "win_rate": 0.6666666666666666
+            },
+            "Helsinki": {
+              "n_legs": 41,
+              "total_cost_usd": 205.0,
+              "total_pnl_usd": -8.779766639719838,
+              "win_rate": 0.5365853658536586
+            },
+            "HongKong": {
+              "n_legs": 8,
+              "total_cost_usd": 40.0,
+              "total_pnl_usd": -14.196419489370358,
+              "win_rate": 0.375
+            },
+            "Houston": {
+              "n_legs": 26,
+              "total_cost_usd": 130.0,
+              "total_pnl_usd": 15.117285097229912,
+              "win_rate": 0.5769230769230769
+            },
+            "Istanbul": {
+              "n_legs": 46,
+              "total_cost_usd": 230.0,
+              "total_pnl_usd": -29.449844477788062,
+              "win_rate": 0.5652173913043478
+            },
+            "Jakarta": {
+              "n_legs": 14,
+              "total_cost_usd": 70.0,
+              "total_pnl_usd": -42.82037704105461,
+              "win_rate": 0.2857142857142857
+            },
+            "Jeddah": {
+              "n_legs": 40,
+              "total_cost_usd": 200.0,
+              "total_pnl_usd": -7.722896192883134,
+              "win_rate": 0.6
+            },
+            "Karachi": {
+              "n_legs": 47,
+              "total_cost_usd": 235.0,
+              "total_pnl_usd": -15.925343229446776,
+              "win_rate": 0.5531914893617021
+            },
+            "KualaLumpur": {
+              "n_legs": 25,
+              "total_cost_usd": 125.0,
+              "total_pnl_usd": -16.613244119577168,
+              "win_rate": 0.4
+            },
+            "LA": {
+              "n_legs": 52,
+              "total_cost_usd": 260.0,
+              "total_pnl_usd": 89.64012050416812,
+              "win_rate": 0.5192307692307693
+            },
+            "Lagos": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": -27.58233279870097,
+              "win_rate": 0.3333333333333333
+            },
+            "London": {
+              "n_legs": 70,
+              "total_cost_usd": 350.0,
+              "total_pnl_usd": -21.668159665920342,
+              "win_rate": 0.5
+            },
+            "Lucknow": {
+              "n_legs": 31,
+              "total_cost_usd": 155.0,
+              "total_pnl_usd": -42.194668817984144,
+              "win_rate": 0.41935483870967744
+            },
+            "Madrid": {
+              "n_legs": 49,
+              "total_cost_usd": 245.0,
+              "total_pnl_usd": 162.52801167190682,
+              "win_rate": 0.5918367346938775
+            },
+            "Manila": {
+              "n_legs": 28,
+              "total_cost_usd": 140.0,
+              "total_pnl_usd": -21.559312060395,
+              "win_rate": 0.5
+            },
+            "MexicoCity": {
+              "n_legs": 3,
+              "total_cost_usd": 15.0,
+              "total_pnl_usd": 18.86389586663622,
+              "win_rate": 1.0
+            },
+            "Miami": {
+              "n_legs": 69,
+              "total_cost_usd": 345.0,
+              "total_pnl_usd": 533.8459308724474,
+              "win_rate": 0.4782608695652174
+            },
+            "Milan": {
+              "n_legs": 30,
+              "total_cost_usd": 150.0,
+              "total_pnl_usd": -15.961082661726929,
+              "win_rate": 0.4666666666666667
+            },
+            "Moscow": {
+              "n_legs": 41,
+              "total_cost_usd": 205.0,
+              "total_pnl_usd": -17.06783786123725,
+              "win_rate": 0.5853658536585366
+            },
+            "Munich": {
+              "n_legs": 35,
+              "total_cost_usd": 175.0,
+              "total_pnl_usd": -13.027503153387203,
+              "win_rate": 0.5142857142857142
+            },
+            "NYC": {
+              "n_legs": 81,
+              "total_cost_usd": 405.0,
+              "total_pnl_usd": -23.769502029723657,
+              "win_rate": 0.5061728395061729
+            },
+            "PanamaCity": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": 7.698389225876528,
+              "win_rate": 0.7777777777777778
+            },
+            "Paris": {
+              "n_legs": 51,
+              "total_cost_usd": 255.0,
+              "total_pnl_usd": -94.65281505497546,
+              "win_rate": 0.39215686274509803
+            },
+            "SanFrancisco": {
+              "n_legs": 12,
+              "total_cost_usd": 60.0,
+              "total_pnl_usd": -1.2665415775204178,
+              "win_rate": 0.5833333333333334
+            },
+            "SaoPaulo": {
+              "n_legs": 23,
+              "total_cost_usd": 115.0,
+              "total_pnl_usd": -23.19993366739358,
+              "win_rate": 0.5652173913043478
+            },
+            "Seattle": {
+              "n_legs": 20,
+              "total_cost_usd": 100.0,
+              "total_pnl_usd": 5.4964859006711215,
+              "win_rate": 0.6
+            },
+            "Seoul": {
+              "n_legs": 63,
+              "total_cost_usd": 315.0,
+              "total_pnl_usd": -106.82718350603129,
+              "win_rate": 0.4126984126984127
+            },
+            "Shanghai": {
+              "n_legs": 55,
+              "total_cost_usd": 275.0,
+              "total_pnl_usd": 59.2141940859937,
+              "win_rate": 0.5454545454545454
+            },
+            "Shenzhen": {
+              "n_legs": 24,
+              "total_cost_usd": 120.0,
+              "total_pnl_usd": -49.65976172241409,
+              "win_rate": 0.4166666666666667
+            },
+            "Singapore": {
+              "n_legs": 22,
+              "total_cost_usd": 110.0,
+              "total_pnl_usd": 149.10857803136767,
+              "win_rate": 0.6363636363636364
+            },
+            "Taipei": {
+              "n_legs": 31,
+              "total_cost_usd": 155.0,
+              "total_pnl_usd": -38.07595113746676,
+              "win_rate": 0.5483870967741935
+            },
+            "TelAviv": {
+              "n_legs": 29,
+              "total_cost_usd": 145.0,
+              "total_pnl_usd": -10.925584466845802,
+              "win_rate": 0.5517241379310345
+            },
+            "Tokyo": {
+              "n_legs": 57,
+              "total_cost_usd": 285.0,
+              "total_pnl_usd": 90.29017703115706,
+              "win_rate": 0.43859649122807015
+            },
+            "Warsaw": {
+              "n_legs": 61,
+              "total_cost_usd": 305.0,
+              "total_pnl_usd": 85.16043986863184,
+              "win_rate": 0.6229508196721312
+            },
+            "Wellington": {
+              "n_legs": 26,
+              "total_cost_usd": 130.0,
+              "total_pnl_usd": 16.38944285370776,
+              "win_rate": 0.38461538461538464
+            },
+            "Wuhan": {
+              "n_legs": 39,
+              "total_cost_usd": 195.0,
+              "total_pnl_usd": -72.57298315287773,
+              "win_rate": 0.46153846153846156
+            }
+          }
+        },
+        "market_only": {
+          "rule": "market_only",
+          "n_legs": 0,
+          "n_wins": 0,
+          "win_rate": 0.0,
+          "total_cost_usd": 0.0,
+          "total_pnl_usd": 0.0,
+          "roi": 0.0,
+          "avg_pnl_usd": 0.0,
+          "worst_single_leg_pnl": 0.0,
+          "best_single_leg_pnl": 0.0,
+          "roi_excl_top1": 0.0,
+          "roi_excl_top5": 0.0,
+          "by_side": {},
+          "by_city": {}
+        },
+        "weather_edge_engine_blended_single_v0": {
+          "rule": "weather_edge_engine_blended_single_v0",
+          "n_legs": 1200,
+          "n_wins": 621,
+          "win_rate": 0.5175,
+          "total_cost_usd": 6000.0,
+          "total_pnl_usd": 868.825674497676,
+          "roi": 0.144804279082946,
+          "avg_pnl_usd": 0.72402139541473,
+          "worst_single_leg_pnl": -5.0,
+          "best_single_leg_pnl": 521.3157894736843,
+          "roi_excl_top1": 0.05796661968707119,
+          "roi_excl_top5": -0.02363928183613001,
+          "by_side": {
+            "BUY_YES": {
+              "n_legs": 406,
+              "n_wins": 79,
+              "win_rate": 0.19458128078817735,
+              "total_cost_usd": 2030.0,
+              "total_pnl_usd": 748.666723283901
+            },
+            "BUY_NO": {
+              "n_legs": 794,
+              "n_wins": 542,
+              "win_rate": 0.6826196473551638,
+              "total_cost_usd": 3970.0,
+              "total_pnl_usd": 120.15895121377505
+            }
+          },
+          "by_city": {
+            "Amsterdam": {
+              "n_legs": 26,
+              "total_cost_usd": 130.0,
+              "total_pnl_usd": 29.029835529900023,
+              "win_rate": 0.6153846153846154
+            },
+            "Ankara": {
+              "n_legs": 36,
+              "total_cost_usd": 180.0,
+              "total_pnl_usd": -46.8263109733818,
+              "win_rate": 0.5
+            },
+            "Atlanta": {
+              "n_legs": 27,
+              "total_cost_usd": 135.0,
+              "total_pnl_usd": 37.43586379927628,
+              "win_rate": 0.7037037037037037
+            },
+            "Austin": {
+              "n_legs": 6,
+              "total_cost_usd": 30.0,
+              "total_pnl_usd": -11.152805949966195,
+              "win_rate": 0.3333333333333333
+            },
+            "Beijing": {
+              "n_legs": 6,
+              "total_cost_usd": 30.0,
+              "total_pnl_usd": -21.666666666666668,
+              "win_rate": 0.16666666666666666
+            },
+            "BuenosAires": {
+              "n_legs": 21,
+              "total_cost_usd": 105.0,
+              "total_pnl_usd": 13.461495072678948,
+              "win_rate": 0.6190476190476191
+            },
+            "Busan": {
+              "n_legs": 25,
+              "total_cost_usd": 125.0,
+              "total_pnl_usd": 58.96423760103456,
+              "win_rate": 0.64
+            },
+            "CapeTown": {
+              "n_legs": 21,
+              "total_cost_usd": 105.0,
+              "total_pnl_usd": 78.43198598246384,
+              "win_rate": 0.5238095238095238
+            },
+            "Chengdu": {
+              "n_legs": 26,
+              "total_cost_usd": 130.0,
+              "total_pnl_usd": 19.95241629525079,
+              "win_rate": 0.6153846153846154
+            },
+            "Chicago": {
+              "n_legs": 19,
+              "total_cost_usd": 95.0,
+              "total_pnl_usd": 44.04635961920676,
+              "win_rate": 0.5263157894736842
+            },
+            "Chongqing": {
+              "n_legs": 24,
+              "total_cost_usd": 120.0,
+              "total_pnl_usd": -56.814660970144736,
+              "win_rate": 0.375
+            },
+            "Dallas": {
+              "n_legs": 11,
+              "total_cost_usd": 55.0,
+              "total_pnl_usd": -19.60530566287906,
+              "win_rate": 0.45454545454545453
+            },
+            "Denver": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": 8.796296296296296,
+              "win_rate": 0.6
+            },
+            "Guangzhou": {
+              "n_legs": 18,
+              "total_cost_usd": 90.0,
+              "total_pnl_usd": 120.60852206908666,
+              "win_rate": 0.5555555555555556
+            },
+            "Helsinki": {
+              "n_legs": 24,
+              "total_cost_usd": 120.0,
+              "total_pnl_usd": -18.568210282443623,
+              "win_rate": 0.5833333333333334
+            },
+            "HongKong": {
+              "n_legs": 6,
+              "total_cost_usd": 30.0,
+              "total_pnl_usd": -4.196419489370358,
+              "win_rate": 0.5
+            },
+            "Houston": {
+              "n_legs": 18,
+              "total_cost_usd": 90.0,
+              "total_pnl_usd": 11.844894618393198,
+              "win_rate": 0.5
+            },
+            "Istanbul": {
+              "n_legs": 33,
+              "total_cost_usd": 165.0,
+              "total_pnl_usd": -13.294724057837751,
+              "win_rate": 0.5454545454545454
+            },
+            "Jakarta": {
+              "n_legs": 12,
+              "total_cost_usd": 60.0,
+              "total_pnl_usd": -32.82037704105461,
+              "win_rate": 0.3333333333333333
+            },
+            "Jeddah": {
+              "n_legs": 25,
+              "total_cost_usd": 125.0,
+              "total_pnl_usd": 4.714435552157425,
+              "win_rate": 0.56
+            },
+            "Karachi": {
+              "n_legs": 41,
+              "total_cost_usd": 205.0,
+              "total_pnl_usd": 0.7712780647693369,
+              "win_rate": 0.5853658536585366
+            },
+            "KualaLumpur": {
+              "n_legs": 13,
+              "total_cost_usd": 65.0,
+              "total_pnl_usd": 1.6463307625904717,
+              "win_rate": 0.46153846153846156
+            },
+            "LA": {
+              "n_legs": 44,
+              "total_cost_usd": 220.0,
+              "total_pnl_usd": 89.33637719071154,
+              "win_rate": 0.5
+            },
+            "Lagos": {
+              "n_legs": 4,
+              "total_cost_usd": 20.0,
+              "total_pnl_usd": -13.827160493827162,
+              "win_rate": 0.25
+            },
+            "London": {
+              "n_legs": 59,
+              "total_cost_usd": 295.0,
+              "total_pnl_usd": -16.728899672895864,
+              "win_rate": 0.4915254237288136
+            },
+            "Lucknow": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": -9.081777091476459,
+              "win_rate": 0.3333333333333333
+            },
+            "Madrid": {
+              "n_legs": 31,
+              "total_cost_usd": 155.0,
+              "total_pnl_usd": 151.43472812346357,
+              "win_rate": 0.6129032258064516
+            },
+            "Manila": {
+              "n_legs": 27,
+              "total_cost_usd": 135.0,
+              "total_pnl_usd": -23.552319053401995,
+              "win_rate": 0.48148148148148145
+            },
+            "MexicoCity": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": 6.622516556291391,
+              "win_rate": 1.0
+            },
+            "Miami": {
+              "n_legs": 48,
+              "total_cost_usd": 240.0,
+              "total_pnl_usd": 560.9621783783014,
+              "win_rate": 0.5208333333333334
+            },
+            "Milan": {
+              "n_legs": 10,
+              "total_cost_usd": 50.0,
+              "total_pnl_usd": -31.116950209316826,
+              "win_rate": 0.2
+            },
+            "Moscow": {
+              "n_legs": 31,
+              "total_cost_usd": 155.0,
+              "total_pnl_usd": 8.133497388972676,
+              "win_rate": 0.6451612903225806
+            },
+            "Munich": {
+              "n_legs": 26,
+              "total_cost_usd": 130.0,
+              "total_pnl_usd": -28.072731006603732,
+              "win_rate": 0.5
+            },
+            "NYC": {
+              "n_legs": 55,
+              "total_cost_usd": 275.0,
+              "total_pnl_usd": -6.4407237170028955,
+              "win_rate": 0.509090909090909
+            },
+            "PanamaCity": {
+              "n_legs": 8,
+              "total_cost_usd": 40.0,
+              "total_pnl_usd": 7.048671711752235,
+              "win_rate": 0.75
+            },
+            "Paris": {
+              "n_legs": 43,
+              "total_cost_usd": 215.0,
+              "total_pnl_usd": -75.89782614615216,
+              "win_rate": 0.3953488372093023
+            },
+            "SanFrancisco": {
+              "n_legs": 12,
+              "total_cost_usd": 60.0,
+              "total_pnl_usd": -1.2665415775204178,
+              "win_rate": 0.5833333333333334
+            },
+            "SaoPaulo": {
+              "n_legs": 16,
+              "total_cost_usd": 80.0,
+              "total_pnl_usd": -15.275538794269124,
+              "win_rate": 0.5625
+            },
+            "Seattle": {
+              "n_legs": 13,
+              "total_cost_usd": 65.0,
+              "total_pnl_usd": 10.01482504961289,
+              "win_rate": 0.6153846153846154
+            },
+            "Seoul": {
+              "n_legs": 49,
+              "total_cost_usd": 245.0,
+              "total_pnl_usd": -73.87495223570464,
+              "win_rate": 0.40816326530612246
+            },
+            "Shanghai": {
+              "n_legs": 48,
+              "total_cost_usd": 240.0,
+              "total_pnl_usd": 69.57012076410062,
+              "win_rate": 0.5416666666666666
+            },
+            "Shenzhen": {
+              "n_legs": 19,
+              "total_cost_usd": 95.0,
+              "total_pnl_usd": -39.3135459414157,
+              "win_rate": 0.42105263157894735
+            },
+            "Singapore": {
+              "n_legs": 20,
+              "total_cost_usd": 100.0,
+              "total_pnl_usd": 159.10857803136767,
+              "win_rate": 0.7
+            },
+            "Taipei": {
+              "n_legs": 27,
+              "total_cost_usd": 135.0,
+              "total_pnl_usd": -36.56862613812195,
+              "win_rate": 0.5185185185185185
+            },
+            "TelAviv": {
+              "n_legs": 20,
+              "total_cost_usd": 100.0,
+              "total_pnl_usd": -23.429658738639535,
+              "win_rate": 0.45
+            },
+            "Tokyo": {
+              "n_legs": 45,
+              "total_cost_usd": 225.0,
+              "total_pnl_usd": -66.61786520222186,
+              "win_rate": 0.4
+            },
+            "Warsaw": {
+              "n_legs": 45,
+              "total_cost_usd": 225.0,
+              "total_pnl_usd": 83.3866754836951,
+              "win_rate": 0.6222222222222222
+            },
+            "Wellington": {
+              "n_legs": 22,
+              "total_cost_usd": 110.0,
+              "total_pnl_usd": 15.231642997521247,
+              "win_rate": 0.3181818181818182
+            },
+            "Wuhan": {
+              "n_legs": 24,
+              "total_cost_usd": 120.0,
+              "total_pnl_usd": -35.7174913289037,
+              "win_rate": 0.5
+            }
+          }
+        }
+      },
+      "attribution_blended_vs_raw": {
+        "raw_winning_profit_missed_by_blend": 930.8188526389303,
+        "raw_losing_cost_avoided_by_blend": 1250.0,
+        "shared_profit": 3763.8256744976816,
+        "shared_loss": -2895.0,
+        "net_blended_vs_raw": 319.18114736106975
+      },
+      "buy_no_roi": 0.030266738341001274,
+      "buy_yes_roi": 0.36880134151916305
+    },
+    "holdout_from_2026_05_26": {
+      "n_rows": 596,
+      "date_range": [
+        "2026-05-26",
+        "2026-06-04"
+      ],
+      "rules": {
+        "raw_single": {
+          "rule": "raw_single",
+          "n_legs": 537,
+          "n_wins": 254,
+          "win_rate": 0.4729981378026071,
+          "total_cost_usd": 2685.0,
+          "total_pnl_usd": -288.88832931259697,
+          "roi": -0.10759341873839738,
+          "avg_pnl_usd": -0.5379670936919869,
+          "worst_single_leg_pnl": -5.0,
+          "best_single_leg_pnl": 139.92753623188406,
+          "roi_excl_top1": -0.16000591997928396,
+          "roi_excl_top5": -0.24535598566749525,
+          "by_side": {
+            "BUY_YES": {
+              "n_legs": 189,
+              "n_wins": 29,
+              "win_rate": 0.15343915343915343,
+              "total_cost_usd": 945.0,
+              "total_pnl_usd": -179.45962877654915
+            },
+            "BUY_NO": {
+              "n_legs": 348,
+              "n_wins": 225,
+              "win_rate": 0.646551724137931,
+              "total_cost_usd": 1740.0,
+              "total_pnl_usd": -109.42870053604781
+            }
+          },
+          "by_city": {
+            "Amsterdam": {
+              "n_legs": 15,
+              "total_cost_usd": 75.0,
+              "total_pnl_usd": 8.221350578388583,
+              "win_rate": 0.6
+            },
+            "Ankara": {
+              "n_legs": 21,
+              "total_cost_usd": 105.0,
+              "total_pnl_usd": -20.798956218263175,
+              "win_rate": 0.5714285714285714
+            },
+            "Atlanta": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": -5.764404831433527,
+              "win_rate": 0.4444444444444444
+            },
+            "Beijing": {
+              "n_legs": 1,
+              "total_cost_usd": 5.0,
+              "total_pnl_usd": 1.7567567567567568,
+              "win_rate": 1.0
+            },
+            "BuenosAires": {
+              "n_legs": 13,
+              "total_cost_usd": 65.0,
+              "total_pnl_usd": -28.495134916040303,
+              "win_rate": 0.38461538461538464
+            },
+            "Busan": {
+              "n_legs": 13,
+              "total_cost_usd": 65.0,
+              "total_pnl_usd": -18.4453647759439,
+              "win_rate": 0.5384615384615384
+            },
+            "CapeTown": {
+              "n_legs": 13,
+              "total_cost_usd": 65.0,
+              "total_pnl_usd": 76.25246233091349,
+              "win_rate": 0.46153846153846156
+            },
+            "Chengdu": {
+              "n_legs": 26,
+              "total_cost_usd": 130.0,
+              "total_pnl_usd": 2.652028039316196,
+              "win_rate": 0.5769230769230769
+            },
+            "Chongqing": {
+              "n_legs": 16,
+              "total_cost_usd": 80.0,
+              "total_pnl_usd": -47.53533023959364,
+              "win_rate": 0.3125
+            },
+            "Dallas": {
+              "n_legs": 4,
+              "total_cost_usd": 20.0,
+              "total_pnl_usd": -20.0,
+              "win_rate": 0.0
+            },
+            "Guangzhou": {
+              "n_legs": 11,
+              "total_cost_usd": 55.0,
+              "total_pnl_usd": -9.741033928682933,
+              "win_rate": 0.5454545454545454
+            },
+            "Helsinki": {
+              "n_legs": 10,
+              "total_cost_usd": 50.0,
+              "total_pnl_usd": -22.039338056811665,
+              "win_rate": 0.4
+            },
+            "HongKong": {
+              "n_legs": 1,
+              "total_cost_usd": 5.0,
+              "total_pnl_usd": -5.0,
+              "win_rate": 0.0
+            },
+            "Houston": {
+              "n_legs": 3,
+              "total_cost_usd": 15.0,
+              "total_pnl_usd": -2.182577949212473,
+              "win_rate": 0.6666666666666666
+            },
+            "Istanbul": {
+              "n_legs": 16,
+              "total_cost_usd": 80.0,
+              "total_pnl_usd": -0.8438376727704672,
+              "win_rate": 0.625
+            },
+            "Jeddah": {
+              "n_legs": 14,
+              "total_cost_usd": 70.0,
+              "total_pnl_usd": -27.611508169795044,
+              "win_rate": 0.42857142857142855
+            },
+            "Karachi": {
+              "n_legs": 23,
+              "total_cost_usd": 115.0,
+              "total_pnl_usd": -12.992030431320126,
+              "win_rate": 0.5217391304347826
+            },
+            "KualaLumpur": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": -11.16876692778021,
+              "win_rate": 0.3333333333333333
+            },
+            "LA": {
+              "n_legs": 15,
+              "total_cost_usd": 75.0,
+              "total_pnl_usd": 2.773086412404627,
+              "win_rate": 0.5333333333333333
+            },
+            "London": {
+              "n_legs": 20,
+              "total_cost_usd": 100.0,
+              "total_pnl_usd": 35.41069123693342,
+              "win_rate": 0.6
+            },
+            "Lucknow": {
+              "n_legs": 8,
+              "total_cost_usd": 40.0,
+              "total_pnl_usd": -25.120035402146254,
+              "win_rate": 0.25
+            },
+            "Madrid": {
+              "n_legs": 14,
+              "total_cost_usd": 70.0,
+              "total_pnl_usd": 21.84934391182765,
+              "win_rate": 0.5714285714285714
+            },
+            "Manila": {
+              "n_legs": 13,
+              "total_cost_usd": 65.0,
+              "total_pnl_usd": -28.810034541687617,
+              "win_rate": 0.38461538461538464
+            },
+            "Miami": {
+              "n_legs": 15,
+              "total_cost_usd": 75.0,
+              "total_pnl_usd": -28.33053288790783,
+              "win_rate": 0.3333333333333333
+            },
+            "Milan": {
+              "n_legs": 13,
+              "total_cost_usd": 65.0,
+              "total_pnl_usd": -33.477441134479285,
+              "win_rate": 0.3076923076923077
+            },
+            "Moscow": {
+              "n_legs": 23,
+              "total_cost_usd": 115.0,
+              "total_pnl_usd": -27.201534457464284,
+              "win_rate": 0.5217391304347826
+            },
+            "Munich": {
+              "n_legs": 20,
+              "total_cost_usd": 100.0,
+              "total_pnl_usd": -24.016364960202818,
+              "win_rate": 0.4
+            },
+            "NYC": {
+              "n_legs": 18,
+              "total_cost_usd": 90.0,
+              "total_pnl_usd": -32.70829267600336,
+              "win_rate": 0.4444444444444444
+            },
+            "PanamaCity": {
+              "n_legs": 1,
+              "total_cost_usd": 5.0,
+              "total_pnl_usd": 2.692307692307692,
+              "win_rate": 1.0
+            },
+            "Paris": {
+              "n_legs": 10,
+              "total_cost_usd": 50.0,
+              "total_pnl_usd": -16.233844359529183,
+              "win_rate": 0.4
+            },
+            "SaoPaulo": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": -5.970316838151234,
+              "win_rate": 0.6
+            },
+            "Seattle": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": -10.0,
+              "win_rate": 0.0
+            },
+            "Seoul": {
+              "n_legs": 14,
+              "total_cost_usd": 70.0,
+              "total_pnl_usd": 5.290802309678915,
+              "win_rate": 0.5714285714285714
+            },
+            "Shanghai": {
+              "n_legs": 18,
+              "total_cost_usd": 90.0,
+              "total_pnl_usd": -21.754165460791732,
+              "win_rate": 0.5555555555555556
+            },
+            "Shenzhen": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": -24.747573715179644,
+              "win_rate": 0.3333333333333333
+            },
+            "Singapore": {
+              "n_legs": 8,
+              "total_cost_usd": 40.0,
+              "total_pnl_usd": 127.95646808434533,
+              "win_rate": 0.5
+            },
+            "Taipei": {
+              "n_legs": 14,
+              "total_cost_usd": 70.0,
+              "total_pnl_usd": -23.125965962838112,
+              "win_rate": 0.5
+            },
+            "TelAviv": {
+              "n_legs": 8,
+              "total_cost_usd": 40.0,
+              "total_pnl_usd": -14.850096416206814,
+              "win_rate": 0.375
+            },
+            "Tokyo": {
+              "n_legs": 18,
+              "total_cost_usd": 90.0,
+              "total_pnl_usd": -39.36532035537446,
+              "win_rate": 0.3888888888888889
+            },
+            "Warsaw": {
+              "n_legs": 18,
+              "total_cost_usd": 90.0,
+              "total_pnl_usd": 28.995860835075643,
+              "win_rate": 0.6666666666666666
+            },
+            "Wellington": {
+              "n_legs": 11,
+              "total_cost_usd": 55.0,
+              "total_pnl_usd": 46.06778153952398,
+              "win_rate": 0.36363636363636365
+            },
+            "Wuhan": {
+              "n_legs": 24,
+              "total_cost_usd": 120.0,
+              "total_pnl_usd": -60.477465754459146,
+              "win_rate": 0.375
+            }
+          }
+        },
+        "market_only": {
+          "rule": "market_only",
+          "n_legs": 0,
+          "n_wins": 0,
+          "win_rate": 0.0,
+          "total_cost_usd": 0.0,
+          "total_pnl_usd": 0.0,
+          "roi": 0.0,
+          "avg_pnl_usd": 0.0,
+          "worst_single_leg_pnl": 0.0,
+          "best_single_leg_pnl": 0.0,
+          "roi_excl_top1": 0.0,
+          "roi_excl_top5": 0.0,
+          "by_side": {},
+          "by_city": {}
+        },
+        "weather_edge_engine_blended_single_v0": {
+          "rule": "weather_edge_engine_blended_single_v0",
+          "n_legs": 396,
+          "n_wins": 186,
+          "win_rate": 0.4696969696969697,
+          "total_cost_usd": 1980.0,
+          "total_pnl_usd": -116.93010881831705,
+          "roi": -0.05905561051430154,
+          "avg_pnl_usd": -0.2952780525715077,
+          "worst_single_leg_pnl": -5.0,
+          "best_single_leg_pnl": 139.92753623188406,
+          "roi_excl_top1": -0.13005450382288664,
+          "roi_excl_top5": -0.24587657359655113,
+          "by_side": {
+            "BUY_YES": {
+              "n_legs": 131,
+              "n_wins": 18,
+              "win_rate": 0.13740458015267176,
+              "total_cost_usd": 655.0,
+              "total_pnl_usd": -38.08451199275693
+            },
+            "BUY_NO": {
+              "n_legs": 265,
+              "n_wins": 168,
+              "win_rate": 0.6339622641509434,
+              "total_cost_usd": 1325.0,
+              "total_pnl_usd": -78.84559682556012
+            }
+          },
+          "by_city": {
+            "Amsterdam": {
+              "n_legs": 12,
+              "total_cost_usd": 60.0,
+              "total_pnl_usd": -2.5723002152622128,
+              "win_rate": 0.5833333333333334
+            },
+            "Ankara": {
+              "n_legs": 17,
+              "total_cost_usd": 85.0,
+              "total_pnl_usd": -12.77543099994202,
+              "win_rate": 0.5882352941176471
+            },
+            "Atlanta": {
+              "n_legs": 6,
+              "total_cost_usd": 30.0,
+              "total_pnl_usd": 3.585877654442179,
+              "win_rate": 0.5
+            },
+            "BuenosAires": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": -14.988641409546796,
+              "win_rate": 0.4444444444444444
+            },
+            "Busan": {
+              "n_legs": 12,
+              "total_cost_usd": 60.0,
+              "total_pnl_usd": -19.159650490229613,
+              "win_rate": 0.5
+            },
+            "CapeTown": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": 90.37010938973701,
+              "win_rate": 0.5555555555555556
+            },
+            "Chengdu": {
+              "n_legs": 17,
+              "total_cost_usd": 85.0,
+              "total_pnl_usd": 17.365160482978446,
+              "win_rate": 0.5882352941176471
+            },
+            "Chongqing": {
+              "n_legs": 13,
+              "total_cost_usd": 65.0,
+              "total_pnl_usd": -44.12079817865274,
+              "win_rate": 0.23076923076923078
+            },
+            "Dallas": {
+              "n_legs": 3,
+              "total_cost_usd": 15.0,
+              "total_pnl_usd": -15.0,
+              "win_rate": 0.0
+            },
+            "Guangzhou": {
+              "n_legs": 7,
+              "total_cost_usd": 35.0,
+              "total_pnl_usd": -11.273853926153969,
+              "win_rate": 0.42857142857142855
+            },
+            "Helsinki": {
+              "n_legs": 4,
+              "total_cost_usd": 20.0,
+              "total_pnl_usd": -12.537313432835822,
+              "win_rate": 0.25
+            },
+            "HongKong": {
+              "n_legs": 1,
+              "total_cost_usd": 5.0,
+              "total_pnl_usd": -5.0,
+              "win_rate": 0.0
+            },
+            "Houston": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": -2.6470588235294126,
+              "win_rate": 0.5
+            },
+            "Istanbul": {
+              "n_legs": 14,
+              "total_cost_usd": 70.0,
+              "total_pnl_usd": -2.588343167275961,
+              "win_rate": 0.5714285714285714
+            },
+            "Jeddah": {
+              "n_legs": 11,
+              "total_cost_usd": 55.0,
+              "total_pnl_usd": -12.611508169795044,
+              "win_rate": 0.5454545454545454
+            },
+            "Karachi": {
+              "n_legs": 21,
+              "total_cost_usd": 105.0,
+              "total_pnl_usd": -10.08422901288041,
+              "win_rate": 0.5238095238095238
+            },
+            "KualaLumpur": {
+              "n_legs": 4,
+              "total_cost_usd": 20.0,
+              "total_pnl_usd": -13.4640522875817,
+              "win_rate": 0.25
+            },
+            "LA": {
+              "n_legs": 14,
+              "total_cost_usd": 70.0,
+              "total_pnl_usd": -2.64358025426204,
+              "win_rate": 0.5
+            },
+            "London": {
+              "n_legs": 15,
+              "total_cost_usd": 75.0,
+              "total_pnl_usd": 40.409024431366284,
+              "win_rate": 0.6666666666666666
+            },
+            "Lucknow": {
+              "n_legs": 3,
+              "total_cost_usd": 15.0,
+              "total_pnl_usd": -15.0,
+              "win_rate": 0.0
+            },
+            "Madrid": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": 21.339426772533262,
+              "win_rate": 0.6
+            },
+            "Manila": {
+              "n_legs": 12,
+              "total_cost_usd": 60.0,
+              "total_pnl_usd": -30.80304153469461,
+              "win_rate": 0.3333333333333333
+            },
+            "Miami": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": -18.704348106261982,
+              "win_rate": 0.3333333333333333
+            },
+            "Milan": {
+              "n_legs": 4,
+              "total_cost_usd": 20.0,
+              "total_pnl_usd": -10.29126213592233,
+              "win_rate": 0.25
+            },
+            "Moscow": {
+              "n_legs": 19,
+              "total_cost_usd": 95.0,
+              "total_pnl_usd": -14.77729203322186,
+              "win_rate": 0.5789473684210527
+            },
+            "Munich": {
+              "n_legs": 14,
+              "total_cost_usd": 70.0,
+              "total_pnl_usd": -31.713107964934494,
+              "win_rate": 0.35714285714285715
+            },
+            "NYC": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": -18.799569819912087,
+              "win_rate": 0.4444444444444444
+            },
+            "PanamaCity": {
+              "n_legs": 1,
+              "total_cost_usd": 5.0,
+              "total_pnl_usd": 2.692307692307692,
+              "win_rate": 1.0
+            },
+            "Paris": {
+              "n_legs": 10,
+              "total_cost_usd": 50.0,
+              "total_pnl_usd": -16.233844359529183,
+              "win_rate": 0.4
+            },
+            "SaoPaulo": {
+              "n_legs": 3,
+              "total_cost_usd": 15.0,
+              "total_pnl_usd": -8.630573248407643,
+              "win_rate": 0.3333333333333333
+            },
+            "Seattle": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": -10.0,
+              "win_rate": 0.0
+            },
+            "Seoul": {
+              "n_legs": 13,
+              "total_cost_usd": 65.0,
+              "total_pnl_usd": 4.765940431225877,
+              "win_rate": 0.5384615384615384
+            },
+            "Shanghai": {
+              "n_legs": 15,
+              "total_cost_usd": 75.0,
+              "total_pnl_usd": -12.814771521397795,
+              "win_rate": 0.6
+            },
+            "Shenzhen": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": -24.747573715179644,
+              "win_rate": 0.3333333333333333
+            },
+            "Singapore": {
+              "n_legs": 6,
+              "total_cost_usd": 30.0,
+              "total_pnl_usd": 137.95646808434532,
+              "win_rate": 0.6666666666666666
+            },
+            "Taipei": {
+              "n_legs": 12,
+              "total_cost_usd": 60.0,
+              "total_pnl_usd": -19.337146087061715,
+              "win_rate": 0.5
+            },
+            "TelAviv": {
+              "n_legs": 7,
+              "total_cost_usd": 35.0,
+              "total_pnl_usd": -16.343602909713308,
+              "win_rate": 0.2857142857142857
+            },
+            "Tokyo": {
+              "n_legs": 13,
+              "total_cost_usd": 65.0,
+              "total_pnl_usd": -35.610331446551136,
+              "win_rate": 0.3076923076923077
+            },
+            "Warsaw": {
+              "n_legs": 13,
+              "total_cost_usd": 65.0,
+              "total_pnl_usd": 17.60168882011367,
+              "win_rate": 0.6153846153846154
+            },
+            "Wellington": {
+              "n_legs": 10,
+              "total_cost_usd": 50.0,
+              "total_pnl_usd": 51.06778153952398,
+              "win_rate": 0.4
+            },
+            "Wuhan": {
+              "n_legs": 16,
+              "total_cost_usd": 80.0,
+              "total_pnl_usd": -38.810668866155254,
+              "win_rate": 0.375
+            }
+          }
+        }
+      },
+      "attribution_blended_vs_raw": {
+        "raw_winning_profit_missed_by_blend": 193.0417795057201,
+        "raw_losing_cost_avoided_by_blend": 365.0,
+        "shared_profit": 933.0698911816834,
+        "shared_loss": -1050.0,
+        "net_blended_vs_raw": 171.9582204942799
+      },
+      "buy_no_roi": -0.059506110811743486,
+      "buy_yes_roi": -0.05814429311871287
+    },
+    "recent_from_2026_06_01": {
+      "n_rows": 147,
+      "date_range": [
+        "2026-06-01",
+        "2026-06-04"
+      ],
+      "rules": {
+        "raw_single": {
+          "rule": "raw_single",
+          "n_legs": 129,
+          "n_wins": 74,
+          "win_rate": 0.5736434108527132,
+          "total_cost_usd": 645.0,
+          "total_pnl_usd": 9.920543463555456,
+          "roi": 0.015380687540396055,
+          "avg_pnl_usd": 0.07690343770198027,
+          "worst_single_leg_pnl": -5.0,
+          "best_single_leg_pnl": 19.390243902439025,
+          "roi_excl_top1": -0.014796406935755577,
+          "roi_excl_top5": -0.10791244592487015,
+          "by_side": {
+            "BUY_YES": {
+              "n_legs": 34,
+              "n_wins": 10,
+              "win_rate": 0.29411764705882354,
+              "total_cost_usd": 170.0,
+              "total_pnl_usd": -10.736923230105573
+            },
+            "BUY_NO": {
+              "n_legs": 95,
+              "n_wins": 64,
+              "win_rate": 0.6736842105263158,
+              "total_cost_usd": 475.0,
+              "total_pnl_usd": 20.65746669366103
+            }
+          },
+          "by_city": {
+            "Amsterdam": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": -9.907801418439716,
+              "win_rate": 0.4
+            },
+            "Ankara": {
+              "n_legs": 8,
+              "total_cost_usd": 40.0,
+              "total_pnl_usd": -9.293920189635532,
+              "win_rate": 0.5
+            },
+            "BuenosAires": {
+              "n_legs": 6,
+              "total_cost_usd": 30.0,
+              "total_pnl_usd": -13.805402570154733,
+              "win_rate": 0.3333333333333333
+            },
+            "Chengdu": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": 3.607961120111085,
+              "win_rate": 1.0
+            },
+            "Guangzhou": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": -2.0556710926251798,
+              "win_rate": 0.6
+            },
+            "Istanbul": {
+              "n_legs": 3,
+              "total_cost_usd": 15.0,
+              "total_pnl_usd": -2.256493506493507,
+              "win_rate": 0.6666666666666666
+            },
+            "Jeddah": {
+              "n_legs": 6,
+              "total_cost_usd": 30.0,
+              "total_pnl_usd": -7.760868503719136,
+              "win_rate": 0.5
+            },
+            "Karachi": {
+              "n_legs": 7,
+              "total_cost_usd": 35.0,
+              "total_pnl_usd": 7.591962089766589,
+              "win_rate": 0.7142857142857143
+            },
+            "LA": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": 14.145946272899238,
+              "win_rate": 0.6666666666666666
+            },
+            "London": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": 32.06403608637794,
+              "win_rate": 0.7777777777777778
+            },
+            "Lucknow": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": -2.366412213740458,
+              "win_rate": 0.5
+            },
+            "Madrid": {
+              "n_legs": 7,
+              "total_cost_usd": 35.0,
+              "total_pnl_usd": 31.037849155519403,
+              "win_rate": 0.7142857142857143
+            },
+            "Manila": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": -2.4312354312354314,
+              "win_rate": 0.6
+            },
+            "Miami": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": -15.854254957084445,
+              "win_rate": 0.3333333333333333
+            },
+            "Moscow": {
+              "n_legs": 10,
+              "total_cost_usd": 50.0,
+              "total_pnl_usd": -10.137517428961175,
+              "win_rate": 0.5
+            },
+            "Munich": {
+              "n_legs": 7,
+              "total_cost_usd": 35.0,
+              "total_pnl_usd": 19.22454900622189,
+              "win_rate": 0.7142857142857143
+            },
+            "NYC": {
+              "n_legs": 12,
+              "total_cost_usd": 60.0,
+              "total_pnl_usd": -24.52813949585018,
+              "win_rate": 0.4166666666666667
+            },
+            "Seattle": {
+              "n_legs": 1,
+              "total_cost_usd": 5.0,
+              "total_pnl_usd": -5.0,
+              "win_rate": 0.0
+            },
+            "Shanghai": {
+              "n_legs": 6,
+              "total_cost_usd": 30.0,
+              "total_pnl_usd": -1.9542455235911982,
+              "win_rate": 0.6666666666666666
+            },
+            "Tokyo": {
+              "n_legs": 3,
+              "total_cost_usd": 15.0,
+              "total_pnl_usd": 1.0096951141727266,
+              "win_rate": 0.6666666666666666
+            },
+            "Warsaw": {
+              "n_legs": 7,
+              "total_cost_usd": 35.0,
+              "total_pnl_usd": 8.590506950017279,
+              "win_rate": 0.7142857142857143
+            }
+          }
+        },
+        "market_only": {
+          "rule": "market_only",
+          "n_legs": 0,
+          "n_wins": 0,
+          "win_rate": 0.0,
+          "total_cost_usd": 0.0,
+          "total_pnl_usd": 0.0,
+          "roi": 0.0,
+          "avg_pnl_usd": 0.0,
+          "worst_single_leg_pnl": 0.0,
+          "best_single_leg_pnl": 0.0,
+          "roi_excl_top1": 0.0,
+          "roi_excl_top5": 0.0,
+          "by_side": {},
+          "by_city": {}
+        },
+        "weather_edge_engine_blended_single_v0": {
+          "rule": "weather_edge_engine_blended_single_v0",
+          "n_legs": 95,
+          "n_wins": 56,
+          "win_rate": 0.5894736842105263,
+          "total_cost_usd": 475.0,
+          "total_pnl_usd": 20.29992884205044,
+          "roi": 0.04273669229905356,
+          "avg_pnl_usd": 0.2136834614952678,
+          "worst_single_leg_pnl": -5.0,
+          "best_single_leg_pnl": 19.390243902439025,
+          "roi_excl_top1": 0.0019354998715136493,
+          "roi_excl_top5": -0.10877414552717768,
+          "by_side": {
+            "BUY_YES": {
+              "n_legs": 20,
+              "n_wins": 5,
+              "win_rate": 0.25,
+              "total_cost_usd": 100.0,
+              "total_pnl_usd": -5.751705670719602
+            },
+            "BUY_NO": {
+              "n_legs": 75,
+              "n_wins": 51,
+              "win_rate": 0.68,
+              "total_cost_usd": 375.0,
+              "total_pnl_usd": 26.051634512770043
+            }
+          },
+          "by_city": {
+            "Amsterdam": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": -9.907801418439716,
+              "win_rate": 0.4
+            },
+            "Ankara": {
+              "n_legs": 7,
+              "total_cost_usd": 35.0,
+              "total_pnl_usd": -10.745533092861338,
+              "win_rate": 0.42857142857142855
+            },
+            "BuenosAires": {
+              "n_legs": 4,
+              "total_cost_usd": 20.0,
+              "total_pnl_usd": -3.8054025701547336,
+              "win_rate": 0.5
+            },
+            "Chengdu": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": 3.607961120111085,
+              "win_rate": 1.0
+            },
+            "Guangzhou": {
+              "n_legs": 4,
+              "total_cost_usd": 20.0,
+              "total_pnl_usd": -4.147869674185464,
+              "win_rate": 0.5
+            },
+            "Istanbul": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": -3.5064935064935066,
+              "win_rate": 0.5
+            },
+            "Jeddah": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": -2.760868503719136,
+              "win_rate": 0.6
+            },
+            "Karachi": {
+              "n_legs": 6,
+              "total_cost_usd": 30.0,
+              "total_pnl_usd": 12.59196208976659,
+              "win_rate": 0.8333333333333334
+            },
+            "LA": {
+              "n_legs": 8,
+              "total_cost_usd": 40.0,
+              "total_pnl_usd": 8.72927960623257,
+              "win_rate": 0.625
+            },
+            "London": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": 32.06403608637794,
+              "win_rate": 0.7777777777777778
+            },
+            "Madrid": {
+              "n_legs": 3,
+              "total_cost_usd": 15.0,
+              "total_pnl_usd": 31.339426772533262,
+              "win_rate": 1.0
+            },
+            "Manila": {
+              "n_legs": 4,
+              "total_cost_usd": 20.0,
+              "total_pnl_usd": -4.424242424242425,
+              "win_rate": 0.5
+            },
+            "Miami": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": -16.228070175438596,
+              "win_rate": 0.2
+            },
+            "Moscow": {
+              "n_legs": 8,
+              "total_cost_usd": 40.0,
+              "total_pnl_usd": -7.713275004718749,
+              "win_rate": 0.5
+            },
+            "Munich": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": 6.527806001490211,
+              "win_rate": 1.0
+            },
+            "NYC": {
+              "n_legs": 7,
+              "total_cost_usd": 35.0,
+              "total_pnl_usd": -15.29307631341858,
+              "win_rate": 0.42857142857142855
+            },
+            "Seattle": {
+              "n_legs": 1,
+              "total_cost_usd": 5.0,
+              "total_pnl_usd": -5.0,
+              "win_rate": 0.0
+            },
+            "Shanghai": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": 3.045754476408802,
+              "win_rate": 0.8
+            },
+            "Tokyo": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": -1.4529914529914523,
+              "win_rate": 0.5
+            },
+            "Warsaw": {
+              "n_legs": 6,
+              "total_cost_usd": 30.0,
+              "total_pnl_usd": 7.379326825793676,
+              "win_rate": 0.6666666666666666
+            }
+          }
+        }
+      },
+      "attribution_blended_vs_raw": {
+        "raw_winning_profit_missed_by_blend": 69.62061462150501,
+        "raw_losing_cost_avoided_by_blend": 80.0,
+        "shared_profit": 215.2999288420504,
+        "shared_loss": -195.0,
+        "net_blended_vs_raw": 10.379385378494987
+      },
+      "buy_no_roi": 0.06947102536738678,
+      "buy_yes_roi": -0.05751705670719602
+    },
+    "live_filled_only": {
+      "n_rows": 305,
+      "date_range": [
+        "2026-05-16",
+        "2026-06-04"
+      ],
+      "rules": {
+        "raw_single": {
+          "rule": "raw_single",
+          "n_legs": 288,
+          "n_wins": 167,
+          "win_rate": 0.5798611111111112,
+          "total_cost_usd": 1440.0,
+          "total_pnl_usd": 36.35019141682544,
+          "roi": 0.025243188483906553,
+          "avg_pnl_usd": 0.12621594241953277,
+          "worst_single_leg_pnl": -5.0,
+          "best_single_leg_pnl": 19.390243902439025,
+          "roi_excl_top1": 0.011818778755669978,
+          "roi_excl_top5": -0.03413609028136314,
+          "by_side": {
+            "BUY_YES": {
+              "n_legs": 63,
+              "n_wins": 23,
+              "win_rate": 0.36507936507936506,
+              "total_cost_usd": 315.0,
+              "total_pnl_usd": 39.76949221864604
+            },
+            "BUY_NO": {
+              "n_legs": 225,
+              "n_wins": 144,
+              "win_rate": 0.64,
+              "total_cost_usd": 1125.0,
+              "total_pnl_usd": -3.4193008018206013
+            }
+          },
+          "by_city": {
+            "Amsterdam": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": -3.5353535353535355,
+              "win_rate": 0.4
+            },
+            "Ankara": {
+              "n_legs": 16,
+              "total_cost_usd": 80.0,
+              "total_pnl_usd": -23.18758859242074,
+              "win_rate": 0.5
+            },
+            "Austin": {
+              "n_legs": 10,
+              "total_cost_usd": 50.0,
+              "total_pnl_usd": 3.6707030704019905,
+              "win_rate": 0.7
+            },
+            "Beijing": {
+              "n_legs": 7,
+              "total_cost_usd": 35.0,
+              "total_pnl_usd": -20.430743243243242,
+              "win_rate": 0.2857142857142857
+            },
+            "BuenosAires": {
+              "n_legs": 8,
+              "total_cost_usd": 40.0,
+              "total_pnl_usd": -16.611157965838185,
+              "win_rate": 0.375
+            },
+            "Chengdu": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": 9.354631030217995,
+              "win_rate": 1.0
+            },
+            "Chicago": {
+              "n_legs": 3,
+              "total_cost_usd": 15.0,
+              "total_pnl_usd": -0.667485667485668,
+              "win_rate": 0.6666666666666666
+            },
+            "Guangzhou": {
+              "n_legs": 10,
+              "total_cost_usd": 50.0,
+              "total_pnl_usd": -4.741033928682933,
+              "win_rate": 0.6
+            },
+            "Istanbul": {
+              "n_legs": 8,
+              "total_cost_usd": 40.0,
+              "total_pnl_usd": 1.0721343873517784,
+              "win_rate": 0.5
+            },
+            "Jeddah": {
+              "n_legs": 10,
+              "total_cost_usd": 50.0,
+              "total_pnl_usd": -14.105014663301537,
+              "win_rate": 0.5
+            },
+            "Karachi": {
+              "n_legs": 18,
+              "total_cost_usd": 90.0,
+              "total_pnl_usd": -3.239313642675194,
+              "win_rate": 0.5555555555555556
+            },
+            "LA": {
+              "n_legs": 17,
+              "total_cost_usd": 85.0,
+              "total_pnl_usd": 27.144978373426326,
+              "win_rate": 0.6470588235294118
+            },
+            "London": {
+              "n_legs": 21,
+              "total_cost_usd": 105.0,
+              "total_pnl_usd": 53.837121620869155,
+              "win_rate": 0.7142857142857143
+            },
+            "Lucknow": {
+              "n_legs": 3,
+              "total_cost_usd": 15.0,
+              "total_pnl_usd": -0.12003540214625463,
+              "win_rate": 0.6666666666666666
+            },
+            "Madrid": {
+              "n_legs": 12,
+              "total_cost_usd": 60.0,
+              "total_pnl_usd": 21.0583549654989,
+              "win_rate": 0.5833333333333334
+            },
+            "Manila": {
+              "n_legs": 10,
+              "total_cost_usd": 50.0,
+              "total_pnl_usd": -20.852288062814377,
+              "win_rate": 0.4
+            },
+            "Miami": {
+              "n_legs": 17,
+              "total_cost_usd": 85.0,
+              "total_pnl_usd": -13.128224819459799,
+              "win_rate": 0.4117647058823529
+            },
+            "Moscow": {
+              "n_legs": 14,
+              "total_cost_usd": 70.0,
+              "total_pnl_usd": -8.454831742672054,
+              "win_rate": 0.5714285714285714
+            },
+            "Munich": {
+              "n_legs": 8,
+              "total_cost_usd": 40.0,
+              "total_pnl_usd": -4.2396466106225965,
+              "win_rate": 0.5
+            },
+            "NYC": {
+              "n_legs": 16,
+              "total_cost_usd": 80.0,
+              "total_pnl_usd": -4.456528087859355,
+              "win_rate": 0.5625
+            },
+            "Paris": {
+              "n_legs": 16,
+              "total_cost_usd": 80.0,
+              "total_pnl_usd": 4.38401559781784,
+              "win_rate": 0.625
+            },
+            "Seattle": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": -10.0,
+              "win_rate": 0.0
+            },
+            "Shanghai": {
+              "n_legs": 11,
+              "total_cost_usd": 55.0,
+              "total_pnl_usd": -2.9114128754345927,
+              "win_rate": 0.6363636363636364
+            },
+            "Singapore": {
+              "n_legs": 4,
+              "total_cost_usd": 20.0,
+              "total_pnl_usd": -3.0316742081447976,
+              "win_rate": 0.5
+            },
+            "Tokyo": {
+              "n_legs": 18,
+              "total_cost_usd": 90.0,
+              "total_pnl_usd": 23.765066231454874,
+              "win_rate": 0.7222222222222222
+            },
+            "Warsaw": {
+              "n_legs": 19,
+              "total_cost_usd": 95.0,
+              "total_pnl_usd": 45.775519187941455,
+              "win_rate": 0.7368421052631579
+            }
+          }
+        },
+        "market_only": {
+          "rule": "market_only",
+          "n_legs": 0,
+          "n_wins": 0,
+          "win_rate": 0.0,
+          "total_cost_usd": 0.0,
+          "total_pnl_usd": 0.0,
+          "roi": 0.0,
+          "avg_pnl_usd": 0.0,
+          "worst_single_leg_pnl": 0.0,
+          "best_single_leg_pnl": 0.0,
+          "roi_excl_top1": 0.0,
+          "roi_excl_top5": 0.0,
+          "by_side": {},
+          "by_city": {}
+        },
+        "weather_edge_engine_blended_single_v0": {
+          "rule": "weather_edge_engine_blended_single_v0",
+          "n_legs": 221,
+          "n_wins": 129,
+          "win_rate": 0.583710407239819,
+          "total_cost_usd": 1105.0,
+          "total_pnl_usd": 61.425079546588805,
+          "roi": 0.05558830728198082,
+          "avg_pnl_usd": 0.2779415364099041,
+          "worst_single_leg_pnl": -5.0,
+          "best_single_leg_pnl": 19.390243902439025,
+          "roi_excl_top1": 0.03821348694922707,
+          "roi_excl_top5": -0.02150711075774582,
+          "by_side": {
+            "BUY_YES": {
+              "n_legs": 42,
+              "n_wins": 16,
+              "win_rate": 0.38095238095238093,
+              "total_cost_usd": 210.0,
+              "total_pnl_usd": 60.120710533963155
+            },
+            "BUY_NO": {
+              "n_legs": 179,
+              "n_wins": 113,
+              "win_rate": 0.6312849162011173,
+              "total_cost_usd": 895.0,
+              "total_pnl_usd": 1.3043690126256502
+            }
+          },
+          "by_city": {
+            "Amsterdam": {
+              "n_legs": 4,
+              "total_cost_usd": 20.0,
+              "total_pnl_usd": -12.424242424242426,
+              "win_rate": 0.25
+            },
+            "Ankara": {
+              "n_legs": 13,
+              "total_cost_usd": 65.0,
+              "total_pnl_usd": -14.63920149564655,
+              "win_rate": 0.5384615384615384
+            },
+            "Austin": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": 8.847194050033805,
+              "win_rate": 1.0
+            },
+            "Beijing": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": -10.0,
+              "win_rate": 0.0
+            },
+            "BuenosAires": {
+              "n_legs": 7,
+              "total_cost_usd": 35.0,
+              "total_pnl_usd": -11.611157965838187,
+              "win_rate": 0.42857142857142855
+            },
+            "Chengdu": {
+              "n_legs": 3,
+              "total_cost_usd": 15.0,
+              "total_pnl_usd": 5.600968113118078,
+              "win_rate": 1.0
+            },
+            "Chicago": {
+              "n_legs": 3,
+              "total_cost_usd": 15.0,
+              "total_pnl_usd": -0.667485667485668,
+              "win_rate": 0.6666666666666666
+            },
+            "Guangzhou": {
+              "n_legs": 6,
+              "total_cost_usd": 30.0,
+              "total_pnl_usd": -6.2738539261539685,
+              "win_rate": 0.5
+            },
+            "Istanbul": {
+              "n_legs": 7,
+              "total_cost_usd": 35.0,
+              "total_pnl_usd": -0.1778656126482212,
+              "win_rate": 0.42857142857142855
+            },
+            "Jeddah": {
+              "n_legs": 8,
+              "total_cost_usd": 40.0,
+              "total_pnl_usd": -4.105014663301537,
+              "win_rate": 0.625
+            },
+            "Karachi": {
+              "n_legs": 16,
+              "total_cost_usd": 80.0,
+              "total_pnl_usd": -0.3315122242354782,
+              "win_rate": 0.5625
+            },
+            "LA": {
+              "n_legs": 15,
+              "total_cost_usd": 75.0,
+              "total_pnl_usd": 15.492356650579886,
+              "win_rate": 0.6
+            },
+            "London": {
+              "n_legs": 16,
+              "total_cost_usd": 80.0,
+              "total_pnl_usd": 54.19516651263519,
+              "win_rate": 0.75
+            },
+            "Madrid": {
+              "n_legs": 7,
+              "total_cost_usd": 35.0,
+              "total_pnl_usd": 23.24418867729517,
+              "win_rate": 0.5714285714285714
+            },
+            "Manila": {
+              "n_legs": 9,
+              "total_cost_usd": 45.0,
+              "total_pnl_usd": -22.84529505582137,
+              "win_rate": 0.3333333333333333
+            },
+            "Miami": {
+              "n_legs": 15,
+              "total_cost_usd": 75.0,
+              "total_pnl_usd": -3.128224819459798,
+              "win_rate": 0.4666666666666667
+            },
+            "Moscow": {
+              "n_legs": 12,
+              "total_cost_usd": 60.0,
+              "total_pnl_usd": -6.03058931842963,
+              "win_rate": 0.5833333333333334
+            },
+            "Munich": {
+              "n_legs": 5,
+              "total_cost_usd": 25.0,
+              "total_pnl_usd": 1.051615525299734,
+              "win_rate": 0.6
+            },
+            "NYC": {
+              "n_legs": 12,
+              "total_cost_usd": 60.0,
+              "total_pnl_usd": 8.55046491913365,
+              "win_rate": 0.6666666666666666
+            },
+            "Paris": {
+              "n_legs": 16,
+              "total_cost_usd": 80.0,
+              "total_pnl_usd": 4.38401559781784,
+              "win_rate": 0.625
+            },
+            "Seattle": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": -10.0,
+              "win_rate": 0.0
+            },
+            "Shanghai": {
+              "n_legs": 10,
+              "total_cost_usd": 50.0,
+              "total_pnl_usd": 2.0885871245654073,
+              "win_rate": 0.7
+            },
+            "Singapore": {
+              "n_legs": 2,
+              "total_cost_usd": 10.0,
+              "total_pnl_usd": 6.968325791855202,
+              "win_rate": 1.0
+            },
+            "Tokyo": {
+              "n_legs": 14,
+              "total_cost_usd": 70.0,
+              "total_pnl_usd": 4.976195491155383,
+              "win_rate": 0.6428571428571429
+            },
+            "Warsaw": {
+              "n_legs": 15,
+              "total_cost_usd": 75.0,
+              "total_pnl_usd": 28.26044426636229,
+              "win_rate": 0.6666666666666666
+            }
+          }
+        }
+      },
+      "attribution_blended_vs_raw": {
+        "raw_winning_profit_missed_by_blend": 119.92511187023665,
+        "raw_losing_cost_avoided_by_blend": 145.0,
+        "shared_profit": 521.4250795465888,
+        "shared_loss": -460.0,
+        "net_blended_vs_raw": 25.07488812976335
+      },
+      "buy_no_roi": 0.0014573955448331287,
+      "buy_yes_roi": 0.28628909778077694
+    }
+  },
+  "current_live_actual": {
+    "by_instance": [
+      {
+        "strategy_instance": "mid_price_core_v1_25_75",
+        "fills": 331,
+        "active_target_days": 18,
+        "min_target_date": "2026-05-16",
+        "max_target_date": "2026-06-04",
+        "cost_usd": 1151.562147,
+        "pnl_usd": 33.996473,
+        "win_rate": 0.5770392749244713,
+        "roi": 0.0295220480184818
+      },
+      {
+        "strategy_instance": "mid_price_core_v1_side_band",
+        "fills": 48,
+        "active_target_days": 4,
+        "min_target_date": "2026-06-01",
+        "max_target_date": "2026-06-04",
+        "cost_usd": 134.704167,
+        "pnl_usd": 25.268147,
+        "win_rate": 0.6041666666666666,
+        "roi": 0.18758251925495367
+      },
+      {
+        "strategy_instance": "live_weather_edge_v1_edb2b6f8df82",
+        "fills": 36,
+        "active_target_days": 4,
+        "min_target_date": "2026-05-27",
+        "max_target_date": "2026-05-30",
+        "cost_usd": 116.105281,
+        "pnl_usd": 7.699435999999998,
+        "win_rate": 0.5555555555555556,
+        "roi": 0.06631426179486183
+      },
+      {
+        "strategy_instance": "live_weather_edge_v1_c13ccf0c3181",
+        "fills": 51,
+        "active_target_days": 6,
+        "min_target_date": "2026-05-24",
+        "max_target_date": "2026-06-01",
+        "cost_usd": 181.261537,
+        "pnl_usd": -36.520955,
+        "win_rate": 0.5294117647058824,
+        "roi": -0.20148209931597347
+      },
+      {
+        "strategy_instance": "mid_price_core_v2_25_75",
+        "fills": 125,
+        "active_target_days": 7,
+        "min_target_date": "2026-05-29",
+        "max_target_date": "2026-06-04",
+        "cost_usd": 341.989082,
+        "pnl_usd": -50.47797500000001,
+        "win_rate": 0.424,
+        "roi": -0.14760113014368104
+      }
+    ],
+    "by_instance_side": [
+      {
+        "strategy_instance": "live_weather_edge_v1_c13ccf0c3181",
+        "side": "BUY_NO",
+        "fills": 42,
+        "cost_usd": 154.328547,
+        "pnl_usd": -15.707964999999998,
+        "win_rate": 0.6190476190476191,
+        "roi": -0.10178262742278005
+      },
+      {
+        "strategy_instance": "live_weather_edge_v1_c13ccf0c3181",
+        "side": "BUY_YES",
+        "fills": 9,
+        "cost_usd": 26.93299,
+        "pnl_usd": -20.812990000000003,
+        "win_rate": 0.1111111111111111,
+        "roi": -0.7727693805997775
+      },
+      {
+        "strategy_instance": "live_weather_edge_v1_edb2b6f8df82",
+        "side": "BUY_NO",
+        "fills": 30,
+        "cost_usd": 98.792281,
+        "pnl_usd": -6.017563999999998,
+        "win_rate": 0.5666666666666667,
+        "roi": -0.060911277066271995
+      },
+      {
+        "strategy_instance": "live_weather_edge_v1_edb2b6f8df82",
+        "side": "BUY_YES",
+        "fills": 6,
+        "cost_usd": 17.313,
+        "pnl_usd": 13.716999999999997,
+        "win_rate": 0.5,
+        "roi": 0.7922948073701841
+      },
+      {
+        "strategy_instance": "mid_price_core_v1_25_75",
+        "side": "BUY_NO",
+        "fills": 249,
+        "cost_usd": 919.004782,
+        "pnl_usd": 19.29839000000001,
+        "win_rate": 0.6385542168674698,
+        "roi": 0.020999226965937604
+      },
+      {
+        "strategy_instance": "mid_price_core_v1_25_75",
+        "side": "BUY_YES",
+        "fills": 82,
+        "cost_usd": 232.557365,
+        "pnl_usd": 14.698082999999997,
+        "win_rate": 0.3902439024390244,
+        "roi": 0.06320196739415239
+      },
+      {
+        "strategy_instance": "mid_price_core_v1_side_band",
+        "side": "BUY_NO",
+        "fills": 32,
+        "cost_usd": 108.392618,
+        "pnl_usd": 19.121775,
+        "win_rate": 0.71875,
+        "roi": 0.17641215197883678
+      },
+      {
+        "strategy_instance": "mid_price_core_v1_side_band",
+        "side": "BUY_YES",
+        "fills": 16,
+        "cost_usd": 26.311549000000003,
+        "pnl_usd": 6.146372000000001,
+        "win_rate": 0.375,
+        "roi": 0.2335997778009953
+      },
+      {
+        "strategy_instance": "mid_price_core_v2_25_75",
+        "side": "BUY_NO",
+        "fills": 62,
+        "cost_usd": 200.743419,
+        "pnl_usd": -19.882312,
+        "win_rate": 0.5645161290322581,
+        "roi": -0.09904340624984573
+      },
+      {
+        "strategy_instance": "mid_price_core_v2_25_75",
+        "side": "BUY_YES",
+        "fills": 63,
+        "cost_usd": 141.245663,
+        "pnl_usd": -30.59566300000001,
+        "win_rate": 0.2857142857142857,
+        "roi": -0.21661311469790054
+      }
+    ]
+  }
+}

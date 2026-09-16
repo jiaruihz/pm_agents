@@ -1,0 +1,18 @@
+{
+  "run_id": "p1-research-draft-compiler-2026-08-27",
+  "base_commit": "3fb72868",
+  "branch": "codex/market-ladder-kink-v1",
+  "scope": "OFFLINE_PROVIDER_DRAFT_TO_RESEARCH_RESULT_COMPILER_ONLY",
+  "disposition": "COMPLETE_OFFLINE_COMPILER",
+  "tests": {
+    "focused_research_compiler_and_pipeline": {"passed": 53, "failed": 0},
+    "full_alpha": {"passed": 585, "failed": 0},
+    "security_violations": 0
+  },
+  "independent_review": {"high_fixed": 1, "open": 0, "telemetry": "unavailable"},
+  "existing_importer_end_to_end": "ACCEPTED",
+  "model_executor_implemented": false,
+  "scheduler_implemented": false,
+  "network_used": false,
+  "live_execution_reachable": false
+}

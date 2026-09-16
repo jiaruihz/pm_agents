@@ -1,0 +1,22 @@
+{
+  "schema_version": "weather_d1_market_residual_artifact_v1",
+  "artifact_id": "demo_d1_market_residual_fixture",
+  "model_id": "demo_linear_market_log_offset",
+  "feature_set_id": "demo_revision_feature_v1",
+  "model_family": "linear_market_log_offset",
+  "training_cutoff": "2026-06-30",
+  "frozen_at_utc": "2026-07-01T00:00:00Z",
+  "target_kind": "market_expression",
+  "market_feature_role": "prior_offset",
+  "market_feature_clock": "decision_current",
+  "required_features": ["revision_up"],
+  "parameters": {
+    "max_abs_delta": 2.0,
+    "default": {"intercept": 0.0, "weights": {}},
+    "by_expression": {
+      "demo_30": {"intercept": -0.2, "weights": {"revision_up": -0.2}},
+      "demo_31": {"intercept": 0.4, "weights": {"revision_up": -0.4}},
+      "demo_32": {"intercept": -0.2, "weights": {"revision_up": 0.8}}
+    }
+  }
+}

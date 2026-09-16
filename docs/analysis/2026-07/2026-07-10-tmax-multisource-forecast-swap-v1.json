@@ -1,0 +1,62 @@
+{
+  "bridge_candidates": "docs/analysis/2026-07/generated/tmax_exact_book_bridge_v1/expression_candidates.csv",
+  "forecast_enrichment_rows": {
+    "forecast_rows": 10588,
+    "forecast_min_date": "2026-06-02",
+    "forecast_max_date": "2026-07-07",
+    "forecast_cities": 36,
+    "forecast_models": [
+      "ecmwf_aifs025_single",
+      "ecmwf_ifs025",
+      "gem_global",
+      "gem_regional",
+      "gem_seamless",
+      "gfs_global",
+      "gfs_seamless",
+      "icon_d2",
+      "icon_eu",
+      "icon_seamless",
+      "jma_seamless",
+      "meteofrance_arome_france_hd",
+      "ncep_aigfs025",
+      "ncep_hrrr_conus",
+      "ncep_nam_conus",
+      "ncep_nbm_conus"
+    ],
+    "best_asof_rows": 649
+  },
+  "states": {
+    "rows": 5795,
+    "min_date": "2026-06-02",
+    "max_date": "2026-07-07",
+    "cities": 36,
+    "scopes": {
+      "dev_cv": 3743,
+      "verified_forward": 2048,
+      "extension_forward": 4
+    }
+  },
+  "probability_rows": 70495,
+  "selected_rows": 11525,
+  "policy": {
+    "ask_floor": 0.4,
+    "ask_ceiling": 0.99,
+    "edge_threshold_fee_adjusted": 0.02,
+    "active_expressions": [
+      "current_no",
+      "d1_no",
+      "d2_no",
+      "d1_yes",
+      "d2_yes"
+    ],
+    "first_city_day": true
+  },
+  "generated": {
+    "probability_rows": "docs/analysis/2026-07/generated/tmax_multisource_forecast_swap_v1/probability_rows.csv",
+    "score_summary": "docs/analysis/2026-07/generated/tmax_multisource_forecast_swap_v1/score_summary.csv",
+    "selected_trades": "docs/analysis/2026-07/generated/tmax_multisource_forecast_swap_v1/selected_trades.csv",
+    "trade_summary": "docs/analysis/2026-07/generated/tmax_multisource_forecast_swap_v1/trade_summary.csv",
+    "source_quality": "docs/analysis/2026-07/generated/tmax_multisource_forecast_swap_v1/source_quality_on_tmax_denominator.csv",
+    "report": "docs/analysis/2026-07/2026-07-10-tmax-multisource-forecast-swap-v1.md"
+  }
+}

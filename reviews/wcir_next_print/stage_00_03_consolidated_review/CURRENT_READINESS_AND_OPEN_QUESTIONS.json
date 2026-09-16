@@ -1,0 +1,37 @@
+{
+  "schema_version": "wcir_stage_00_03_consultation_v1",
+  "stage_02_03_evidence_commit_sha": "10ebb309be6091b9290193b2aa4b3de0ad8fca3c",
+  "city_scope": [
+    "Amsterdam",
+    "Helsinki",
+    "Busan",
+    "Seoul",
+    "Tokyo"
+  ],
+  "money_boundary": "zero_notional_no_live_change",
+  "stage_status": {
+    "stage_00_rev2": "evidence_closure_complete_pending_consolidated_disposition",
+    "stage_01": "offline_contract_complete_production_deployment_blocked_pending_current_health",
+    "stage_02": "deterministic_book_contract_complete_transport_coverage_limited",
+    "stage_03": "continue_collection_only_modeling_gate_failed"
+  },
+  "stage_03_gate": {
+    "passed": false,
+    "required_minimum_target_dates": 20,
+    "required_minimum_eligible_events": 100,
+    "actual_linked_target_dates_range": [14, 16],
+    "five_share_30s_executable_oracle_rows": 1,
+    "five_share_30s_executable_oracle_city": "Busan",
+    "five_share_30s_net_markout_usd": -0.3233,
+    "current_city_decision": "CONTINUE_COLLECTION_ONLY"
+  },
+  "stage_4_default_authorization": "NOT_AUTHORIZED",
+  "open_questions": [
+    "accept_or_expand_stage_02_transport_replay",
+    "rework_full_two_sided_oracle_before_stage_03_acceptance",
+    "minimum_clean_forward_collection_scope",
+    "whether_any_provisional_measurement_only_fit_is_allowed",
+    "city_specific_vs_pooled_hierarchical_training_order",
+    "current_production_health_reacceptance_before_any_deployment"
+  ]
+}

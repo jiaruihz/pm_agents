@@ -1,0 +1,3579 @@
+{
+  "count": 52,
+  "fill_models": [
+    "conservative",
+    "optimistic"
+  ],
+  "runs": [
+    {
+      "scenario_id": "b10_stable_boundary__fill_conservative",
+      "description": "Base near 10%, sticky near boundary with sparse fills and wider spread.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.04,
+        "min_profitability_spread": 0.03,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.2
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 5.615752699998183,
+      "equity_start": 150.0,
+      "equity_end": 155.61575269999818,
+      "max_drawdown": 0.03151160239565139,
+      "total_placed": 1025,
+      "total_canceled": 1021,
+      "total_fills": 760,
+      "total_fill_events": 801,
+      "total_filled_qty": 527.0909000000004,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.7414634146341463,
+      "avg_pnl_per_tick": 0.8358387536103569,
+      "scenario_base": "b10_stable_boundary",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b30_event_spike_then_revert__fill_conservative",
+      "description": "Base near 30%, event spike and mean reversion.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 840,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -3.4330750749999766,
+      "equity_start": 150.0,
+      "equity_end": 146.56692492500002,
+      "max_drawdown": 0.03584360362754549,
+      "total_placed": 104,
+      "total_canceled": 56,
+      "total_fills": 25,
+      "total_fill_events": 25,
+      "total_filled_qty": 119.628175,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.2403846153846154,
+      "avg_pnl_per_tick": -3.5106586238690136,
+      "scenario_base": "b30_event_spike_then_revert",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b30_extreme_spike_revert__fill_conservative",
+      "description": "Extreme event spike then mean reversion from low base; validates emergency controls.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 960,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 2.6165697499999965,
+      "equity_start": 150.0,
+      "equity_end": 152.61656975,
+      "max_drawdown": 0.035527792114476237,
+      "total_placed": 246,
+      "total_canceled": 142,
+      "total_fills": 83,
+      "total_fill_events": 84,
+      "total_filled_qty": 397.15090000000004,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.33739837398373984,
+      "avg_pnl_per_tick": -2.143288135963514,
+      "scenario_base": "b30_extreme_spike_revert",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b30_fast_trend_up_thin__fill_conservative",
+      "description": "Fast one-sided up trend with thin book; stress for inventory and adverse selection.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -3.400668049999979,
+      "equity_start": 150.0,
+      "equity_end": 146.59933195000002,
+      "max_drawdown": 0.032711844462167426,
+      "total_placed": 610,
+      "total_canceled": 526,
+      "total_fills": 129,
+      "total_fill_events": 129,
+      "total_filled_qty": 524.3189749999999,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.21147540983606558,
+      "avg_pnl_per_tick": -3.682353076916683,
+      "scenario_base": "b30_fast_trend_up_thin",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b30_stable_no_fill__fill_conservative",
+      "description": "Base near 30%, tight stable range, low drift, hard to fill.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.04,
+        "min_profitability_spread": 0.03,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.2
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 2.529064299999618,
+      "equity_start": 150.0,
+      "equity_end": 152.52906429999962,
+      "max_drawdown": 0.030264243027074148,
+      "total_placed": 146,
+      "total_canceled": 146,
+      "total_fills": 130,
+      "total_fill_events": 130,
+      "total_filled_qty": 127.37270000000002,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.8904109589041096,
+      "avg_pnl_per_tick": 1.0508376879164536,
+      "scenario_base": "b30_stable_no_fill",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b30_trend_down_fill__fill_conservative",
+      "description": "Base near 30%, one-side down trend.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 0.9920194500000434,
+      "equity_start": 150.0,
+      "equity_end": 150.99201945000004,
+      "max_drawdown": 0.03270896930890354,
+      "total_placed": 272,
+      "total_canceled": 202,
+      "total_fills": 46,
+      "total_fill_events": 46,
+      "total_filled_qty": 219.464475,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.16911764705882354,
+      "avg_pnl_per_tick": -4.027702375902758,
+      "scenario_base": "b30_trend_down_fill",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b30_trend_up_fill__fill_conservative",
+      "description": "Base near 30%, one-side up trend, easier fills via pullback crossings.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -4.31972810000002,
+      "equity_start": 150.0,
+      "equity_end": 145.68027189999998,
+      "max_drawdown": 0.03301421633333329,
+      "total_placed": 253,
+      "total_canceled": 223,
+      "total_fills": 45,
+      "total_fill_events": 45,
+      "total_filled_qty": 193.87027499999996,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.17786561264822134,
+      "avg_pnl_per_tick": -4.6332363372916925,
+      "scenario_base": "b30_trend_up_fill",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b50_dryup_early_severe__fill_conservative",
+      "description": "Liquidity dries up early and severely; checks spread gating and side blocks.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 2.1961562499993477,
+      "equity_start": 150.0,
+      "equity_end": 152.19615624999935,
+      "max_drawdown": 0.03281960750000015,
+      "total_placed": 896,
+      "total_canceled": 892,
+      "total_fills": 873,
+      "total_fill_events": 2624,
+      "total_filled_qty": 465.9655,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.9743303571428571,
+      "avg_pnl_per_tick": -2.1825846031946434,
+      "scenario_base": "b50_dryup_early_severe",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b50_fine_tick_micro_noise__fill_conservative",
+      "description": "Micro-noise oscillation with fine tick size 0.001 for rounding/quantization sensitivity.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 0.9652976250000052,
+      "equity_start": 150.0,
+      "equity_end": 150.965297625,
+      "max_drawdown": 0.03408063096284338,
+      "total_placed": 457,
+      "total_canceled": 432,
+      "total_fills": 56,
+      "total_fill_events": 56,
+      "total_filled_qty": 235.42749999999998,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.12253829321663019,
+      "avg_pnl_per_tick": -0.23704846388887682,
+      "scenario_base": "b50_fine_tick_micro_noise",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b50_liquidity_dryup__fill_conservative",
+      "description": "Normal market then depth dries up and spread widens.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 0.6221893749998344,
+      "equity_start": 150.0,
+      "equity_end": 150.62218937499983,
+      "max_drawdown": 0.03259999999999991,
+      "total_placed": 658,
+      "total_canceled": 654,
+      "total_fills": 623,
+      "total_fill_events": 1590,
+      "total_filled_qty": 354.51237500000116,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.9468085106382979,
+      "avg_pnl_per_tick": -3.539912358611001,
+      "scenario_base": "b50_liquidity_dryup",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b50_long_regime_switch__fill_conservative",
+      "description": "Long-horizon regime switch for stability and parameter robustness checks.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 1440,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -4.971220249999988,
+      "equity_start": 150.0,
+      "equity_end": 145.02877975,
+      "max_drawdown": 0.033893809999999955,
+      "total_placed": 134,
+      "total_canceled": 109,
+      "total_fills": 6,
+      "total_fill_events": 6,
+      "total_filled_qty": 20.433249999999997,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.04477611940298507,
+      "avg_pnl_per_tick": -3.7475700994791232,
+      "scenario_base": "b50_long_regime_switch",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b50_oscillating_fill__fill_conservative",
+      "description": "Base near 50%, oscillating, frequent crossings and fills.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 3.399549250000007,
+      "equity_start": 150.0,
+      "equity_end": 153.39954925,
+      "max_drawdown": 0.03326963038945364,
+      "total_placed": 977,
+      "total_canceled": 805,
+      "total_fills": 176,
+      "total_fill_events": 176,
+      "total_filled_qty": 846.9136000000001,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.18014329580348004,
+      "avg_pnl_per_tick": 0.4919777010416878,
+      "scenario_base": "b50_oscillating_fill",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b50_oscillating_no_fill__fill_conservative",
+      "description": "Oscillating but wide spread and low crossing probability.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.04,
+        "min_profitability_spread": 0.03,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.2
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 16.440788700000155,
+      "equity_start": 150.0,
+      "equity_end": 166.44078870000016,
+      "max_drawdown": 0.031392573443450894,
+      "total_placed": 1208,
+      "total_canceled": 1204,
+      "total_fills": 753,
+      "total_fill_events": 753,
+      "total_filled_qty": 897.6309999999987,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.6233443708609272,
+      "avg_pnl_per_tick": 4.534809825416755,
+      "scenario_base": "b50_oscillating_no_fill",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b50_regime_switch__fill_conservative",
+      "description": "Stable -> trend up -> oscillating -> trend down regime switch.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -4.36250287499999,
+      "equity_start": 150.0,
+      "equity_end": 145.637497125,
+      "max_drawdown": 0.03687404691020608,
+      "total_placed": 110,
+      "total_canceled": 101,
+      "total_fills": 9,
+      "total_fill_events": 9,
+      "total_filled_qty": 27.883874999999996,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.08181818181818182,
+      "avg_pnl_per_tick": -3.5385663676389076,
+      "scenario_base": "b50_regime_switch",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b50_shock_down_emergency__fill_conservative",
+      "description": "Mid around 50%, abrupt downward shock with spread/depth stress.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -4.163374999999974,
+      "equity_start": 150.0,
+      "equity_end": 145.83662500000003,
+      "max_drawdown": 0.03502686830283378,
+      "total_placed": 168,
+      "total_canceled": 122,
+      "total_fills": 14,
+      "total_fill_events": 14,
+      "total_filled_qty": 29.941625000000002,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.08333333333333333,
+      "avg_pnl_per_tick": -3.5244911812499917,
+      "scenario_base": "b50_shock_down_emergency",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b50_shock_up_emergency__fill_conservative",
+      "description": "Mid around 50%, abrupt upward shock with spread/depth stress.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -3.1155372499999885,
+      "equity_start": 150.0,
+      "equity_end": 146.88446275,
+      "max_drawdown": 0.035459021510965846,
+      "total_placed": 190,
+      "total_canceled": 150,
+      "total_fills": 4,
+      "total_fill_events": 4,
+      "total_filled_qty": 12.132749999999998,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.021052631578947368,
+      "avg_pnl_per_tick": -2.702740261284713,
+      "scenario_base": "b50_shock_up_emergency",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b50_stable_no_fill__fill_conservative",
+      "description": "Base near 50%, low vol, difficult to get executed.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.04,
+        "min_profitability_spread": 0.03,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.2
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 0.9409938999999667,
+      "equity_start": 150.0,
+      "equity_end": 150.94099389999997,
+      "max_drawdown": 0.0289881118833197,
+      "total_placed": 58,
+      "total_canceled": 58,
+      "total_fills": 40,
+      "total_fill_events": 40,
+      "total_filled_qty": 48.6486,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.6896551724137931,
+      "avg_pnl_per_tick": 0.4041576616666442,
+      "scenario_base": "b50_stable_no_fill",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b50_whipsaw__fill_conservative",
+      "description": "Alternating up/down micro-trends, difficult inventory management.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -1.725856325000052,
+      "equity_start": 150.0,
+      "equity_end": 148.27414367499995,
+      "max_drawdown": 0.03290000000000001,
+      "total_placed": 700,
+      "total_canceled": 580,
+      "total_fills": 139,
+      "total_fill_events": 139,
+      "total_filled_qty": 667.045725,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.19857142857142857,
+      "avg_pnl_per_tick": -3.233177868638924,
+      "scenario_base": "b50_whipsaw",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b50_whipsaw_high_vol__fill_conservative",
+      "description": "High-volatility whipsaw market to stress deadband and cancel/replace frequency.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 960,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 2.3372384250001232,
+      "equity_start": 150.0,
+      "equity_end": 152.33723842500012,
+      "max_drawdown": 0.032617434485139714,
+      "total_placed": 1228,
+      "total_canceled": 958,
+      "total_fills": 323,
+      "total_fill_events": 323,
+      "total_filled_qty": 1477.9132250000002,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.26302931596091206,
+      "avg_pnl_per_tick": -0.8061949705988726,
+      "scenario_base": "b50_whipsaw_high_vol",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b70_event_drop_then_revert__fill_conservative",
+      "description": "Base near 70%, downward event drop and reversion.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 840,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -4.679999999999978,
+      "equity_start": 150.0,
+      "equity_end": 145.32000000000002,
+      "max_drawdown": 0.03557404326123127,
+      "total_placed": 73,
+      "total_canceled": 31,
+      "total_fills": 8,
+      "total_fill_events": 8,
+      "total_filled_qty": 40.0,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.1095890410958904,
+      "avg_pnl_per_tick": -4.281422619047607,
+      "scenario_base": "b70_event_drop_then_revert",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b70_extreme_drop_revert__fill_conservative",
+      "description": "Extreme event drop then reversion from high base; inventory unwind stress case.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 960,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 0.9350115999999389,
+      "equity_start": 150.0,
+      "equity_end": 150.93501159999994,
+      "max_drawdown": 0.033557901877985956,
+      "total_placed": 250,
+      "total_canceled": 165,
+      "total_fills": 86,
+      "total_fill_events": 86,
+      "total_filled_qty": 401.732325,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.344,
+      "avg_pnl_per_tick": -0.46136659666667346,
+      "scenario_base": "b70_extreme_drop_revert",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b70_fast_trend_down_thin__fill_conservative",
+      "description": "Fast one-sided down trend with thin book; tests drawdown containment.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -2.1343295749999527,
+      "equity_start": 150.0,
+      "equity_end": 147.86567042500005,
+      "max_drawdown": 0.03397454378544703,
+      "total_placed": 597,
+      "total_canceled": 496,
+      "total_fills": 161,
+      "total_fill_events": 161,
+      "total_filled_qty": 692.499075,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.2696817420435511,
+      "avg_pnl_per_tick": -3.425300607750002,
+      "scenario_base": "b70_fast_trend_down_thin",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b70_stable_no_fill__fill_conservative",
+      "description": "Base near 70%, stable and sticky.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.04,
+        "min_profitability_spread": 0.03,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.2
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 4.626239099999594,
+      "equity_start": 150.0,
+      "equity_end": 154.6262390999996,
+      "max_drawdown": 0.03124267767991503,
+      "total_placed": 254,
+      "total_canceled": 254,
+      "total_fills": 200,
+      "total_fill_events": 200,
+      "total_filled_qty": 234.88359999999994,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.7874015748031497,
+      "avg_pnl_per_tick": 1.897422132222031,
+      "scenario_base": "b70_stable_no_fill",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b70_trend_down__fill_conservative",
+      "description": "Base near 70%, one-side down trend.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -4.563056374999974,
+      "equity_start": 150.0,
+      "equity_end": 145.43694362500003,
+      "max_drawdown": 0.03300075583333334,
+      "total_placed": 188,
+      "total_canceled": 172,
+      "total_fills": 9,
+      "total_fill_events": 9,
+      "total_filled_qty": 26.089874999999992,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.047872340425531915,
+      "avg_pnl_per_tick": -4.680261635763883,
+      "scenario_base": "b70_trend_down",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b70_trend_up__fill_conservative",
+      "description": "Base near 70%, one-side up trend.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -4.380164750000006,
+      "equity_start": 150.0,
+      "equity_end": 145.61983525,
+      "max_drawdown": 0.034334143810541604,
+      "total_placed": 179,
+      "total_canceled": 151,
+      "total_fills": 18,
+      "total_fill_events": 18,
+      "total_filled_qty": 46.57712500000001,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.1005586592178771,
+      "avg_pnl_per_tick": -4.582793533333333,
+      "scenario_base": "b70_trend_up",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b90_stable_boundary__fill_conservative",
+      "description": "Base near 90%, sticky near upper boundary with limited fill probability.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.04,
+        "min_profitability_spread": 0.03,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "paper_fill_model": "conservative",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.2
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 6.772298299997999,
+      "equity_start": 150.0,
+      "equity_end": 156.772298299998,
+      "max_drawdown": 0.031574196027976516,
+      "total_placed": 1091,
+      "total_canceled": 1087,
+      "total_fills": 831,
+      "total_fill_events": 876,
+      "total_filled_qty": 585.8985999999998,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.7616865261228231,
+      "avg_pnl_per_tick": 1.5780628695824448,
+      "scenario_base": "b90_stable_boundary",
+      "fill_model": "conservative"
+    },
+    {
+      "scenario_id": "b10_stable_boundary__fill_optimistic",
+      "description": "Base near 10%, sticky near boundary with sparse fills and wider spread.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.04,
+        "min_profitability_spread": 0.03,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.2
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 6.154407999999677,
+      "equity_start": 150.0,
+      "equity_end": 156.15440799999968,
+      "max_drawdown": 0.03139142281314551,
+      "total_placed": 651,
+      "total_canceled": 647,
+      "total_fills": 311,
+      "total_fill_events": 311,
+      "total_filled_qty": 582.1640000000001,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.47772657450076805,
+      "avg_pnl_per_tick": 2.0499069972220507,
+      "scenario_base": "b10_stable_boundary",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b30_event_spike_then_revert__fill_optimistic",
+      "description": "Base near 30%, event spike and mean reversion.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 840,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -4.089999999999975,
+      "equity_start": 150.0,
+      "equity_end": 145.91000000000003,
+      "max_drawdown": 0.03584360362754549,
+      "total_placed": 111,
+      "total_canceled": 49,
+      "total_fills": 34,
+      "total_fill_events": 34,
+      "total_filled_qty": 170.0,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.3063063063063063,
+      "avg_pnl_per_tick": -3.9355238095238287,
+      "scenario_base": "b30_event_spike_then_revert",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b30_extreme_spike_revert__fill_optimistic",
+      "description": "Extreme event spike then mean reversion from low base; validates emergency controls.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 960,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 2.285000000000082,
+      "equity_start": 150.0,
+      "equity_end": 152.28500000000008,
+      "max_drawdown": 0.035119658402568636,
+      "total_placed": 242,
+      "total_canceled": 134,
+      "total_fills": 78,
+      "total_fill_events": 78,
+      "total_filled_qty": 390.0,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.32231404958677684,
+      "avg_pnl_per_tick": -2.1572864583333122,
+      "scenario_base": "b30_extreme_spike_revert",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b30_fast_trend_up_thin__fill_optimistic",
+      "description": "Fast one-sided up trend with thin book; stress for inventory and adverse selection.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -0.3184934999999314,
+      "equity_start": 150.0,
+      "equity_end": 149.68150650000007,
+      "max_drawdown": 0.03270000000000001,
+      "total_placed": 628,
+      "total_canceled": 447,
+      "total_fills": 167,
+      "total_fill_events": 167,
+      "total_filled_qty": 829.5000000000001,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.2659235668789809,
+      "avg_pnl_per_tick": -1.8478633388888985,
+      "scenario_base": "b30_fast_trend_up_thin",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b30_stable_no_fill__fill_optimistic",
+      "description": "Base near 30%, tight stable range, low drift, hard to fill.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.04,
+        "min_profitability_spread": 0.03,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.2
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 4.090437999999921,
+      "equity_start": 150.0,
+      "equity_end": 154.09043799999992,
+      "max_drawdown": 0.030662862472872917,
+      "total_placed": 143,
+      "total_canceled": 143,
+      "total_fills": 79,
+      "total_fill_events": 79,
+      "total_filled_qty": 225.70399999999995,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.5524475524475524,
+      "avg_pnl_per_tick": 1.9867770055555052,
+      "scenario_base": "b30_stable_no_fill",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b30_trend_down_fill__fill_optimistic",
+      "description": "Base near 30%, one-side down trend.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 1.530000000000058,
+      "equity_start": 150.0,
+      "equity_end": 151.53000000000006,
+      "max_drawdown": 0.0326000000000001,
+      "total_placed": 285,
+      "total_canceled": 188,
+      "total_fills": 66,
+      "total_fill_events": 66,
+      "total_filled_qty": 330.0,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.23157894736842105,
+      "avg_pnl_per_tick": -3.6532152777777047,
+      "scenario_base": "b30_trend_down_fill",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b30_trend_up_fill__fill_optimistic",
+      "description": "Base near 30%, one-side up trend, easier fills via pullback crossings.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -2.6749999999999545,
+      "equity_start": 150.0,
+      "equity_end": 147.32500000000005,
+      "max_drawdown": 0.03259999999999991,
+      "total_placed": 281,
+      "total_canceled": 175,
+      "total_fills": 102,
+      "total_fill_events": 102,
+      "total_filled_qty": 510.0,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.36298932384341637,
+      "avg_pnl_per_tick": -3.5382222222222053,
+      "scenario_base": "b30_trend_up_fill",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b50_dryup_early_severe__fill_optimistic",
+      "description": "Liquidity dries up early and severely; checks spread gating and side blocks.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 15.675892499999321,
+      "equity_start": 150.0,
+      "equity_end": 165.67589249999932,
+      "max_drawdown": 0.03290000000000001,
+      "total_placed": 1927,
+      "total_canceled": 1917,
+      "total_fills": 1903,
+      "total_fill_events": 2627,
+      "total_filled_qty": 1353.962500000003,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.9875454073689673,
+      "avg_pnl_per_tick": 2.993608986110938,
+      "scenario_base": "b50_dryup_early_severe",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b50_fine_tick_micro_noise__fill_optimistic",
+      "description": "Micro-noise oscillation with fine tick size 0.001 for rounding/quantization sensitivity.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 1.2649999999999864,
+      "equity_start": 150.0,
+      "equity_end": 151.265,
+      "max_drawdown": 0.03394281914893592,
+      "total_placed": 455,
+      "total_canceled": 395,
+      "total_fills": 56,
+      "total_fill_events": 56,
+      "total_filled_qty": 280.0,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.12307692307692308,
+      "avg_pnl_per_tick": 0.024205555555538688,
+      "scenario_base": "b50_fine_tick_micro_noise",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b50_liquidity_dryup__fill_optimistic",
+      "description": "Normal market then depth dries up and spread widens.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 10.559459999999262,
+      "equity_start": 150.0,
+      "equity_end": 160.55945999999926,
+      "max_drawdown": 0.03259999999999991,
+      "total_placed": 1475,
+      "total_canceled": 1470,
+      "total_fills": 1440,
+      "total_fill_events": 1592,
+      "total_filled_qty": 1006.3799999999995,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.976271186440678,
+      "avg_pnl_per_tick": -1.252056100000067,
+      "scenario_base": "b50_liquidity_dryup",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b50_long_regime_switch__fill_optimistic",
+      "description": "Long-horizon regime switch for stability and parameter robustness checks.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 1440,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -4.731299999999976,
+      "equity_start": 150.0,
+      "equity_end": 145.26870000000002,
+      "max_drawdown": 0.0326000000000001,
+      "total_placed": 134,
+      "total_canceled": 104,
+      "total_fills": 7,
+      "total_fill_events": 7,
+      "total_filled_qty": 33.870000000000005,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.05223880597014925,
+      "avg_pnl_per_tick": -3.71267770833331,
+      "scenario_base": "b50_long_regime_switch",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b50_oscillating_fill__fill_optimistic",
+      "description": "Base near 50%, oscillating, frequent crossings and fills.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 2.510000000000076,
+      "equity_start": 150.0,
+      "equity_end": 152.51000000000008,
+      "max_drawdown": 0.03290000000000001,
+      "total_placed": 878,
+      "total_canceled": 732,
+      "total_fills": 120,
+      "total_fill_events": 120,
+      "total_filled_qty": 600.0,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.1366742596810934,
+      "avg_pnl_per_tick": 0.4169861111111863,
+      "scenario_base": "b50_oscillating_fill",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b50_oscillating_no_fill__fill_optimistic",
+      "description": "Oscillating but wide spread and low crossing probability.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.04,
+        "min_profitability_spread": 0.03,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.2
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 31.26188599999969,
+      "equity_start": 150.0,
+      "equity_end": 181.2618859999997,
+      "max_drawdown": 0.031040241758731744,
+      "total_placed": 1048,
+      "total_canceled": 986,
+      "total_fills": 568,
+      "total_fill_events": 568,
+      "total_filled_qty": 1928.0339999999997,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.5419847328244275,
+      "avg_pnl_per_tick": 12.322550938888782,
+      "scenario_base": "b50_oscillating_no_fill",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b50_regime_switch__fill_optimistic",
+      "description": "Stable -> trend up -> oscillating -> trend down regime switch.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -5.715984999999961,
+      "equity_start": 150.0,
+      "equity_end": 144.28401500000004,
+      "max_drawdown": 0.043257799142323056,
+      "total_placed": 106,
+      "total_canceled": 87,
+      "total_fills": 13,
+      "total_fill_events": 13,
+      "total_filled_qty": 62.455000000000005,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.12264150943396226,
+      "avg_pnl_per_tick": -3.8607062944444155,
+      "scenario_base": "b50_regime_switch",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b50_shock_down_emergency__fill_optimistic",
+      "description": "Mid around 50%, abrupt downward shock with spread/depth stress.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -3.7072900000000004,
+      "equity_start": 150.0,
+      "equity_end": 146.29271,
+      "max_drawdown": 0.034811249732903796,
+      "total_placed": 166,
+      "total_canceled": 114,
+      "total_fills": 9,
+      "total_fill_events": 9,
+      "total_filled_qty": 41.307500000000005,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.05421686746987952,
+      "avg_pnl_per_tick": -3.215188354166691,
+      "scenario_base": "b50_shock_down_emergency",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b50_shock_up_emergency__fill_optimistic",
+      "description": "Mid around 50%, abrupt upward shock with spread/depth stress.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -3.285125000000022,
+      "equity_start": 150.0,
+      "equity_end": 146.71487499999998,
+      "max_drawdown": 0.035747284248580063,
+      "total_placed": 194,
+      "total_canceled": 150,
+      "total_fills": 8,
+      "total_fill_events": 8,
+      "total_filled_qty": 36.4,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.041237113402061855,
+      "avg_pnl_per_tick": -2.751046614583345,
+      "scenario_base": "b50_shock_up_emergency",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b50_stable_no_fill__fill_optimistic",
+      "description": "Base near 50%, low vol, difficult to get executed.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.04,
+        "min_profitability_spread": 0.03,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.2
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 2.387489999999957,
+      "equity_start": 150.0,
+      "equity_end": 152.38748999999996,
+      "max_drawdown": 0.024834432370487193,
+      "total_placed": 58,
+      "total_canceled": 56,
+      "total_fills": 37,
+      "total_fill_events": 37,
+      "total_filled_qty": 129.99799999999996,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.6379310344827587,
+      "avg_pnl_per_tick": 1.254521263888853,
+      "scenario_base": "b50_stable_no_fill",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b50_whipsaw__fill_optimistic",
+      "description": "Alternating up/down micro-trends, difficult inventory management.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -1.16499999999985,
+      "equity_start": 150.0,
+      "equity_end": 148.83500000000015,
+      "max_drawdown": 0.03290000000000001,
+      "total_placed": 709,
+      "total_canceled": 539,
+      "total_fills": 164,
+      "total_fill_events": 164,
+      "total_filled_qty": 820.0,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.231311706629055,
+      "avg_pnl_per_tick": -2.817255555555507,
+      "scenario_base": "b50_whipsaw",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b50_whipsaw_high_vol__fill_optimistic",
+      "description": "High-volatility whipsaw market to stress deadband and cancel/replace frequency.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 960,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 4.965721000000201,
+      "equity_start": 150.0,
+      "equity_end": 154.9657210000002,
+      "max_drawdown": 0.03259999999999991,
+      "total_placed": 1232,
+      "total_canceled": 805,
+      "total_fills": 394,
+      "total_fill_events": 394,
+      "total_filled_qty": 1969.5445,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.3198051948051948,
+      "avg_pnl_per_tick": 0.6791716229168043,
+      "scenario_base": "b50_whipsaw_high_vol",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b70_event_drop_then_revert__fill_optimistic",
+      "description": "Base near 70%, downward event drop and reversion.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 840,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -4.679999999999978,
+      "equity_start": 150.0,
+      "equity_end": 145.32000000000002,
+      "max_drawdown": 0.03557404326123127,
+      "total_placed": 73,
+      "total_canceled": 31,
+      "total_fills": 8,
+      "total_fill_events": 8,
+      "total_filled_qty": 40.0,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.1095890410958904,
+      "avg_pnl_per_tick": -4.281422619047607,
+      "scenario_base": "b70_event_drop_then_revert",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b70_extreme_drop_revert__fill_optimistic",
+      "description": "Extreme event drop then reversion from high base; inventory unwind stress case.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 960,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 0.7100000000000364,
+      "equity_start": 150.0,
+      "equity_end": 150.71000000000004,
+      "max_drawdown": 0.03341103341103338,
+      "total_placed": 252,
+      "total_canceled": 145,
+      "total_fills": 93,
+      "total_fill_events": 93,
+      "total_filled_qty": 465.0,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.36904761904761907,
+      "avg_pnl_per_tick": -0.6101666666666399,
+      "scenario_base": "b70_extreme_drop_revert",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b70_fast_trend_down_thin__fill_optimistic",
+      "description": "Fast one-sided down trend with thin book; tests drawdown containment.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.025,
+        "min_profitability_spread": 0.006,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.001,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.0005,
+        "target_profit_spread": 0.0005,
+        "volatility_spread_coeff": 0.5,
+        "inventory_risk_spread_coeff": 0.002,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.35
+      },
+      "ticks": 900,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 4.438478500000116,
+      "equity_start": 150.0,
+      "equity_end": 154.43847850000012,
+      "max_drawdown": 0.03290000000000001,
+      "total_placed": 627,
+      "total_canceled": 408,
+      "total_fills": 222,
+      "total_fill_events": 222,
+      "total_filled_qty": 1105.3045,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.35406698564593303,
+      "avg_pnl_per_tick": -2.503045794999958,
+      "scenario_base": "b70_fast_trend_down_thin",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b70_stable_no_fill__fill_optimistic",
+      "description": "Base near 70%, stable and sticky.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.04,
+        "min_profitability_spread": 0.03,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.2
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 9.200681999999688,
+      "equity_start": 150.0,
+      "equity_end": 159.2006819999997,
+      "max_drawdown": 0.02705227900083117,
+      "total_placed": 251,
+      "total_canceled": 249,
+      "total_fills": 152,
+      "total_fill_events": 152,
+      "total_filled_qty": 506.9419999999999,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.6055776892430279,
+      "avg_pnl_per_tick": 4.391853541666538,
+      "scenario_base": "b70_stable_no_fill",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b70_trend_down__fill_optimistic",
+      "description": "Base near 70%, one-side down trend.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -4.394249999999971,
+      "equity_start": 150.0,
+      "equity_end": 145.60575000000003,
+      "max_drawdown": 0.03290000000000001,
+      "total_placed": 191,
+      "total_canceled": 164,
+      "total_fills": 15,
+      "total_fill_events": 15,
+      "total_filled_qty": 72.0225,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.07853403141361257,
+      "avg_pnl_per_tick": -4.435733645833325,
+      "scenario_base": "b70_trend_down",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b70_trend_up__fill_optimistic",
+      "description": "Base near 70%, one-side up trend.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.03,
+        "min_profitability_spread": 0.01,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "fee_spread_floor": 0.001,
+        "target_profit_spread": 0.001,
+        "volatility_spread_coeff": 0.8,
+        "inventory_risk_spread_coeff": 0.003,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.25
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": -3.9380974999999694,
+      "equity_start": 150.0,
+      "equity_end": 146.06190250000003,
+      "max_drawdown": 0.03392516868181374,
+      "total_placed": 181,
+      "total_canceled": 144,
+      "total_fills": 16,
+      "total_fill_events": 16,
+      "total_filled_qty": 72.455,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.08839779005524862,
+      "avg_pnl_per_tick": -4.275120788194427,
+      "scenario_base": "b70_trend_up",
+      "fill_model": "optimistic"
+    },
+    {
+      "scenario_id": "b90_stable_boundary__fill_optimistic",
+      "description": "Base near 90%, sticky near upper boundary with limited fill probability.",
+      "strategy_key": "single_level_v1",
+      "quote_runtime": {
+        "quote_levels_requested": 1,
+        "quote_levels_effective": 1,
+        "multi_level_quote_enabled": false,
+        "multi_level_placeholder_active": false,
+        "level_spread_step": 0.005,
+        "level_size_decay": 0.6
+      },
+      "strategy_overrides": {
+        "base_spread": 0.04,
+        "min_profitability_spread": 0.03,
+        "deadband": 0.01,
+        "skew_factor": 0.05,
+        "join_epsilon": 0.001,
+        "min_edge": 0.002,
+        "inventory_sigmoid_k": 4.0,
+        "mid_price_mode": "weighted",
+        "alpha_enabled": false,
+        "enforce_inventory_for_sell": true,
+        "paper_fill_model": "optimistic",
+        "paper_fill_epsilon": 0.001,
+        "paper_queue_share": 0.2
+      },
+      "ticks": 720,
+      "token_ids": [
+        "YES",
+        "NO"
+      ],
+      "pnl_end": 6.945171999999815,
+      "equity_start": 150.0,
+      "equity_end": 156.94517199999981,
+      "max_drawdown": 0.03133521593850763,
+      "total_placed": 688,
+      "total_canceled": 684,
+      "total_fills": 328,
+      "total_fill_events": 328,
+      "total_filled_qty": 627.7020000000002,
+      "total_errors": 0,
+      "fill_rate_per_order": 0.47674418604651164,
+      "avg_pnl_per_tick": 2.257688105555419,
+      "scenario_base": "b90_stable_boundary",
+      "fill_model": "optimistic"
+    }
+  ],
+  "leaderboard_rows": [
+    {
+      "scenario": "b50_oscillating_no_fill",
+      "fill_model": "optimistic",
+      "pnl": 31.26188599999969,
+      "fills": 568,
+      "orders": 1048,
+      "fill_pct": 0.5419847328244275,
+      "mdd": 0.031040241758731744
+    },
+    {
+      "scenario": "b50_oscillating_no_fill",
+      "fill_model": "conservative",
+      "pnl": 16.440788700000155,
+      "fills": 753,
+      "orders": 1208,
+      "fill_pct": 0.6233443708609272,
+      "mdd": 0.031392573443450894
+    },
+    {
+      "scenario": "b50_dryup_early_severe",
+      "fill_model": "optimistic",
+      "pnl": 15.675892499999321,
+      "fills": 1903,
+      "orders": 1927,
+      "fill_pct": 0.9875454073689673,
+      "mdd": 0.03290000000000001
+    },
+    {
+      "scenario": "b50_liquidity_dryup",
+      "fill_model": "optimistic",
+      "pnl": 10.559459999999262,
+      "fills": 1440,
+      "orders": 1475,
+      "fill_pct": 0.976271186440678,
+      "mdd": 0.03259999999999991
+    },
+    {
+      "scenario": "b70_stable_no_fill",
+      "fill_model": "optimistic",
+      "pnl": 9.200681999999688,
+      "fills": 152,
+      "orders": 251,
+      "fill_pct": 0.6055776892430279,
+      "mdd": 0.02705227900083117
+    },
+    {
+      "scenario": "b90_stable_boundary",
+      "fill_model": "optimistic",
+      "pnl": 6.945171999999815,
+      "fills": 328,
+      "orders": 688,
+      "fill_pct": 0.47674418604651164,
+      "mdd": 0.03133521593850763
+    },
+    {
+      "scenario": "b90_stable_boundary",
+      "fill_model": "conservative",
+      "pnl": 6.772298299997999,
+      "fills": 831,
+      "orders": 1091,
+      "fill_pct": 0.7616865261228231,
+      "mdd": 0.031574196027976516
+    },
+    {
+      "scenario": "b10_stable_boundary",
+      "fill_model": "optimistic",
+      "pnl": 6.154407999999677,
+      "fills": 311,
+      "orders": 651,
+      "fill_pct": 0.47772657450076805,
+      "mdd": 0.03139142281314551
+    },
+    {
+      "scenario": "b10_stable_boundary",
+      "fill_model": "conservative",
+      "pnl": 5.615752699998183,
+      "fills": 760,
+      "orders": 1025,
+      "fill_pct": 0.7414634146341463,
+      "mdd": 0.03151160239565139
+    },
+    {
+      "scenario": "b50_whipsaw_high_vol",
+      "fill_model": "optimistic",
+      "pnl": 4.965721000000201,
+      "fills": 394,
+      "orders": 1232,
+      "fill_pct": 0.3198051948051948,
+      "mdd": 0.03259999999999991
+    },
+    {
+      "scenario": "b70_stable_no_fill",
+      "fill_model": "conservative",
+      "pnl": 4.626239099999594,
+      "fills": 200,
+      "orders": 254,
+      "fill_pct": 0.7874015748031497,
+      "mdd": 0.03124267767991503
+    },
+    {
+      "scenario": "b70_fast_trend_down_thin",
+      "fill_model": "optimistic",
+      "pnl": 4.438478500000116,
+      "fills": 222,
+      "orders": 627,
+      "fill_pct": 0.35406698564593303,
+      "mdd": 0.03290000000000001
+    },
+    {
+      "scenario": "b30_stable_no_fill",
+      "fill_model": "optimistic",
+      "pnl": 4.090437999999921,
+      "fills": 79,
+      "orders": 143,
+      "fill_pct": 0.5524475524475524,
+      "mdd": 0.030662862472872917
+    },
+    {
+      "scenario": "b50_oscillating_fill",
+      "fill_model": "conservative",
+      "pnl": 3.399549250000007,
+      "fills": 176,
+      "orders": 977,
+      "fill_pct": 0.18014329580348004,
+      "mdd": 0.03326963038945364
+    },
+    {
+      "scenario": "b30_extreme_spike_revert",
+      "fill_model": "conservative",
+      "pnl": 2.6165697499999965,
+      "fills": 83,
+      "orders": 246,
+      "fill_pct": 0.33739837398373984,
+      "mdd": 0.035527792114476237
+    },
+    {
+      "scenario": "b30_stable_no_fill",
+      "fill_model": "conservative",
+      "pnl": 2.529064299999618,
+      "fills": 130,
+      "orders": 146,
+      "fill_pct": 0.8904109589041096,
+      "mdd": 0.030264243027074148
+    },
+    {
+      "scenario": "b50_oscillating_fill",
+      "fill_model": "optimistic",
+      "pnl": 2.510000000000076,
+      "fills": 120,
+      "orders": 878,
+      "fill_pct": 0.1366742596810934,
+      "mdd": 0.03290000000000001
+    },
+    {
+      "scenario": "b50_stable_no_fill",
+      "fill_model": "optimistic",
+      "pnl": 2.387489999999957,
+      "fills": 37,
+      "orders": 58,
+      "fill_pct": 0.6379310344827587,
+      "mdd": 0.024834432370487193
+    },
+    {
+      "scenario": "b50_whipsaw_high_vol",
+      "fill_model": "conservative",
+      "pnl": 2.3372384250001232,
+      "fills": 323,
+      "orders": 1228,
+      "fill_pct": 0.26302931596091206,
+      "mdd": 0.032617434485139714
+    },
+    {
+      "scenario": "b30_extreme_spike_revert",
+      "fill_model": "optimistic",
+      "pnl": 2.285000000000082,
+      "fills": 78,
+      "orders": 242,
+      "fill_pct": 0.32231404958677684,
+      "mdd": 0.035119658402568636
+    },
+    {
+      "scenario": "b50_dryup_early_severe",
+      "fill_model": "conservative",
+      "pnl": 2.1961562499993477,
+      "fills": 873,
+      "orders": 896,
+      "fill_pct": 0.9743303571428571,
+      "mdd": 0.03281960750000015
+    },
+    {
+      "scenario": "b30_trend_down_fill",
+      "fill_model": "optimistic",
+      "pnl": 1.530000000000058,
+      "fills": 66,
+      "orders": 285,
+      "fill_pct": 0.23157894736842105,
+      "mdd": 0.0326000000000001
+    },
+    {
+      "scenario": "b50_fine_tick_micro_noise",
+      "fill_model": "optimistic",
+      "pnl": 1.2649999999999864,
+      "fills": 56,
+      "orders": 455,
+      "fill_pct": 0.12307692307692308,
+      "mdd": 0.03394281914893592
+    },
+    {
+      "scenario": "b30_trend_down_fill",
+      "fill_model": "conservative",
+      "pnl": 0.9920194500000434,
+      "fills": 46,
+      "orders": 272,
+      "fill_pct": 0.16911764705882354,
+      "mdd": 0.03270896930890354
+    },
+    {
+      "scenario": "b50_fine_tick_micro_noise",
+      "fill_model": "conservative",
+      "pnl": 0.9652976250000052,
+      "fills": 56,
+      "orders": 457,
+      "fill_pct": 0.12253829321663019,
+      "mdd": 0.03408063096284338
+    },
+    {
+      "scenario": "b50_stable_no_fill",
+      "fill_model": "conservative",
+      "pnl": 0.9409938999999667,
+      "fills": 40,
+      "orders": 58,
+      "fill_pct": 0.6896551724137931,
+      "mdd": 0.0289881118833197
+    },
+    {
+      "scenario": "b70_extreme_drop_revert",
+      "fill_model": "conservative",
+      "pnl": 0.9350115999999389,
+      "fills": 86,
+      "orders": 250,
+      "fill_pct": 0.344,
+      "mdd": 0.033557901877985956
+    },
+    {
+      "scenario": "b70_extreme_drop_revert",
+      "fill_model": "optimistic",
+      "pnl": 0.7100000000000364,
+      "fills": 93,
+      "orders": 252,
+      "fill_pct": 0.36904761904761907,
+      "mdd": 0.03341103341103338
+    },
+    {
+      "scenario": "b50_liquidity_dryup",
+      "fill_model": "conservative",
+      "pnl": 0.6221893749998344,
+      "fills": 623,
+      "orders": 658,
+      "fill_pct": 0.9468085106382979,
+      "mdd": 0.03259999999999991
+    },
+    {
+      "scenario": "b30_fast_trend_up_thin",
+      "fill_model": "optimistic",
+      "pnl": -0.3184934999999314,
+      "fills": 167,
+      "orders": 628,
+      "fill_pct": 0.2659235668789809,
+      "mdd": 0.03270000000000001
+    },
+    {
+      "scenario": "b50_whipsaw",
+      "fill_model": "optimistic",
+      "pnl": -1.16499999999985,
+      "fills": 164,
+      "orders": 709,
+      "fill_pct": 0.231311706629055,
+      "mdd": 0.03290000000000001
+    },
+    {
+      "scenario": "b50_whipsaw",
+      "fill_model": "conservative",
+      "pnl": -1.725856325000052,
+      "fills": 139,
+      "orders": 700,
+      "fill_pct": 0.19857142857142857,
+      "mdd": 0.03290000000000001
+    },
+    {
+      "scenario": "b70_fast_trend_down_thin",
+      "fill_model": "conservative",
+      "pnl": -2.1343295749999527,
+      "fills": 161,
+      "orders": 597,
+      "fill_pct": 0.2696817420435511,
+      "mdd": 0.03397454378544703
+    },
+    {
+      "scenario": "b30_trend_up_fill",
+      "fill_model": "optimistic",
+      "pnl": -2.6749999999999545,
+      "fills": 102,
+      "orders": 281,
+      "fill_pct": 0.36298932384341637,
+      "mdd": 0.03259999999999991
+    },
+    {
+      "scenario": "b50_shock_up_emergency",
+      "fill_model": "conservative",
+      "pnl": -3.1155372499999885,
+      "fills": 4,
+      "orders": 190,
+      "fill_pct": 0.021052631578947368,
+      "mdd": 0.035459021510965846
+    },
+    {
+      "scenario": "b50_shock_up_emergency",
+      "fill_model": "optimistic",
+      "pnl": -3.285125000000022,
+      "fills": 8,
+      "orders": 194,
+      "fill_pct": 0.041237113402061855,
+      "mdd": 0.035747284248580063
+    },
+    {
+      "scenario": "b30_fast_trend_up_thin",
+      "fill_model": "conservative",
+      "pnl": -3.400668049999979,
+      "fills": 129,
+      "orders": 610,
+      "fill_pct": 0.21147540983606558,
+      "mdd": 0.032711844462167426
+    },
+    {
+      "scenario": "b30_event_spike_then_revert",
+      "fill_model": "conservative",
+      "pnl": -3.4330750749999766,
+      "fills": 25,
+      "orders": 104,
+      "fill_pct": 0.2403846153846154,
+      "mdd": 0.03584360362754549
+    },
+    {
+      "scenario": "b50_shock_down_emergency",
+      "fill_model": "optimistic",
+      "pnl": -3.7072900000000004,
+      "fills": 9,
+      "orders": 166,
+      "fill_pct": 0.05421686746987952,
+      "mdd": 0.034811249732903796
+    },
+    {
+      "scenario": "b70_trend_up",
+      "fill_model": "optimistic",
+      "pnl": -3.9380974999999694,
+      "fills": 16,
+      "orders": 181,
+      "fill_pct": 0.08839779005524862,
+      "mdd": 0.03392516868181374
+    },
+    {
+      "scenario": "b30_event_spike_then_revert",
+      "fill_model": "optimistic",
+      "pnl": -4.089999999999975,
+      "fills": 34,
+      "orders": 111,
+      "fill_pct": 0.3063063063063063,
+      "mdd": 0.03584360362754549
+    },
+    {
+      "scenario": "b50_shock_down_emergency",
+      "fill_model": "conservative",
+      "pnl": -4.163374999999974,
+      "fills": 14,
+      "orders": 168,
+      "fill_pct": 0.08333333333333333,
+      "mdd": 0.03502686830283378
+    },
+    {
+      "scenario": "b30_trend_up_fill",
+      "fill_model": "conservative",
+      "pnl": -4.31972810000002,
+      "fills": 45,
+      "orders": 253,
+      "fill_pct": 0.17786561264822134,
+      "mdd": 0.03301421633333329
+    },
+    {
+      "scenario": "b50_regime_switch",
+      "fill_model": "conservative",
+      "pnl": -4.36250287499999,
+      "fills": 9,
+      "orders": 110,
+      "fill_pct": 0.08181818181818182,
+      "mdd": 0.03687404691020608
+    },
+    {
+      "scenario": "b70_trend_up",
+      "fill_model": "conservative",
+      "pnl": -4.380164750000006,
+      "fills": 18,
+      "orders": 179,
+      "fill_pct": 0.1005586592178771,
+      "mdd": 0.034334143810541604
+    },
+    {
+      "scenario": "b70_trend_down",
+      "fill_model": "optimistic",
+      "pnl": -4.394249999999971,
+      "fills": 15,
+      "orders": 191,
+      "fill_pct": 0.07853403141361257,
+      "mdd": 0.03290000000000001
+    },
+    {
+      "scenario": "b70_trend_down",
+      "fill_model": "conservative",
+      "pnl": -4.563056374999974,
+      "fills": 9,
+      "orders": 188,
+      "fill_pct": 0.047872340425531915,
+      "mdd": 0.03300075583333334
+    },
+    {
+      "scenario": "b70_event_drop_then_revert",
+      "fill_model": "conservative",
+      "pnl": -4.679999999999978,
+      "fills": 8,
+      "orders": 73,
+      "fill_pct": 0.1095890410958904,
+      "mdd": 0.03557404326123127
+    },
+    {
+      "scenario": "b70_event_drop_then_revert",
+      "fill_model": "optimistic",
+      "pnl": -4.679999999999978,
+      "fills": 8,
+      "orders": 73,
+      "fill_pct": 0.1095890410958904,
+      "mdd": 0.03557404326123127
+    },
+    {
+      "scenario": "b50_long_regime_switch",
+      "fill_model": "optimistic",
+      "pnl": -4.731299999999976,
+      "fills": 7,
+      "orders": 134,
+      "fill_pct": 0.05223880597014925,
+      "mdd": 0.0326000000000001
+    },
+    {
+      "scenario": "b50_long_regime_switch",
+      "fill_model": "conservative",
+      "pnl": -4.971220249999988,
+      "fills": 6,
+      "orders": 134,
+      "fill_pct": 0.04477611940298507,
+      "mdd": 0.033893809999999955
+    },
+    {
+      "scenario": "b50_regime_switch",
+      "fill_model": "optimistic",
+      "pnl": -5.715984999999961,
+      "fills": 13,
+      "orders": 106,
+      "fill_pct": 0.12264150943396226,
+      "mdd": 0.043257799142323056
+    }
+  ],
+  "by_scenario": [
+    {
+      "scenario": "b10_stable_boundary",
+      "models": {
+        "conservative": {
+          "pnl_end": 5.615752699998183,
+          "fills": 760,
+          "orders": 1025,
+          "fill_rate_per_order": 0.7414634146341463,
+          "max_drawdown": 0.03151160239565139
+        },
+        "optimistic": {
+          "pnl_end": 6.154407999999677,
+          "fills": 311,
+          "orders": 651,
+          "fill_rate_per_order": 0.47772657450076805,
+          "max_drawdown": 0.03139142281314551
+        }
+      }
+    },
+    {
+      "scenario": "b30_event_spike_then_revert",
+      "models": {
+        "conservative": {
+          "pnl_end": -3.4330750749999766,
+          "fills": 25,
+          "orders": 104,
+          "fill_rate_per_order": 0.2403846153846154,
+          "max_drawdown": 0.03584360362754549
+        },
+        "optimistic": {
+          "pnl_end": -4.089999999999975,
+          "fills": 34,
+          "orders": 111,
+          "fill_rate_per_order": 0.3063063063063063,
+          "max_drawdown": 0.03584360362754549
+        }
+      }
+    },
+    {
+      "scenario": "b30_extreme_spike_revert",
+      "models": {
+        "conservative": {
+          "pnl_end": 2.6165697499999965,
+          "fills": 83,
+          "orders": 246,
+          "fill_rate_per_order": 0.33739837398373984,
+          "max_drawdown": 0.035527792114476237
+        },
+        "optimistic": {
+          "pnl_end": 2.285000000000082,
+          "fills": 78,
+          "orders": 242,
+          "fill_rate_per_order": 0.32231404958677684,
+          "max_drawdown": 0.035119658402568636
+        }
+      }
+    },
+    {
+      "scenario": "b30_fast_trend_up_thin",
+      "models": {
+        "conservative": {
+          "pnl_end": -3.400668049999979,
+          "fills": 129,
+          "orders": 610,
+          "fill_rate_per_order": 0.21147540983606558,
+          "max_drawdown": 0.032711844462167426
+        },
+        "optimistic": {
+          "pnl_end": -0.3184934999999314,
+          "fills": 167,
+          "orders": 628,
+          "fill_rate_per_order": 0.2659235668789809,
+          "max_drawdown": 0.03270000000000001
+        }
+      }
+    },
+    {
+      "scenario": "b30_stable_no_fill",
+      "models": {
+        "conservative": {
+          "pnl_end": 2.529064299999618,
+          "fills": 130,
+          "orders": 146,
+          "fill_rate_per_order": 0.8904109589041096,
+          "max_drawdown": 0.030264243027074148
+        },
+        "optimistic": {
+          "pnl_end": 4.090437999999921,
+          "fills": 79,
+          "orders": 143,
+          "fill_rate_per_order": 0.5524475524475524,
+          "max_drawdown": 0.030662862472872917
+        }
+      }
+    },
+    {
+      "scenario": "b30_trend_down_fill",
+      "models": {
+        "conservative": {
+          "pnl_end": 0.9920194500000434,
+          "fills": 46,
+          "orders": 272,
+          "fill_rate_per_order": 0.16911764705882354,
+          "max_drawdown": 0.03270896930890354
+        },
+        "optimistic": {
+          "pnl_end": 1.530000000000058,
+          "fills": 66,
+          "orders": 285,
+          "fill_rate_per_order": 0.23157894736842105,
+          "max_drawdown": 0.0326000000000001
+        }
+      }
+    },
+    {
+      "scenario": "b30_trend_up_fill",
+      "models": {
+        "conservative": {
+          "pnl_end": -4.31972810000002,
+          "fills": 45,
+          "orders": 253,
+          "fill_rate_per_order": 0.17786561264822134,
+          "max_drawdown": 0.03301421633333329
+        },
+        "optimistic": {
+          "pnl_end": -2.6749999999999545,
+          "fills": 102,
+          "orders": 281,
+          "fill_rate_per_order": 0.36298932384341637,
+          "max_drawdown": 0.03259999999999991
+        }
+      }
+    },
+    {
+      "scenario": "b50_dryup_early_severe",
+      "models": {
+        "conservative": {
+          "pnl_end": 2.1961562499993477,
+          "fills": 873,
+          "orders": 896,
+          "fill_rate_per_order": 0.9743303571428571,
+          "max_drawdown": 0.03281960750000015
+        },
+        "optimistic": {
+          "pnl_end": 15.675892499999321,
+          "fills": 1903,
+          "orders": 1927,
+          "fill_rate_per_order": 0.9875454073689673,
+          "max_drawdown": 0.03290000000000001
+        }
+      }
+    },
+    {
+      "scenario": "b50_fine_tick_micro_noise",
+      "models": {
+        "conservative": {
+          "pnl_end": 0.9652976250000052,
+          "fills": 56,
+          "orders": 457,
+          "fill_rate_per_order": 0.12253829321663019,
+          "max_drawdown": 0.03408063096284338
+        },
+        "optimistic": {
+          "pnl_end": 1.2649999999999864,
+          "fills": 56,
+          "orders": 455,
+          "fill_rate_per_order": 0.12307692307692308,
+          "max_drawdown": 0.03394281914893592
+        }
+      }
+    },
+    {
+      "scenario": "b50_liquidity_dryup",
+      "models": {
+        "conservative": {
+          "pnl_end": 0.6221893749998344,
+          "fills": 623,
+          "orders": 658,
+          "fill_rate_per_order": 0.9468085106382979,
+          "max_drawdown": 0.03259999999999991
+        },
+        "optimistic": {
+          "pnl_end": 10.559459999999262,
+          "fills": 1440,
+          "orders": 1475,
+          "fill_rate_per_order": 0.976271186440678,
+          "max_drawdown": 0.03259999999999991
+        }
+      }
+    },
+    {
+      "scenario": "b50_long_regime_switch",
+      "models": {
+        "conservative": {
+          "pnl_end": -4.971220249999988,
+          "fills": 6,
+          "orders": 134,
+          "fill_rate_per_order": 0.04477611940298507,
+          "max_drawdown": 0.033893809999999955
+        },
+        "optimistic": {
+          "pnl_end": -4.731299999999976,
+          "fills": 7,
+          "orders": 134,
+          "fill_rate_per_order": 0.05223880597014925,
+          "max_drawdown": 0.0326000000000001
+        }
+      }
+    },
+    {
+      "scenario": "b50_oscillating_fill",
+      "models": {
+        "conservative": {
+          "pnl_end": 3.399549250000007,
+          "fills": 176,
+          "orders": 977,
+          "fill_rate_per_order": 0.18014329580348004,
+          "max_drawdown": 0.03326963038945364
+        },
+        "optimistic": {
+          "pnl_end": 2.510000000000076,
+          "fills": 120,
+          "orders": 878,
+          "fill_rate_per_order": 0.1366742596810934,
+          "max_drawdown": 0.03290000000000001
+        }
+      }
+    },
+    {
+      "scenario": "b50_oscillating_no_fill",
+      "models": {
+        "conservative": {
+          "pnl_end": 16.440788700000155,
+          "fills": 753,
+          "orders": 1208,
+          "fill_rate_per_order": 0.6233443708609272,
+          "max_drawdown": 0.031392573443450894
+        },
+        "optimistic": {
+          "pnl_end": 31.26188599999969,
+          "fills": 568,
+          "orders": 1048,
+          "fill_rate_per_order": 0.5419847328244275,
+          "max_drawdown": 0.031040241758731744
+        }
+      }
+    },
+    {
+      "scenario": "b50_regime_switch",
+      "models": {
+        "conservative": {
+          "pnl_end": -4.36250287499999,
+          "fills": 9,
+          "orders": 110,
+          "fill_rate_per_order": 0.08181818181818182,
+          "max_drawdown": 0.03687404691020608
+        },
+        "optimistic": {
+          "pnl_end": -5.715984999999961,
+          "fills": 13,
+          "orders": 106,
+          "fill_rate_per_order": 0.12264150943396226,
+          "max_drawdown": 0.043257799142323056
+        }
+      }
+    },
+    {
+      "scenario": "b50_shock_down_emergency",
+      "models": {
+        "conservative": {
+          "pnl_end": -4.163374999999974,
+          "fills": 14,
+          "orders": 168,
+          "fill_rate_per_order": 0.08333333333333333,
+          "max_drawdown": 0.03502686830283378
+        },
+        "optimistic": {
+          "pnl_end": -3.7072900000000004,
+          "fills": 9,
+          "orders": 166,
+          "fill_rate_per_order": 0.05421686746987952,
+          "max_drawdown": 0.034811249732903796
+        }
+      }
+    },
+    {
+      "scenario": "b50_shock_up_emergency",
+      "models": {
+        "conservative": {
+          "pnl_end": -3.1155372499999885,
+          "fills": 4,
+          "orders": 190,
+          "fill_rate_per_order": 0.021052631578947368,
+          "max_drawdown": 0.035459021510965846
+        },
+        "optimistic": {
+          "pnl_end": -3.285125000000022,
+          "fills": 8,
+          "orders": 194,
+          "fill_rate_per_order": 0.041237113402061855,
+          "max_drawdown": 0.035747284248580063
+        }
+      }
+    },
+    {
+      "scenario": "b50_stable_no_fill",
+      "models": {
+        "conservative": {
+          "pnl_end": 0.9409938999999667,
+          "fills": 40,
+          "orders": 58,
+          "fill_rate_per_order": 0.6896551724137931,
+          "max_drawdown": 0.0289881118833197
+        },
+        "optimistic": {
+          "pnl_end": 2.387489999999957,
+          "fills": 37,
+          "orders": 58,
+          "fill_rate_per_order": 0.6379310344827587,
+          "max_drawdown": 0.024834432370487193
+        }
+      }
+    },
+    {
+      "scenario": "b50_whipsaw",
+      "models": {
+        "conservative": {
+          "pnl_end": -1.725856325000052,
+          "fills": 139,
+          "orders": 700,
+          "fill_rate_per_order": 0.19857142857142857,
+          "max_drawdown": 0.03290000000000001
+        },
+        "optimistic": {
+          "pnl_end": -1.16499999999985,
+          "fills": 164,
+          "orders": 709,
+          "fill_rate_per_order": 0.231311706629055,
+          "max_drawdown": 0.03290000000000001
+        }
+      }
+    },
+    {
+      "scenario": "b50_whipsaw_high_vol",
+      "models": {
+        "conservative": {
+          "pnl_end": 2.3372384250001232,
+          "fills": 323,
+          "orders": 1228,
+          "fill_rate_per_order": 0.26302931596091206,
+          "max_drawdown": 0.032617434485139714
+        },
+        "optimistic": {
+          "pnl_end": 4.965721000000201,
+          "fills": 394,
+          "orders": 1232,
+          "fill_rate_per_order": 0.3198051948051948,
+          "max_drawdown": 0.03259999999999991
+        }
+      }
+    },
+    {
+      "scenario": "b70_event_drop_then_revert",
+      "models": {
+        "conservative": {
+          "pnl_end": -4.679999999999978,
+          "fills": 8,
+          "orders": 73,
+          "fill_rate_per_order": 0.1095890410958904,
+          "max_drawdown": 0.03557404326123127
+        },
+        "optimistic": {
+          "pnl_end": -4.679999999999978,
+          "fills": 8,
+          "orders": 73,
+          "fill_rate_per_order": 0.1095890410958904,
+          "max_drawdown": 0.03557404326123127
+        }
+      }
+    },
+    {
+      "scenario": "b70_extreme_drop_revert",
+      "models": {
+        "conservative": {
+          "pnl_end": 0.9350115999999389,
+          "fills": 86,
+          "orders": 250,
+          "fill_rate_per_order": 0.344,
+          "max_drawdown": 0.033557901877985956
+        },
+        "optimistic": {
+          "pnl_end": 0.7100000000000364,
+          "fills": 93,
+          "orders": 252,
+          "fill_rate_per_order": 0.36904761904761907,
+          "max_drawdown": 0.03341103341103338
+        }
+      }
+    },
+    {
+      "scenario": "b70_fast_trend_down_thin",
+      "models": {
+        "conservative": {
+          "pnl_end": -2.1343295749999527,
+          "fills": 161,
+          "orders": 597,
+          "fill_rate_per_order": 0.2696817420435511,
+          "max_drawdown": 0.03397454378544703
+        },
+        "optimistic": {
+          "pnl_end": 4.438478500000116,
+          "fills": 222,
+          "orders": 627,
+          "fill_rate_per_order": 0.35406698564593303,
+          "max_drawdown": 0.03290000000000001
+        }
+      }
+    },
+    {
+      "scenario": "b70_stable_no_fill",
+      "models": {
+        "conservative": {
+          "pnl_end": 4.626239099999594,
+          "fills": 200,
+          "orders": 254,
+          "fill_rate_per_order": 0.7874015748031497,
+          "max_drawdown": 0.03124267767991503
+        },
+        "optimistic": {
+          "pnl_end": 9.200681999999688,
+          "fills": 152,
+          "orders": 251,
+          "fill_rate_per_order": 0.6055776892430279,
+          "max_drawdown": 0.02705227900083117
+        }
+      }
+    },
+    {
+      "scenario": "b70_trend_down",
+      "models": {
+        "conservative": {
+          "pnl_end": -4.563056374999974,
+          "fills": 9,
+          "orders": 188,
+          "fill_rate_per_order": 0.047872340425531915,
+          "max_drawdown": 0.03300075583333334
+        },
+        "optimistic": {
+          "pnl_end": -4.394249999999971,
+          "fills": 15,
+          "orders": 191,
+          "fill_rate_per_order": 0.07853403141361257,
+          "max_drawdown": 0.03290000000000001
+        }
+      }
+    },
+    {
+      "scenario": "b70_trend_up",
+      "models": {
+        "conservative": {
+          "pnl_end": -4.380164750000006,
+          "fills": 18,
+          "orders": 179,
+          "fill_rate_per_order": 0.1005586592178771,
+          "max_drawdown": 0.034334143810541604
+        },
+        "optimistic": {
+          "pnl_end": -3.9380974999999694,
+          "fills": 16,
+          "orders": 181,
+          "fill_rate_per_order": 0.08839779005524862,
+          "max_drawdown": 0.03392516868181374
+        }
+      }
+    },
+    {
+      "scenario": "b90_stable_boundary",
+      "models": {
+        "conservative": {
+          "pnl_end": 6.772298299997999,
+          "fills": 831,
+          "orders": 1091,
+          "fill_rate_per_order": 0.7616865261228231,
+          "max_drawdown": 0.031574196027976516
+        },
+        "optimistic": {
+          "pnl_end": 6.945171999999815,
+          "fills": 328,
+          "orders": 688,
+          "fill_rate_per_order": 0.47674418604651164,
+          "max_drawdown": 0.03133521593850763
+        }
+      }
+    }
+  ]
+}

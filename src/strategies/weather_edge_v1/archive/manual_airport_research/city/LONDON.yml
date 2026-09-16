@@ -1,0 +1,86 @@
+identity:
+  city_key: london
+  display_name: London
+  market_unit: C
+  timezone: Europe/London
+
+station:
+  station_name: London City Airport
+  station_code: EGLC
+  iata_code: LCY
+  object_type: airport
+  settlement_scope: Only the London City Airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values, matching the market rules for London temperature contracts.
+  station_match_rule: Must match London City Airport Station / EGLC. Do not substitute a generic London city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: EGLC
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not treat a non-finalized page as final truth.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: EGLC
+    role: trading_anchor
+    use_for: Record the target-day high, the daytime peak window, and any intraday warming or cooling revision.
+    do_not_use_for: Do not map the forecasted integer directly to a guaranteed settlement bucket.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain how the broader market may be anchoring within the same TWC ecosystem.
+      do_not_use_for: Do not replace the same-station WU anchor with a generic London page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check cloud, wind, and airport-specific daytime heating.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the expected daily high and warming path.
+    - family: meteoblue
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check peak timing and uncertainty.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: It describes London as a city object, not the EGLC airport station used for settlement.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Useful for spotting market noise, but not for pricing the airport contract.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: City guidance can drift away from the airport temperature path.
+
+operator_notes:
+  summary: London should be treated as an airport contract, not a generic city weather contract. Start from same-station WU Hourly, then check whether marine cloud or low cloud could flatten the afternoon peak.
+  why_this_station: London City Airport is the station used by the current London weather-market setup in this repo and matches the airport-centric workflow used elsewhere.
+  main_risks:
+    - Marine cloud suppressing the afternoon high.
+    - Low cloud or fog keeping the peak one bucket below a warm-looking city page.
+    - Fast-moving fronts changing the peak hour late in the day.
+  common_wrong_anchor:
+    - Generic London city pages that run warmer than the airport.
+    - Wider metro pages that ignore the airport's marine influence.
+  usage_order:
+    - Open Polymarket rules and confirm EGLC plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check one to three airport support pages for disagreement.
+    - Look at city pages only to judge whether the market is being pulled by a wrong anchor.

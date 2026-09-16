@@ -1,0 +1,35 @@
+{
+  "fixture_set_id": "op01_synthetic_frozen_gamma_v1",
+  "source_kind": "SYNTHETIC_FROZEN_OFFLINE",
+  "live_capture": false,
+  "fixtures": [
+    {
+      "fixture_id": "storm_landfall_binary",
+      "filename": "storm_landfall_binary.json",
+      "raw_bytes_sha256": "d7207ef508220bbe09313265969b689e4b47fd733a48ca0579a995634bbfa6c6",
+      "payload_sha256": "8f3530396172ea23a47b0ea22ef6c45f2f46edd8309132aef315492a0003b22b",
+      "expected_identity": {"event_id": "evt-storm-2026", "market_id": "op01-1001", "condition_id": "0xop01storm", "yes_token_id": "op01-storm-yes", "no_token_id": "op01-storm-no"}
+    },
+    {
+      "fixture_id": "election_turnout_binary",
+      "filename": "election_turnout_binary.json",
+      "raw_bytes_sha256": "af1b4b70c70b3a97530fdf04a2d67e73bd89fad59d94f65e56d8526051946cbd",
+      "payload_sha256": "eb20ae380658194c7cca2a84f5871486c7e4e81a992345e3f29350693a954065",
+      "expected_identity": {"event_id": "evt-election-2026", "market_id": "op01-1002", "condition_id": "0xop01election", "yes_token_id": "op01-election-yes", "no_token_id": "op01-election-no"}
+    },
+    {
+      "fixture_id": "space_launch_binary",
+      "filename": "space_launch_binary.json",
+      "raw_bytes_sha256": "ecff7324b0da46236456be6546fa6a4fef7e33035352d5df86f966e852d18c41",
+      "payload_sha256": "c8ba681de743631d10d72ec84a98077d3552cc08508ad7b86e47a91649a02d46",
+      "expected_identity": {"event_id": "evt-space-2026", "market_id": "op01-1003", "condition_id": "0xop01space", "yes_token_id": "op01-space-yes", "no_token_id": "op01-space-no"}
+    },
+    {
+      "fixture_id": "court_ruling_binary",
+      "filename": "court_ruling_binary.json",
+      "raw_bytes_sha256": "132ffed24b090143a54bfd1c7169b08e0948d7814ed10416824f03438e2cb0c6",
+      "payload_sha256": "fbf4ec1802991299d003a81677c54fe55344af8ff5e378a5150dd4adbc08588b",
+      "expected_identity": {"event_id": "evt-court-2026", "market_id": "op01-1004", "condition_id": "0xop01court", "yes_token_id": "op01-court-yes", "no_token_id": "op01-court-no"}
+    }
+  ]
+}

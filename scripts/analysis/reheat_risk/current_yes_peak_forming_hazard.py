@@ -1,0 +1,580 @@
+#!/usr/bin/env python3
+"""Train the plateau-aware current-YES peak-forming hazard family.
+
+The model answers a narrower question than the generic current-YES artifact:
+when the observed temperature is still at the running max, will that current
+bracket survive, or is the market about to see a later higher print?
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from datetime import datetime, timezone
+from functools import partial
+from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
+
+import numpy as np
+import pandas as pd
+try:
+    from .peak_forming_hazard_shared import (
+        approx_metar_veto,
+        artifact_from_model as shared_artifact_from_model,
+        build_pipeline,
+        data_self_check as shared_data_self_check,
+        json_ready,
+        metric_row,
+        score_artifact as shared_score_artifact,
+        select_grid as shared_select_grid,
+        summarize_trade as shared_summarize_trade,
+    )
+except ImportError:  # direct script execution
+    from peak_forming_hazard_shared import (
+        approx_metar_veto,
+        artifact_from_model as shared_artifact_from_model,
+        build_pipeline,
+        data_self_check as shared_data_self_check,
+        json_ready,
+        metric_row,
+        score_artifact as shared_score_artifact,
+        select_grid as shared_select_grid,
+        summarize_trade as shared_summarize_trade,
+    )
+
+
+ROOT = Path(__file__).resolve().parents[3]
+DB = ROOT / "runtime/weather.db"
+REHEAT_ROWS = ROOT / "docs/analysis/2026-06/generated/reheat_feature_factory_v1/reheat_feature_rows.csv"
+BASE_MODEL = ROOT / "docs/analysis/2026-06/generated/theta_yes_current_live_gate_v9/live_model.json"
+OUT_DIR = ROOT / "docs/analysis/2026-06/generated/current_yes_peak_forming_hazard_v2"
+OUT_ARTIFACT = OUT_DIR / "peak_forming_hazard_plateau_model.json"
+OUT_SCORED = OUT_DIR / "peak_forming_plateau_scored_rows.csv"
+OUT_METRICS = OUT_DIR / "model_metrics.csv"
+OUT_RULES = OUT_DIR / "rule_comparison.csv"
+OUT_JSON = OUT_DIR / "summary.json"
+OUT_MD = OUT_DIR / "report.md"
+
+SEED = 20260621
+TRAIN_END = "2026-05-31"
+HOLDOUT_START = "2026-06-01"
+PEAK_DECLINE_MAX_NATIVE = 0.25
+
+BASE_ALIAS = {
+    "yes_current_ask": "current_yes_ask",
+    "log_yes_size": "log_current_yes_size",
+    "decline_c": "decline_from_max_c",
+    "relh_now": "relative_humidity_pct",
+    "sknt_now": "wind_speed_kt",
+    "sky_now": "sky_cover_code",
+    "d_tmpf_1h": "temp_trend_1h_f",
+    "d_tmpf_3h": "temp_trend_3h_f",
+}
+
+NUMERIC_FEATURES = [
+    "decision_hour_local",
+    "month",
+    "current_native",
+    "running_native",
+    "running_value",
+    "decline_native",
+    "decline_from_max_c",
+    "gap_running_to_d1_low_native",
+    "gap_current_to_d1_low_native",
+    "current_yes_ask",
+    "log_current_yes_size",
+    "d1_no_ask",
+    "ask_gap_d1_no_minus_yes",
+    "tmpf_now",
+    "dwpf_now",
+    "dewpoint_depression_f",
+    "relative_humidity_pct",
+    "wind_speed_kt",
+    "sky_cover_code",
+    "temp_trend_1h_f",
+    "temp_trend_3h_f",
+    "minutes_since_running_max_capped",
+    "plateau_obs_count_at_high",
+    "plateau_duration_min",
+    "at_high_stalled_ge2_obs_num",
+    "at_high_stalled_ge30m_num",
+    "just_touched_high_num",
+    "running_max_first_obs_hour_local",
+    "running_max_first_obs_before_noon_num",
+    "decision_minus_running_max_hour",
+    "morning_spike_reheat_window_num",
+    "forecast_peak_still_ahead_num",
+    "warming_while_at_high_num",
+    "decision_obs_age_min",
+    "gfs_forecast_peak_delta_hours_local",
+    "ecmwf_forecast_peak_delta_hours_local",
+    "min_forecast_peak_delta_hours_local",
+    "max_forecast_peak_delta_hours_local",
+    "forecast_peak_hour_spread",
+    "gfs_forecast_gap_to_running_native",
+    "ecmwf_forecast_gap_to_running_native",
+    "min_forecast_gap_to_running_native",
+    "max_forecast_gap_to_running_native",
+    "forecast_peak_models_agree_le_1h_num",
+]
+CAT_FEATURES = ["city", "unit"]
+PRICE_LIKE_FEATURES = {
+    "current_yes_ask",
+    "log_current_yes_size",
+    "d1_no_ask",
+    "ask_gap_d1_no_minus_yes",
+}
+WEATHER_ONLY_NUMERIC_FEATURES = [feature for feature in NUMERIC_FEATURES if feature not in PRICE_LIKE_FEATURES]
+
+
+def now_utc() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+pipeline = partial(
+    build_pipeline,
+    default_numeric_features=NUMERIC_FEATURES,
+    categorical_features=CAT_FEATURES,
+    seed=SEED,
+)
+artifact_from_model = partial(
+    shared_artifact_from_model,
+    categorical_features=CAT_FEATURES,
+    source_feature_rows=REHEAT_ROWS,
+    root=ROOT,
+    peak_decline_max_native=PEAK_DECLINE_MAX_NATIVE,
+    seed=SEED,
+    trained_at_utc=now_utc,
+)
+score_artifact = partial(shared_score_artifact, base_alias=BASE_ALIAS)
+select_grid = partial(shared_select_grid, seed=SEED)
+
+
+def pct(value: float | None, digits: int = 1) -> str:
+    if value is None or not math.isfinite(float(value)):
+        return "NA"
+    return f"{float(value) * 100:.{digits}f}%"
+
+
+def num(value: float | None, digits: int = 3) -> str:
+    if value is None or not math.isfinite(float(value)):
+        return "NA"
+    return f"{float(value):.{digits}f}"
+
+
+def data_self_check() -> dict[str, Any]:
+    return shared_data_self_check(DB)
+
+
+def boolish(series: pd.Series) -> pd.Series:
+    numeric = pd.to_numeric(series, errors="coerce")
+    out = numeric.fillna(0).astype(float) > 0
+    text_mask = numeric.isna()
+    if text_mask.any():
+        out.loc[text_mask] = series.loc[text_mask].astype(str).str.lower().isin({"true", "1", "1.0", "yes"})
+    return out
+
+
+def local_hour(ts: pd.Timestamp, timezone_name: str) -> float:
+    if pd.isna(ts):
+        return np.nan
+    try:
+        local = ts.to_pydatetime().astimezone(ZoneInfo(str(timezone_name)))
+    except Exception:  # noqa: BLE001
+        return np.nan
+    return local.hour + local.minute / 60.0 + local.second / 3600.0
+
+
+def add_peak_plateau_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Add model features that distinguish a real high-temperature plateau from a fresh touch."""
+
+    out = df.copy()
+    out["minutes_since_running_max_num"] = pd.to_numeric(out["minutes_since_running_max"], errors="coerce")
+    first_max_dt = out["decision_last_obs_dt"] - pd.to_timedelta(out["minutes_since_running_max_num"], unit="m")
+    out["running_max_first_obs_hour_local"] = [
+        local_hour(ts, tz) for ts, tz in zip(first_max_dt, out["timezone"], strict=False)
+    ]
+    out["running_max_first_obs_before_noon_num"] = (
+        pd.to_numeric(out["running_max_first_obs_hour_local"], errors="coerce").lt(12.0).astype(float)
+    )
+    out["decision_minus_running_max_hour"] = (
+        pd.to_numeric(out["decision_hour_local"], errors="coerce")
+        - pd.to_numeric(out["running_max_first_obs_hour_local"], errors="coerce")
+    )
+    out["morning_spike_reheat_window_num"] = (
+        out["running_max_first_obs_before_noon_num"].eq(1.0)
+        & pd.to_numeric(out["decision_hour_local"], errors="coerce").between(12.0, 15.5)
+    ).astype(float)
+    out["forecast_peak_still_ahead_num"] = (
+        pd.to_numeric(out["min_forecast_peak_delta_hours_local"], errors="coerce").lt(0).astype(float)
+    )
+    out["warming_while_at_high_num"] = (
+        pd.to_numeric(out["temp_trend_1h_f"], errors="coerce").gt(0).astype(float)
+    )
+
+    key_cols = ["city", "target_date", "running_value", "decision_last_obs_utc"]
+    obs = (
+        out.sort_values(["city", "target_date", "running_value", "decision_last_obs_dt", "decision_snapshot_dt"])
+        .drop_duplicates(key_cols, keep="last")
+        .copy()
+    )
+    obs["_at_high"] = pd.to_numeric(obs["decline_native"], errors="coerce").le(PEAK_DECLINE_MAX_NATIVE)
+    plateau_count: dict[int, int] = {}
+    plateau_duration: dict[int, float] = {}
+    for _group_key, group in obs.groupby(["city", "target_date", "running_value"], sort=False):
+        run_count = 0
+        streak_start: pd.Timestamp | None = None
+        for idx, row in group.sort_values("decision_last_obs_dt").iterrows():
+            obs_dt = row["decision_last_obs_dt"]
+            if bool(row["_at_high"]):
+                run_count += 1
+                if streak_start is None:
+                    streak_start = obs_dt
+                if pd.isna(obs_dt) or pd.isna(streak_start):
+                    duration = np.nan
+                else:
+                    duration = max(0.0, (obs_dt - streak_start).total_seconds() / 60.0)
+            else:
+                run_count = 0
+                streak_start = None
+                duration = 0.0
+            plateau_count[idx] = run_count
+            plateau_duration[idx] = duration
+
+    obs["plateau_obs_count_at_high"] = pd.Series(plateau_count)
+    obs["plateau_duration_min"] = pd.Series(plateau_duration)
+    out = out.merge(
+        obs[key_cols + ["plateau_obs_count_at_high", "plateau_duration_min"]],
+        on=key_cols,
+        how="left",
+    )
+    out["plateau_obs_count_at_high"] = pd.to_numeric(out["plateau_obs_count_at_high"], errors="coerce").fillna(0)
+    out["plateau_duration_min"] = pd.to_numeric(out["plateau_duration_min"], errors="coerce").fillna(0.0)
+    out["at_high_stalled_ge2_obs_num"] = out["plateau_obs_count_at_high"].ge(2).astype(float)
+    out["at_high_stalled_ge30m_num"] = out["plateau_duration_min"].ge(30.0).astype(float)
+    out["just_touched_high_num"] = out["plateau_obs_count_at_high"].le(1).astype(float)
+    return out
+
+
+def load_peak_rows() -> pd.DataFrame:
+    df = pd.read_csv(REHEAT_ROWS)
+    df = df[(df["outcome"].astype(str).str.lower() == "yes") & (df["bracket"].astype(str) == df["current_bracket"].astype(str))]
+    df = df.drop_duplicates(["city", "target_date", "decision_snapshot_ts_utc", "current_bracket"]).copy()
+    df = df[df["current_yes_ask"].notna() & df["current_bracket_held"].notna()].copy()
+    df["label_current_yes_survives"] = boolish(df["current_bracket_held"]).astype(int)
+    df["label_future_break"] = 1 - df["label_current_yes_survives"]
+    df["target_date"] = df["target_date"].astype(str)
+    df["period"] = np.where(df["target_date"] <= TRAIN_END, "train", "holdout")
+    df.loc[df["target_date"] < "2026-05-19", "period"] = "ignore"
+    df["decision_snapshot_dt"] = pd.to_datetime(df["decision_snapshot_ts_utc"], utc=True, errors="coerce")
+    df["decision_last_obs_dt"] = pd.to_datetime(df["decision_last_obs_utc"], utc=True, errors="coerce")
+    df["decision_obs_age_min"] = (df["decision_snapshot_dt"] - df["decision_last_obs_dt"]).dt.total_seconds() / 60.0
+    df["month"] = pd.to_datetime(df["target_date"], errors="coerce").dt.month
+    df["log_current_yes_size"] = np.log1p(pd.to_numeric(df["current_yes_ask_size"], errors="coerce").clip(lower=0))
+    df["ask_gap_d1_no_minus_yes"] = pd.to_numeric(df["d1_no_ask"], errors="coerce") - pd.to_numeric(
+        df["current_yes_ask"], errors="coerce"
+    )
+    df["gap_running_to_d1_low_native"] = pd.to_numeric(df["bracket_low"], errors="coerce") + 1.0 - pd.to_numeric(
+        df["running_native"], errors="coerce"
+    )
+    df["gap_current_to_d1_low_native"] = pd.to_numeric(df["bracket_low"], errors="coerce") + 1.0 - pd.to_numeric(
+        df["current_native"], errors="coerce"
+    )
+    df["minutes_since_running_max_capped"] = pd.to_numeric(df["minutes_since_running_max"], errors="coerce").clip(upper=240)
+
+    for col in [
+        "gfs_forecast_peak_delta_hours_local",
+        "ecmwf_forecast_peak_delta_hours_local",
+        "gfs_forecast_gap_to_running_native",
+        "ecmwf_forecast_gap_to_running_native",
+        "forecast_peak_hour_spread",
+        "forecast_peak_models_agree_le_1h",
+    ]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    df["min_forecast_peak_delta_hours_local"] = df[
+        ["gfs_forecast_peak_delta_hours_local", "ecmwf_forecast_peak_delta_hours_local"]
+    ].min(axis=1)
+    df["max_forecast_peak_delta_hours_local"] = df[
+        ["gfs_forecast_peak_delta_hours_local", "ecmwf_forecast_peak_delta_hours_local"]
+    ].max(axis=1)
+    df["min_forecast_gap_to_running_native"] = df[
+        ["gfs_forecast_gap_to_running_native", "ecmwf_forecast_gap_to_running_native"]
+    ].min(axis=1)
+    df["max_forecast_gap_to_running_native"] = df[
+        ["gfs_forecast_gap_to_running_native", "ecmwf_forecast_gap_to_running_native"]
+    ].max(axis=1)
+    df["forecast_peak_models_agree_le_1h_num"] = pd.to_numeric(
+        df.get("forecast_peak_models_agree_le_1h"), errors="coerce"
+    )
+    df = add_peak_plateau_features(df)
+
+    peak = df[pd.to_numeric(df["decline_native"], errors="coerce").le(PEAK_DECLINE_MAX_NATIVE)].copy()
+    return peak
+
+
+def summarize_trade(frame: pd.DataFrame, p_col: str, name: str) -> dict[str, Any]:
+    return shared_summarize_trade(frame, p_col, name, seed=SEED)
+
+
+def live_like_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
+    tradable = (
+        frame["decision_hour_local"].between(13, 17)
+        & frame["current_yes_ask"].between(0.50, 0.97, inclusive="both")
+        & frame["min_forecast_peak_delta_hours_local"].fillna(-999).ge(-1.0)
+    )
+    guard_ok = ~approx_metar_veto(frame)
+    return {
+        "market_price_only_tradable": tradable,
+        "base_v9_peak_rule": tradable & frame["p_base"].ge(0.60) & (frame["p_base"] - frame["current_yes_ask"]).ge(0.02),
+        "base_v9_peak_rule_plus_approx_guard": tradable
+        & guard_ok
+        & frame["p_base"].ge(0.60)
+        & (frame["p_base"] - frame["current_yes_ask"]).ge(0.02),
+        "hazard_v2_peak_rule": tradable
+        & frame["p_hazard"].ge(0.60)
+        & (frame["p_hazard"] - frame["current_yes_ask"]).ge(0.02),
+        "hazard_v2_peak_rule_plus_approx_guard": tradable
+        & guard_ok
+        & frame["p_hazard"].ge(0.60)
+        & (frame["p_hazard"] - frame["current_yes_ask"]).ge(0.02),
+        "hazard_v2_stalled_peak_rule": tradable
+        & frame["plateau_obs_count_at_high"].ge(2)
+        & frame["p_hazard"].ge(0.60)
+        & (frame["p_hazard"] - frame["current_yes_ask"]).ge(0.02),
+        "hazard_v2_stalled_peak_rule_plus_approx_guard": tradable
+        & frame["plateau_obs_count_at_high"].ge(2)
+        & guard_ok
+        & frame["p_hazard"].ge(0.60)
+        & (frame["p_hazard"] - frame["current_yes_ask"]).ge(0.02),
+    }
+
+
+def write_markdown(payload: dict[str, Any]) -> None:
+    metrics = payload["holdout_model_metrics"]
+    rules = payload["holdout_rule_comparison"]
+    lines = [
+        "# Current YES Peak-Forming Hazard Model v2",
+        "",
+        "Status: research-only",
+        f"Generated: {payload['generated_at_utc']}",
+        "",
+        "Target metric: `current_yes_peak_forming_hazard_v2` = 当前温度仍在 running max 附近时，预测当前最高温 bracket 是否最终守住；等价地，预测后面会不会出现更高温打穿。",
+        "",
+        "## Human Summary",
+        "",
+        "这版不是把旧模型再套几条 if/else。它单独训练 peak-forming 状态，用盘口、METAR 温湿风云/温度趋势、forecast peak clock、GFS/ECMWF 最高温缺口，以及 `plateau_obs_count_at_high / plateau_duration_min / running_max_first_obs_hour_local` 一起估计 `p_survive`。",
+        "",
+        "结果的重点比较清楚：模型判别力有提升，但交易层仍没有到可以替换 live 的程度。尤其是高 ask 区域市场本来就接近校准，真正能留下 edge 的样本变薄。",
+        "",
+        "## 数据快照",
+        "",
+        f"- 数据源: `{payload['data_snapshot']['source_feature_rows']}` + `runtime/weather.db` self-check",
+        f"- 数据快照时间: fact_trades max built at `{payload['data_self_check']['fact_trades_max_built_at_utc']}`",
+        f"- 特征产出日期: `{payload['coverage']['source_min_target_date']}`..`{payload['coverage']['source_max_target_date']}`；记录行数: source rows {payload['coverage']['source_rows']}, current-YES peak rows {payload['coverage']['peak_rows']}",
+        f"- unsettled 占比: feature factory peak rows are settled-only; fact self-check `{payload['data_self_check']['fact_trades_by_settlement_status']}`",
+        "- missing_bracket 数: feature factory reads `settlement_outcomes`; no missing rows in this peak slice.",
+        f"- 数据范围: 本报告使用 `reheat_feature_factory_v1` 当前物化范围 `{payload['coverage']['source_min_target_date']}`..`{payload['coverage']['source_max_target_date']}`；holdout peak states 为 `{HOLDOUT_START}`..`{payload['coverage']['source_max_target_date']}` 内可形成 peak slice 的行。",
+        "",
+        "## Funnel",
+        "",
+        "| step | rows | dates | cities |",
+        "|---|---:|---:|---:|",
+        f"| all reheat feature rows | {payload['coverage']['source_rows']} | {payload['coverage']['source_dates']} | {payload['coverage']['source_cities']} |",
+        f"| current YES states | {payload['coverage']['current_yes_rows']} | {payload['coverage']['current_yes_dates']} | {payload['coverage']['current_yes_cities']} |",
+        f"| peak-forming states | {payload['coverage']['peak_rows']} | {payload['coverage']['peak_dates']} | {payload['coverage']['peak_cities']} |",
+        f"| train peak states | {payload['coverage']['train_rows']} | {payload['coverage']['train_dates']} | {payload['coverage']['train_cities']} |",
+        f"| holdout peak states | {payload['coverage']['holdout_rows']} | {payload['coverage']['holdout_dates']} | {payload['coverage']['holdout_cities']} |",
+        "",
+        "Row grain: one row is one city + target date + orderbook snapshot + current running-max bracket, not one fill.",
+        "",
+        "## Holdout Model Metrics",
+        "",
+        "| model | rows | actual survive | mean p | AUC | Brier | avg edge vs ask |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in metrics:
+        lines.append(
+            f"| {row['model']} | {row['rows']} | {pct(row.get('actual_survive_rate'))} | "
+            f"{pct(row.get('mean_pred_survive'))} | {num(row.get('auc'))} | {num(row.get('brier'))} | "
+            f"{pct(row.get('mean_edge_vs_ask'))} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Holdout Trading Rules",
+            "",
+            "| rule | orders | dates | cities | avg ask | win rate | ROI | 95% date bootstrap ROI |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for row in rules:
+        ci = row.get("bootstrap_roi_ci95") or [None, None]
+        ci_text = f"[{pct(ci[0])}, {pct(ci[1])}]"
+        lines.append(
+            f"| {row['rule']} | {row['orders']} | {row['active_dates']} | {row['cities']} | "
+            f"{num(row.get('avg_ask'))} | {pct(row.get('win_rate'))} | {pct(row.get('roi'))} | {ci_text} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Verdict",
+            "",
+            f"significance={payload['verdict']['significance']} / baseline={payload['verdict']['baseline']} / forward={payload['verdict']['forward']} / conclusion={payload['verdict']['conclusion']}",
+            "",
+            payload["verdict"]["plain_text"],
+            "",
+            "## Outputs",
+            "",
+            f"- artifact: `{payload['outputs']['artifact']}`",
+            f"- scored rows: `{payload['outputs']['scored_rows']}`",
+            f"- metrics: `{payload['outputs']['metrics']}`",
+            f"- rule comparison: `{payload['outputs']['rule_comparison']}`",
+            f"- json: `{payload['outputs']['json']}`",
+        ]
+    )
+    OUT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def main() -> int:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    source_df = pd.read_csv(REHEAT_ROWS, usecols=["city", "target_date"])
+    current_yes_df = (
+        pd.read_csv(
+            REHEAT_ROWS,
+            usecols=["city", "target_date", "decision_snapshot_ts_utc", "bracket", "current_bracket", "outcome", "current_yes_ask"],
+        )
+        .query("outcome == 'yes' and current_yes_ask == current_yes_ask")
+        .assign(_is_current=lambda d: d["bracket"].astype(str) == d["current_bracket"].astype(str))
+        .query("_is_current")
+        .drop_duplicates(["city", "target_date", "decision_snapshot_ts_utc", "current_bracket"])
+    )
+    peak = load_peak_rows()
+    train = peak[peak["period"].eq("train")].copy()
+    holdout = peak[peak["period"].eq("holdout")].copy()
+
+    model = pipeline(NUMERIC_FEATURES)
+    model.fit(train[NUMERIC_FEATURES + CAT_FEATURES], train["label_current_yes_survives"])
+    artifact = artifact_from_model(
+        model,
+        train,
+        NUMERIC_FEATURES,
+        "current_yes_peak_forming_hazard_logistic_v2",
+        "current_yes_peak_forming_hazard_v2",
+    )
+    OUT_ARTIFACT.write_text(json.dumps(json_ready(artifact), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    weather_model = pipeline(WEATHER_ONLY_NUMERIC_FEATURES)
+    weather_model.fit(train[WEATHER_ONLY_NUMERIC_FEATURES + CAT_FEATURES], train["label_current_yes_survives"])
+
+    peak["p_hazard"] = model.predict_proba(peak[NUMERIC_FEATURES + CAT_FEATURES])[:, 1]
+    peak["p_weather_only"] = weather_model.predict_proba(peak[WEATHER_ONLY_NUMERIC_FEATURES + CAT_FEATURES])[:, 1]
+    base_artifact = json.loads(BASE_MODEL.read_text(encoding="utf-8"))
+    peak["p_base"] = score_artifact(peak, base_artifact)
+    peak["p_market"] = peak["current_yes_ask"].clip(1e-6, 1 - 1e-6)
+    peak["approx_metar_veto"] = approx_metar_veto(peak)
+    peak["p_hazard_edge"] = peak["p_hazard"] - peak["current_yes_ask"]
+    peak["p_base_edge"] = peak["p_base"] - peak["current_yes_ask"]
+    peak.to_csv(OUT_SCORED, index=False)
+
+    train = peak[peak["period"].eq("train")].copy()
+    holdout = peak[peak["period"].eq("holdout")].copy()
+    metrics = pd.DataFrame(
+        [
+            metric_row("market_price_as_probability", holdout, "p_market"),
+            metric_row("weather_forecast_only_v1", holdout, "p_weather_only"),
+            metric_row("base_current_yes_v9", holdout, "p_base"),
+            metric_row("peak_forming_hazard_v2", holdout, "p_hazard"),
+        ]
+    )
+    metrics.to_csv(OUT_METRICS, index=False)
+
+    masks = live_like_masks(holdout)
+    rule_rows = []
+    for name, mask in masks.items():
+        p_col = "p_market" if name == "market_price_only_tradable" else "p_base" if name.startswith("base_") else "p_hazard"
+        rule_rows.append(summarize_trade(holdout[mask].copy(), p_col, name))
+
+    grid_rows = select_grid(train)
+    best_grid_holdout = []
+    for row in grid_rows[:3]:
+        mask = (
+            holdout["decision_hour_local"].between(int(row["min_hour"]), 17)
+            & holdout["current_yes_ask"].between(0.50, 0.97, inclusive="both")
+            & holdout["min_forecast_peak_delta_hours_local"].fillna(-999).ge(-1.0)
+            & holdout["p_hazard"].ge(float(row["min_p"]))
+            & (holdout["p_hazard"] - holdout["current_yes_ask"]).ge(float(row["min_edge"]))
+        )
+        best_grid_holdout.append(summarize_trade(holdout[mask].copy(), "p_hazard", "train_selected_" + row["rule"]))
+    rule_rows.extend(best_grid_holdout)
+    pd.DataFrame(rule_rows).to_csv(OUT_RULES, index=False)
+
+    hazard_guard = next(row for row in rule_rows if row["rule"] == "hazard_v2_peak_rule_plus_approx_guard")
+    hazard = next(row for row in rule_rows if row["rule"] == "hazard_v2_peak_rule")
+    forward_pass = bool(hazard["orders"] >= 30 and hazard["active_dates"] >= 10 and (hazard["roi"] or -999) > 0)
+    ci = hazard.get("bootstrap_roi_ci95") or [None, None]
+    significance_pass = bool(ci[0] is not None and ci[0] > 0)
+    baseline_pass = bool(hazard["roi"] is not None and hazard["avg_edge"] is not None and hazard["avg_edge"] > 0)
+    conclusion = "confirmed" if significance_pass and baseline_pass and forward_pass else "inconclusive"
+
+    self_check = data_self_check()
+    payload = {
+        "generated_at_utc": now_utc(),
+        "data_snapshot": {
+            "source_feature_rows": str(REHEAT_ROWS.relative_to(ROOT)),
+            "base_model": str(BASE_MODEL.relative_to(ROOT)),
+            "train_end": TRAIN_END,
+            "holdout_start": HOLDOUT_START,
+        },
+        "data_self_check": self_check,
+        "coverage": {
+            "source_rows": int(len(source_df)),
+            "source_min_target_date": str(source_df["target_date"].min()),
+            "source_max_target_date": str(source_df["target_date"].max()),
+            "source_dates": int(source_df["target_date"].nunique()),
+            "source_cities": int(source_df["city"].nunique()),
+            "current_yes_rows": int(current_yes_df.shape[0]),
+            "current_yes_dates": int(current_yes_df["target_date"].nunique()),
+            "current_yes_cities": int(current_yes_df["city"].nunique()),
+            "peak_rows": int(len(peak)),
+            "peak_dates": int(peak["target_date"].nunique()),
+            "peak_cities": int(peak["city"].nunique()),
+            "train_rows": int(len(train)),
+            "train_dates": int(train["target_date"].nunique()),
+            "train_cities": int(train["city"].nunique()),
+            "holdout_rows": int(len(holdout)),
+            "holdout_dates": int(holdout["target_date"].nunique()),
+            "holdout_cities": int(holdout["city"].nunique()),
+        },
+        "holdout_model_metrics": metrics.to_dict(orient="records"),
+        "holdout_rule_comparison": rule_rows,
+        "train_selected_grid_top10": grid_rows,
+        "verdict": {
+            "significance": "PASS" if significance_pass else "FAIL",
+            "baseline": "PASS" if baseline_pass else "FAIL",
+            "forward": "PASS" if forward_pass else "FAIL",
+            "conclusion": conclusion,
+            "plain_text": (
+                f"在 {HOLDOUT_START}..{source_df['target_date'].max()} holdout，peak-forming hazard v2 的主交易规则 "
+                f"ROI 为 {pct(hazard['roi'])}，95% 日期 bootstrap CI "
+                f"[{pct(ci[0])}, {pct(ci[1])}]；approx guard 后 ROI 为 {pct(hazard_guard['roi'])}。"
+                "它可以继续作为 shadow/研究概率层，但还没有满足显著性和前瞻门，暂不替换 live。"
+            ),
+        },
+        "outputs": {
+            "artifact": str(OUT_ARTIFACT.relative_to(ROOT)),
+            "scored_rows": str(OUT_SCORED.relative_to(ROOT)),
+            "metrics": str(OUT_METRICS.relative_to(ROOT)),
+            "rule_comparison": str(OUT_RULES.relative_to(ROOT)),
+            "json": str(OUT_JSON.relative_to(ROOT)),
+            "markdown": str(OUT_MD.relative_to(ROOT)),
+        },
+    }
+    OUT_JSON.write_text(json.dumps(json_ready(payload), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_markdown(json_ready(payload))
+    print(json.dumps(json_ready(payload["verdict"]), indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

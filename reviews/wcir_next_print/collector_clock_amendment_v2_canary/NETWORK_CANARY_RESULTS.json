@@ -1,0 +1,180 @@
+{
+  "authorization_boundary": "BOUNDED_CANARY_ONLY; NOT_A_SHADOW_DEPLOYMENT; NOT_A_FORMAL_FORWARD_EPOCH",
+  "controlled_faults_all_passed": true,
+  "daemon_started": false,
+  "fills": 0,
+  "formal_clean_forward_target_dates_counted": 0,
+  "generated_at_utc": "2026-08-28T02:10:54.556572Z",
+  "modeling_performed": false,
+  "network": {
+    "authentication_used": false,
+    "controlled_fault_phase_count": 2,
+    "frame_count": 13,
+    "official_protocol": "https://docs.polymarket.com/api-reference/wss/market",
+    "order_or_user_channel_used": false,
+    "parse_error_count": 0,
+    "phase_count": 5,
+    "phases": [
+      {
+        "ack_observed": true,
+        "ack_semantics": "FIRST_TOKEN_SCOPED_SERVER_FRAME_PROTOCOL_RECEIPT; NO_STANDALONE_ACK_DEFINED_BY_PUBLIC_MARKET_PROTOCOL",
+        "baseline_seen": true,
+        "connected_at_utc": "2026-08-28T02:10:27.235693Z",
+        "connection_attempt_count": 1,
+        "connection_closed_after_bounded_phase": true,
+        "controlled_fault": null,
+        "parse_errors": 0,
+        "phase": "initial_connect",
+        "ping_round_trip_ms_upper_bound": 6002.7675,
+        "pong_seen": true,
+        "prior_connection_errors": [],
+        "queue_drop_count": 0,
+        "subscription_request": {
+          "assets_ids": [
+            "31093818460558427786061634221576512916351494782561764883465144588283506331292"
+          ],
+          "custom_feature_enabled": true,
+          "initial_dump": true,
+          "type": "market"
+        },
+        "subscription_request_sha256": "8d2b1718663a404f999cfb960a579c0262a80c199be518f714a5cc6a7a0b2491",
+        "subscription_requested_at_wall_ns": 1787883027235544000
+      },
+      {
+        "ack_observed": true,
+        "ack_semantics": "FIRST_TOKEN_SCOPED_SERVER_FRAME_PROTOCOL_RECEIPT; NO_STANDALONE_ACK_DEFINED_BY_PUBLIC_MARKET_PROTOCOL",
+        "baseline_seen": true,
+        "connected_at_utc": "2026-08-28T02:10:34.243290Z",
+        "connection_attempt_count": 1,
+        "connection_closed_after_bounded_phase": true,
+        "controlled_fault": null,
+        "parse_errors": 0,
+        "phase": "hard_reconnect",
+        "ping_round_trip_ms_upper_bound": 5778.252625,
+        "pong_seen": true,
+        "prior_connection_errors": [],
+        "queue_drop_count": 0,
+        "subscription_request": {
+          "assets_ids": [
+            "31093818460558427786061634221576512916351494782561764883465144588283506331292"
+          ],
+          "custom_feature_enabled": true,
+          "initial_dump": true,
+          "type": "market"
+        },
+        "subscription_request_sha256": "8d2b1718663a404f999cfb960a579c0262a80c199be518f714a5cc6a7a0b2491",
+        "subscription_requested_at_wall_ns": 1787883034242989000
+      },
+      {
+        "ack_observed": true,
+        "ack_semantics": "FIRST_TOKEN_SCOPED_SERVER_FRAME_PROTOCOL_RECEIPT; NO_STANDALONE_ACK_DEFINED_BY_PUBLIC_MARKET_PROTOCOL",
+        "baseline_seen": true,
+        "connected_at_utc": "2026-08-28T02:10:40.969820Z",
+        "connection_attempt_count": 1,
+        "connection_closed_after_bounded_phase": true,
+        "controlled_fault": null,
+        "parse_errors": 0,
+        "phase": "process_restart",
+        "ping_round_trip_ms_upper_bound": 1572.123291,
+        "pong_seen": true,
+        "prior_connection_errors": [],
+        "queue_drop_count": 0,
+        "subscription_request": {
+          "assets_ids": [
+            "31093818460558427786061634221576512916351494782561764883465144588283506331292"
+          ],
+          "custom_feature_enabled": true,
+          "initial_dump": true,
+          "type": "market"
+        },
+        "subscription_request_sha256": "8d2b1718663a404f999cfb960a579c0262a80c199be518f714a5cc6a7a0b2491",
+        "subscription_requested_at_wall_ns": 1787883040969545000
+      },
+      {
+        "ack_observed": true,
+        "ack_semantics": "FIRST_TOKEN_SCOPED_SERVER_FRAME_PROTOCOL_RECEIPT; NO_STANDALONE_ACK_DEFINED_BY_PUBLIC_MARKET_PROTOCOL",
+        "baseline_seen": true,
+        "connected_at_utc": "2026-08-28T02:10:43.646179Z",
+        "connection_attempt_count": 1,
+        "connection_closed_after_bounded_phase": true,
+        "controlled_fault": {
+          "actively_induced_on_real_network_frame": true,
+          "exception": "backpressure frame drop",
+          "fail_closed": true,
+          "fault": "queue_overflow",
+          "wire_sha256": "5defea7aebec2f4a4ddd55920d2d26fa958c94ad31ddb4e4b71c8e5b06176b85"
+        },
+        "parse_errors": 0,
+        "phase": "real_frame_queue_overflow_fault",
+        "ping_round_trip_ms_upper_bound": 2874.075416,
+        "pong_seen": true,
+        "prior_connection_errors": [],
+        "queue_drop_count": 1,
+        "subscription_request": {
+          "assets_ids": [
+            "31093818460558427786061634221576512916351494782561764883465144588283506331292"
+          ],
+          "custom_feature_enabled": true,
+          "initial_dump": true,
+          "type": "market"
+        },
+        "subscription_request_sha256": "8d2b1718663a404f999cfb960a579c0262a80c199be518f714a5cc6a7a0b2491",
+        "subscription_requested_at_wall_ns": 1787883043646062000
+      },
+      {
+        "ack_observed": true,
+        "ack_semantics": "FIRST_TOKEN_SCOPED_SERVER_FRAME_PROTOCOL_RECEIPT; NO_STANDALONE_ACK_DEFINED_BY_PUBLIC_MARKET_PROTOCOL",
+        "baseline_seen": true,
+        "connected_at_utc": "2026-08-28T02:10:47.587491Z",
+        "connection_attempt_count": 1,
+        "connection_closed_after_bounded_phase": true,
+        "controlled_fault": {
+          "actively_induced_on_real_network_baseline_path": true,
+          "exception": "delta without valid baseline",
+          "exchange_sequence_is_protocol_unavailable": true,
+          "fail_closed": true,
+          "fault": "sequence_gap",
+          "reason": "CONTROLLED_SEQUENCE_GAP_ON_REAL_BASELINE_PATH",
+          "wire_sha256": "5ddbd0515f0c42939011633c07458b0cefab60ab5be5b73bf574d2bd7ae563a2"
+        },
+        "parse_errors": 0,
+        "phase": "real_baseline_sequence_gap_fault",
+        "ping_round_trip_ms_upper_bound": 6002.837834,
+        "pong_seen": true,
+        "prior_connection_errors": [],
+        "queue_drop_count": 0,
+        "subscription_request": {
+          "assets_ids": [
+            "31093818460558427786061634221576512916351494782561764883465144588283506331292"
+          ],
+          "custom_feature_enabled": true,
+          "initial_dump": true,
+          "type": "market"
+        },
+        "subscription_request_sha256": "8d2b1718663a404f999cfb960a579c0262a80c199be518f714a5cc6a7a0b2491",
+        "subscription_requested_at_wall_ns": 1787883047587062000
+      }
+    ],
+    "public_market_channel": true,
+    "queue_drop_count_normal_path": 0,
+    "url": "wss://ws-subscriptions-clob.polymarket.com/ws/market",
+    "wire_bytes": 10603
+  },
+  "notional_usd": 0,
+  "orders": 0,
+  "production_config_modified": false,
+  "production_consumer_joined": false,
+  "request_coverage": {
+    "baseline_phase_count": 3,
+    "coverage_semantics": "SINGLE_FROZEN_CANARY_TOKEN_TRANSPORT_ONLY; NOT FUTURE EXPECTED-DEMAND COVERAGE",
+    "demand_created_to_initial_request_ms": 567.053,
+    "expected_token_count": 1,
+    "formal_source_opportunity_trigger_observed": false,
+    "pong_phase_count": 3,
+    "protocol_receipt_phase_count": 3,
+    "requested_fraction": 1.0,
+    "requested_token_count": 1
+  },
+  "stage4_work_performed": false,
+  "status": "PASS"
+}

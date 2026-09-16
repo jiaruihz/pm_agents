@@ -1,0 +1,39 @@
+{
+  "forecast_only": {
+    "available_events": 841,
+    "contract": "latest frozen forecast curve available by decision; model/capture/value identities frozen"
+  },
+  "market_only_blocked_oof": {
+    "full_sample_fit_forbidden": true,
+    "inner_group": "official_print_id",
+    "outer_split": "target_date",
+    "reason": "Stage 2 source-t0 coverage gate is not closed; OOF fitting is not authorized",
+    "status": "blocked"
+  },
+  "persistence": {
+    "availability": "event field",
+    "contract": "predict latest official rounded print"
+  },
+  "recent_slope": {
+    "contract": "latest + (latest - previous) using official prints available by decision"
+  },
+  "row_file": {
+    "path": "/Users/deepsleep/projects/pm_agents/reviews/wcir_next_print/stage_03_rev2/evidence/MATCHED_BASELINE_ROWS.jsonl.gz",
+    "row_count": 841,
+    "sha256": "81ca0d88d46d027a8848f1e7f50b64aac52397a274d397c11ae31214b15b5703",
+    "size_bytes": 70758
+  },
+  "same_executable_row_intersection": {
+    "effective_n": 1,
+    "event_ids": [
+      "fe5607f248e2484c0cd3e76498f8a8e0365db186f5abc0ccbade6d626baca702"
+    ],
+    "no_per_model_row_deletion": true,
+    "raw_n": 1,
+    "row_count": 1,
+    "row_hash": "469e5c2ccf52a31ca9d8a8dcbd63121f38b223f4538afc59a10269768fcd529d",
+    "target_date_n": 1,
+    "unique_official_print_n": 1
+  },
+  "stage3_baseline_closure": "blocked_stage2_coverage_gate_and_insufficient_exact_intersection"
+}

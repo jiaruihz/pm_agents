@@ -1,0 +1,4578 @@
+{
+  "generated_at_utc": "2026-06-08T16:34:10Z",
+  "config": {
+    "event_slugs": [
+      "what-kind-of-product-will-openai-announce-in-2026",
+      "which-company-has-second-best-ai-model-end-of-june",
+      "which-company-has-best-ai-model-end-of-june",
+      "who-will-close-warner-bros-acquisition",
+      "will-anthropic-or-openai-ipo-first",
+      "time-person-of-the-year-2026"
+    ],
+    "price_range": [
+      0.08,
+      0.88
+    ],
+    "min_market_liquidity": 500.0,
+    "holders_per_market": 25,
+    "max_wallets_reviewed": 30,
+    "max_closed_rows": 300
+  },
+  "markets_count": 36,
+  "wallets_found": 550,
+  "reviewed_count": 30,
+  "markets": [
+    {
+      "event": "Which company has best AI model end of June?",
+      "event_slug": "which-company-has-best-ai-model-end-of-june",
+      "question": "Will Google have the best AI model at the end of June 2026?",
+      "condition_id": "0x0bd1b836a2494f80aaee62927cf01e5f6fceb19114e96fc517c6440aea4576e4",
+      "prices": [
+        0.095,
+        0.905
+      ],
+      "liquidity": 65433.2182,
+      "volume24hr": 9927.893416,
+      "link": "https://polymarket.com/event/which-company-has-best-ai-model-end-of-june"
+    },
+    {
+      "event": "Which company has best AI model end of June?",
+      "event_slug": "which-company-has-best-ai-model-end-of-june",
+      "question": "Will Anthropic have the best AI model at the end of June 2026?",
+      "condition_id": "0xa4d72632ac0ddadcac5247ffc586a193f1bc3bc839cf9ce993c2471e0d599cca",
+      "prices": [
+        0.8695,
+        0.1305
+      ],
+      "liquidity": 60587.30615,
+      "volume24hr": 32053.75789900002,
+      "link": "https://polymarket.com/event/which-company-has-best-ai-model-end-of-june"
+    },
+    {
+      "event": "Will Anthropic or OpenAI IPO first?",
+      "event_slug": "will-anthropic-or-openai-ipo-first",
+      "question": "Will Anthropic or OpenAI IPO first?",
+      "condition_id": "0xc289a877bc155123069739b21d690b3e8dc220b98f6ae3924468bbcbdfaf98dc",
+      "prices": [
+        0.825,
+        0.175
+      ],
+      "liquidity": 16904.2463,
+      "volume24hr": 10089.57276,
+      "link": "https://polymarket.com/event/will-anthropic-or-openai-ipo-first"
+    },
+    {
+      "event": "Who will close Warner Bros. acquisition?",
+      "event_slug": "who-will-close-warner-bros-acquisition",
+      "question": "No listed company closes Warner Bros acquisition by June 30, 2027",
+      "condition_id": "0x3347f5c9c3b49e0165dbd1be6cc1757cee05fdbdc02f97352c9734c3ab765b26",
+      "prices": [
+        0.145,
+        0.855
+      ],
+      "liquidity": 14920.6552,
+      "volume24hr": 334.0,
+      "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Reid Wiseman be TIME Person of the Year 2026?",
+      "condition_id": "0x8c22beccaf5dd8d898570039f70d332bc993d8cb1edcb19dd24647a010fec557",
+      "prices": [
+        0.295,
+        0.705
+      ],
+      "liquidity": 12874.4949,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Benjamin Netanyahu be TIME Person of the Year 2026?",
+      "condition_id": "0x013f06c497ac738ed8dff2412b3c4165120393baf8bf1a680615355568bfd71a",
+      "prices": [
+        0.105,
+        0.895
+      ],
+      "liquidity": 11752.6678,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Zohran Mamdani be TIME Person of the Year 2026?",
+      "condition_id": "0x9c08dd09883c33419b3dc35ee73720c0f69c33246c1c8370f9572279707a40d5",
+      "prices": [
+        0.105,
+        0.895
+      ],
+      "liquidity": 11209.0436,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Sam Altman be TIME Person of the Year 2026?",
+      "condition_id": "0xab7081796629558979a40115a0870f0fb746779ee0d0bbbed534bb0c1907653b",
+      "prices": [
+        0.09,
+        0.91
+      ],
+      "liquidity": 10696.752,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will James Talarico be TIME Person of the Year 2026?",
+      "condition_id": "0xa55aba6f5c78f51112da71f57888efba75e85840a9afafe42ab9f3dedf8fc338",
+      "prices": [
+        0.24,
+        0.76
+      ],
+      "liquidity": 10600.1245,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Elon Musk be TIME Person of the Year 2026?",
+      "condition_id": "0x80bfd6a03e40101e5b436d6ca4e404f34ecf4bee69378f5f78f89d06a7a4298b",
+      "prices": [
+        0.18,
+        0.82
+      ],
+      "liquidity": 10105.3451,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Shehbaz Sharif be TIME Person of the Year 2026?",
+      "condition_id": "0x33f4b3a76fc6adb0f0f705808bfa133bd48ca1b79b9a7f952182555206351913",
+      "prices": [
+        0.28,
+        0.72
+      ],
+      "liquidity": 10032.2811,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Jerome Powell be TIME Person of the Year 2026?",
+      "condition_id": "0x27d394a3f2d4a32850a1f567d1944b28c48a92540babbffc588743f063fe7ac7",
+      "prices": [
+        0.085,
+        0.915
+      ],
+      "liquidity": 9549.2565,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will ChatGPT be TIME Person of the Year 2026?",
+      "condition_id": "0xea4ed38f531f9786dfd1e157d7f17c659077b0082aefec46ad5fb37b777e16f0",
+      "prices": [
+        0.275,
+        0.725
+      ],
+      "liquidity": 9408.0248,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Pope Leo XIV be TIME Person of the Year 2026?",
+      "condition_id": "0xc36f13fb975afe21daa6b863e055b80a0322186fd8af361e4c1a315c92c48d35",
+      "prices": [
+        0.095,
+        0.905
+      ],
+      "liquidity": 9324.1192,
+      "volume24hr": 8.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Donald Trump be TIME Person of the Year 2026?",
+      "condition_id": "0xba0808fbb35d07e14ecf98e22ca74bc4b5613947f614029432337298af267e4d",
+      "prices": [
+        0.14,
+        0.86
+      ],
+      "liquidity": 9129.6893,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Taylor Swift be TIME Person of the Year 2026?",
+      "condition_id": "0xa44f29126cefb6c4f51b98043e94faec39e90d1e12d0eb310937b6c81e3fa869",
+      "prices": [
+        0.1,
+        0.9
+      ],
+      "liquidity": 9090.4195,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Artificial Intelligence be TIME Person of the Year 2026?",
+      "condition_id": "0xb0b352ee5f3df81f0383b7e066bb2d5d7378fbde42dea66125dd5f714e9b7b02",
+      "prices": [
+        0.29,
+        0.71
+      ],
+      "liquidity": 9045.2895,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Victor Glover be TIME Person of the Year 2026?",
+      "condition_id": "0x22215d1b4337eb3bf7dc9778e934e8b81622ee452eec229ecaa00c8f7d2b209c",
+      "prices": [
+        0.285,
+        0.715
+      ],
+      "liquidity": 9004.3188,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Dario Amodei be TIME Person of the Year 2026?",
+      "condition_id": "0x2ec3186c25af8ca0e431db6fee3513489f6eddd7242c42eee59931b483d766ce",
+      "prices": [
+        0.125,
+        0.875
+      ],
+      "liquidity": 8876.4112,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Christina Koch be TIME Person of the Year 2026?",
+      "condition_id": "0xee8e0462ec5a4c6100e390941358f387fb918bcbbebff110a08899626e8174ff",
+      "prices": [
+        0.405,
+        0.595
+      ],
+      "liquidity": 8840.0267,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Mohammad-Bagher Ghalibaf be TIME Person of the Year 2026?",
+      "condition_id": "0xf9defdfbc645a8a06734f250fbfb37269b43ac50fbc03ff5dc260d90fffa3d22",
+      "prices": [
+        0.35,
+        0.65
+      ],
+      "liquidity": 8837.5957,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Marco Rubio be TIME Person of the Year 2026?",
+      "condition_id": "0x892d1e281ad603dffc0361a23072a601c14025da05a512f9f3812dbff5414b5c",
+      "prices": [
+        0.355,
+        0.645
+      ],
+      "liquidity": 8801.8182,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "TIME Person of the Year 2026",
+      "event_slug": "time-person-of-the-year-2026",
+      "question": "Will Jeremy Hansen be TIME Person of the Year 2026?",
+      "condition_id": "0xac2d277720c1ff8581fd267f845ba9d2aa596cefd388f986827cb2326dc2c2fc",
+      "prices": [
+        0.105,
+        0.895
+      ],
+      "liquidity": 7718.4194,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+    },
+    {
+      "event": "Who will close Warner Bros. acquisition?",
+      "event_slug": "who-will-close-warner-bros-acquisition",
+      "question": "Will Paramount close Warner Bros acquisition?",
+      "condition_id": "0xa71785ae27eeaf2a9f7adf8f4f0d7db11e773fa2602b28c55399d31e91c3f2f0",
+      "prices": [
+        0.735,
+        0.265
+      ],
+      "liquidity": 7673.1677,
+      "volume24hr": 6.7,
+      "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+    },
+    {
+      "event": "Which company has second best AI model end of June?",
+      "event_slug": "which-company-has-second-best-ai-model-end-of-june",
+      "question": "Will Anthropic have the second best AI model at the end of June 2026?",
+      "condition_id": "0xd0e97d28b706d26f47ada6b739674efe7768bf7a407481008474d5a0d4c4c55a",
+      "prices": [
+        0.68,
+        0.32
+      ],
+      "liquidity": 5759.3648,
+      "volume24hr": 1375.114736,
+      "link": "https://polymarket.com/event/which-company-has-second-best-ai-model-end-of-june"
+    },
+    {
+      "event": "What kind of product will OpenAI announce in 2026?",
+      "event_slug": "what-kind-of-product-will-openai-announce-in-2026",
+      "question": "Will OpenAI announce a phone in 2026?",
+      "condition_id": "0x2d9e8b66e63e7b169416eed9d241a5aa633ba0052f553bb64a824e21f1be04c4",
+      "prices": [
+        0.175,
+        0.825
+      ],
+      "liquidity": 4801.4279,
+      "volume24hr": 24.53,
+      "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+    },
+    {
+      "event": "Which company has second best AI model end of June?",
+      "event_slug": "which-company-has-second-best-ai-model-end-of-june",
+      "question": "Will Google have the second best AI model at the end of June 2026?",
+      "condition_id": "0x9a43c9ddeef87245a713570da886d5637666b4a3dba886162df4b271978ee5f3",
+      "prices": [
+        0.255,
+        0.745
+      ],
+      "liquidity": 4581.9998,
+      "volume24hr": 200.788406,
+      "link": "https://polymarket.com/event/which-company-has-second-best-ai-model-end-of-june"
+    },
+    {
+      "event": "What kind of product will OpenAI announce in 2026?",
+      "event_slug": "what-kind-of-product-will-openai-announce-in-2026",
+      "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+      "condition_id": "0xba3981309bcbbd6c89f44f10354f8b9d26b33cb34ba0b972f62d6268fa6addcd",
+      "prices": [
+        0.125,
+        0.875
+      ],
+      "liquidity": 3903.1463,
+      "volume24hr": 129.62,
+      "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+    },
+    {
+      "event": "What kind of product will OpenAI announce in 2026?",
+      "event_slug": "what-kind-of-product-will-openai-announce-in-2026",
+      "question": "Will OpenAI announce a watch in 2026?",
+      "condition_id": "0xe1c1ad2a8552dbb0ac83b1baf7986d74849fbef0e209d44efbd2f2e5254e4e75",
+      "prices": [
+        0.155,
+        0.845
+      ],
+      "liquidity": 3492.0447,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+    },
+    {
+      "event": "What kind of product will OpenAI announce in 2026?",
+      "event_slug": "what-kind-of-product-will-openai-announce-in-2026",
+      "question": "Will OpenAI announce a head-mounted display in 2026?",
+      "condition_id": "0xe5fbcaf9e6eee30018a5e19d9e96296c7fd6be8502f8c8239a80a3108198417c",
+      "prices": [
+        0.115,
+        0.885
+      ],
+      "liquidity": 3309.274,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+    },
+    {
+      "event": "What kind of product will OpenAI announce in 2026?",
+      "event_slug": "what-kind-of-product-will-openai-announce-in-2026",
+      "question": "Will OpenAI announce a ring in 2026?",
+      "condition_id": "0x456a6fc21b414098046a33440896cb6cfaa86dc1a0032f2a73af21980b5e1099",
+      "prices": [
+        0.115,
+        0.885
+      ],
+      "liquidity": 3079.6334,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+    },
+    {
+      "event": "What kind of product will OpenAI announce in 2026?",
+      "event_slug": "what-kind-of-product-will-openai-announce-in-2026",
+      "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+      "condition_id": "0x9808175a3da0c4c5c12884209195e3e6236bd82ce435f34e6b88c92b0a7c4db9",
+      "prices": [
+        0.095,
+        0.905
+      ],
+      "liquidity": 2179.4083,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+    },
+    {
+      "event": "What kind of product will OpenAI announce in 2026?",
+      "event_slug": "what-kind-of-product-will-openai-announce-in-2026",
+      "question": "Will OpenAI announce a tablet in 2026?",
+      "condition_id": "0xc15a7548e3f5c17dd61cebeba2f105ce6a8c36e5dce50331ad308b26094c5a78",
+      "prices": [
+        0.131,
+        0.869
+      ],
+      "liquidity": 2059.17642,
+      "volume24hr": 1.38,
+      "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+    },
+    {
+      "event": "What kind of product will OpenAI announce in 2026?",
+      "event_slug": "what-kind-of-product-will-openai-announce-in-2026",
+      "question": "Will OpenAI announce glasses in 2026?",
+      "condition_id": "0x0a7e49c536cc4a9ddfaca10ac9aec476e358c2d29a9e13d5cc320ad0335374a8",
+      "prices": [
+        0.19,
+        0.81
+      ],
+      "liquidity": 1233.7787,
+      "volume24hr": 16.48,
+      "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+    },
+    {
+      "event": "What kind of product will OpenAI announce in 2026?",
+      "event_slug": "what-kind-of-product-will-openai-announce-in-2026",
+      "question": "Will OpenAI announce earbuds or headphones in 2026?",
+      "condition_id": "0x3ff9124b87f05d7a65ec801f28cb336b86c16a2197afb0139731610d55e21d27",
+      "prices": [
+        0.305,
+        0.695
+      ],
+      "liquidity": 958.546,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+    },
+    {
+      "event": "What kind of product will OpenAI announce in 2026?",
+      "event_slug": "what-kind-of-product-will-openai-announce-in-2026",
+      "question": "Will OpenAI announce a clip-on device for clothing in 2026?",
+      "condition_id": "0xec68eadfac48a30f23f3a7f4acc4428d65bac28cc61f7daf2581f42201d72d48",
+      "prices": [
+        0.21,
+        0.79
+      ],
+      "liquidity": 783.9712,
+      "volume24hr": 0.0,
+      "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+    }
+  ],
+  "top_reviewed": [
+    {
+      "wallet": "0x736539924a5602b37a03a54fc12c1cc8f98964da",
+      "name": "cqk",
+      "source_market_count": 5,
+      "total_holder_amount": 3978.3,
+      "max_holder_amount": 2656.15,
+      "score": 62.34,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=43428, non_election=42244, pf=999.00, sports=0%, single_event=6%",
+      "metrics": {
+        "wallet_address": "0x736539924a5602b37a03a54fc12c1cc8f98964da",
+        "closed_positions_count": 300,
+        "open_positions_count": 118,
+        "net_pnl": 43427.94,
+        "non_election_pnl": 42244.06,
+        "election_pnl": 1183.87,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.003,
+        "arbitrage_like_ratio": 0.003,
+        "single_event_dependency": 0.056,
+        "positive_single_event_dependency": 0.056,
+        "election_dependency": 0.027,
+        "avg_entry_price": 0.6311,
+        "low_price_ratio": 0.12,
+        "high_price_ratio": 0.333,
+        "market_diversity_ratio": 0.947,
+        "open_unrealized_roi": 0.044,
+        "topic_counts": {
+          "other": 131,
+          "tech": 118,
+          "geopolitics": 28,
+          "politics": 17,
+          "crypto": 3,
+          "weather": 1,
+          "sports": 1,
+          "economics": 1
+        },
+        "topic_pnl": {
+          "other": 20827.62,
+          "tech": 16450.43,
+          "geopolitics": 4073.06,
+          "crypto": 1137.32,
+          "politics": 709.46,
+          "weather": 191.0,
+          "sports": 29.5,
+          "economics": 9.55
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce glasses in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "38445023851151660993666237267712981362686626593721378545175263940037718392453",
+          "amount": 2656.15,
+          "prices": [
+            0.19,
+            0.81
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a phone in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "4967389004560237148087059097306936016483726557350463241288661442119258090198",
+          "amount": 587.5,
+          "prices": [
+            0.175,
+            0.825
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "Which company has second best AI model end of June?",
+          "question": "Will Google have the second best AI model at the end of June 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "46732361156533554200273167444716682745731173212840610770514652310112222825772",
+          "amount": 453.42,
+          "prices": [
+            0.255,
+            0.745
+          ],
+          "link": "https://polymarket.com/event/which-company-has-second-best-ai-model-end-of-june"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce earbuds or headphones in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "2495741164869514855992472185546919768592825594811693043740639350245507358833",
+          "amount": 195.93,
+          "prices": [
+            0.305,
+            0.695
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "6214606943107197115529634171182195163539818508116179312208172739501841301622",
+          "amount": 85.3,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xad5353afe30c2da57709e2704ef3ccdcf67eef24",
+      "name": "AJSV",
+      "source_market_count": 25,
+      "total_holder_amount": 1058.42,
+      "max_holder_amount": 116.7,
+      "score": 61.95,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=149600, non_election=112289, pf=999.00, sports=0%, single_event=1%",
+      "metrics": {
+        "wallet_address": "0xad5353afe30c2da57709e2704ef3ccdcf67eef24",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 149599.51,
+        "non_election_pnl": 112289.24,
+        "election_pnl": 37310.27,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.003,
+        "arbitrage_like_ratio": 0.003,
+        "single_event_dependency": 0.014,
+        "positive_single_event_dependency": 0.014,
+        "election_dependency": 0.249,
+        "avg_entry_price": 0.1794,
+        "low_price_ratio": 0.613,
+        "high_price_ratio": 0.023,
+        "market_diversity_ratio": 1.0,
+        "open_unrealized_roi": -0.32,
+        "topic_counts": {
+          "other": 109,
+          "geopolitics": 84,
+          "politics": 51,
+          "crypto": 22,
+          "economics": 11,
+          "tech": 9,
+          "weather": 9,
+          "culture": 4,
+          "sports": 1
+        },
+        "topic_pnl": {
+          "other": 53267.74,
+          "geopolitics": 37979.77,
+          "politics": 30463.73,
+          "crypto": 10458.02,
+          "economics": 5328.53,
+          "weather": 4905.23,
+          "tech": 4488.05,
+          "culture": 2326.35,
+          "sports": 382.09
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a phone in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "4967389004560237148087059097306936016483726557350463241288661442119258090198",
+          "amount": 116.7,
+          "prices": [
+            0.175,
+            0.825
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "105793471410600103279818302661836433120260173055196756819977205026613295786512",
+          "amount": 100.59,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "24535511360909789070465577593343267401226583512825755634755701071660338255675",
+          "amount": 100.4,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "77120919023569550198628906932983149373349506964926056595149258435958662028903",
+          "amount": 98.08,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "15596881315836367767699003429490212721537835348949574643253042524587080151396",
+          "amount": 55.0,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Dario Amodei be TIME Person of the Year 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "55324856138639668378123269728786302535994859173020263965580593909204298656516",
+          "amount": 54.85,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Sam Altman be TIME Person of the Year 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "91195573269222885139319238736030855111206053072927457343337731770808533820424",
+          "amount": 50.0,
+          "prices": [
+            0.09,
+            0.91
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Marco Rubio be TIME Person of the Year 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "80715501435278800376538251697430664442452728911302405234327845338824540021870",
+          "amount": 50.0,
+          "prices": [
+            0.355,
+            0.645
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce glasses in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "38445023851151660993666237267712981362686626593721378545175263940037718392453",
+          "amount": 49.48,
+          "prices": [
+            0.19,
+            0.81
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will ChatGPT be TIME Person of the Year 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "78815940021045606641440422428300777753054439603144468994915704317778192677336",
+          "amount": 45.0,
+          "prices": [
+            0.275,
+            0.725
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x1c266db0f8529b1f25b77123e9c0c918ac2f6e31",
+      "name": "5atka",
+      "source_market_count": 4,
+      "total_holder_amount": 368.74,
+      "max_holder_amount": 205.67,
+      "score": 61.42,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=29763, non_election=26952, pf=999.00, sports=0%, single_event=1%",
+      "metrics": {
+        "wallet_address": "0x1c266db0f8529b1f25b77123e9c0c918ac2f6e31",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 29763.28,
+        "non_election_pnl": 26951.89,
+        "election_pnl": 2811.39,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.0,
+        "arbitrage_like_ratio": 0.003,
+        "single_event_dependency": 0.012,
+        "positive_single_event_dependency": 0.012,
+        "election_dependency": 0.094,
+        "avg_entry_price": 0.5746,
+        "low_price_ratio": 0.107,
+        "high_price_ratio": 0.203,
+        "market_diversity_ratio": 0.983,
+        "open_unrealized_roi": -0.749,
+        "topic_counts": {
+          "weather": 87,
+          "geopolitics": 85,
+          "other": 61,
+          "politics": 24,
+          "tech": 19,
+          "crypto": 10,
+          "economics": 9,
+          "culture": 5
+        },
+        "topic_pnl": {
+          "geopolitics": 9049.85,
+          "weather": 8567.89,
+          "other": 5727.58,
+          "politics": 2543.96,
+          "tech": 1660.52,
+          "crypto": 978.46,
+          "economics": 783.34,
+          "culture": 451.67
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "Who will close Warner Bros. acquisition?",
+          "question": "Will Paramount close Warner Bros acquisition?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "12068609223027041437214952122316923930875444851110633205851320421601762942510",
+          "amount": 205.67,
+          "prices": [
+            0.735,
+            0.265
+          ],
+          "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce glasses in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "7860813783788365228940933442491468403797619020807014292210819082168277140152",
+          "amount": 106.07,
+          "prices": [
+            0.19,
+            0.81
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "77120919023569550198628906932983149373349506964926056595149258435958662028903",
+          "amount": 30.0,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "Who will close Warner Bros. acquisition?",
+          "question": "No listed company closes Warner Bros acquisition by June 30, 2027",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "92247462418331121567176516538364198127633745062455470091774998340990979894644",
+          "amount": 27.0,
+          "prices": [
+            0.145,
+            0.855
+          ],
+          "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+        }
+      ]
+    },
+    {
+      "wallet": "0x75d1b199a96801338e67a6efaa35c0028ea87a5f",
+      "name": "0x75d1B199a96801338e67a6eFAa35C0028eA87A5F-1770658242710",
+      "source_market_count": 8,
+      "total_holder_amount": 389.05,
+      "max_holder_amount": 110.0,
+      "score": 59.33,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=319310, non_election=289050, pf=999.00, sports=22%, single_event=6%",
+      "metrics": {
+        "wallet_address": "0x75d1b199a96801338e67a6efaa35c0028ea87a5f",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 319309.93,
+        "non_election_pnl": 289049.96,
+        "election_pnl": 30259.97,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.223,
+        "arbitrage_like_ratio": 0.227,
+        "single_event_dependency": 0.058,
+        "positive_single_event_dependency": 0.058,
+        "election_dependency": 0.095,
+        "avg_entry_price": 0.3981,
+        "low_price_ratio": 0.143,
+        "high_price_ratio": 0.013,
+        "market_diversity_ratio": 0.943,
+        "open_unrealized_roi": -0.043,
+        "topic_counts": {
+          "geopolitics": 114,
+          "other": 79,
+          "sports": 67,
+          "politics": 25,
+          "tech": 5,
+          "culture": 4,
+          "weather": 3,
+          "economics": 2,
+          "crypto": 1
+        },
+        "topic_pnl": {
+          "geopolitics": 137194.94,
+          "sports": 73609.55,
+          "other": 67844.8,
+          "politics": 19846.23,
+          "weather": 11843.74,
+          "tech": 4300.81,
+          "culture": 3102.98,
+          "crypto": 825.78,
+          "economics": 741.1
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "20826236952766096458839542076301237144154160218855573686197597978501264662054",
+          "amount": 110.0,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce earbuds or headphones in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "2495741164869514855992472185546919768592825594811693043740639350245507358833",
+          "amount": 103.83,
+          "prices": [
+            0.305,
+            0.695
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "Which company has second best AI model end of June?",
+          "question": "Will Anthropic have the second best AI model at the end of June 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "69436176274521575766526727800933540541400074952707897813587148108079404412084",
+          "amount": 86.25,
+          "prices": [
+            0.68,
+            0.32
+          ],
+          "link": "https://polymarket.com/event/which-company-has-second-best-ai-model-end-of-june"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a clip-on device for clothing in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "14297574727087523604876851617000352443381479544462660285614372795163263811991",
+          "amount": 35.0,
+          "prices": [
+            0.21,
+            0.79
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce glasses in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "7860813783788365228940933442491468403797619020807014292210819082168277140152",
+          "amount": 29.0,
+          "prices": [
+            0.19,
+            0.81
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "Which company has second best AI model end of June?",
+          "question": "Will Google have the second best AI model at the end of June 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "34259708138713628324985799192959228781142905350383459948552349770868947944528",
+          "amount": 13.0,
+          "prices": [
+            0.255,
+            0.745
+          ],
+          "link": "https://polymarket.com/event/which-company-has-second-best-ai-model-end-of-june"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "90946858908509503172731774494091540616416221763225603850370541944018942488697",
+          "amount": 7.31,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "80447937560636138474473008630355047311560041627893286747878042109733464769201",
+          "amount": 4.66,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xcb14f61711d913773f4b982af340fa7eae175358",
+      "name": "ooops",
+      "source_market_count": 6,
+      "total_holder_amount": 607.44,
+      "max_holder_amount": 144.81,
+      "score": 56.88,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=116096, non_election=100654, pf=999.00, sports=18%, single_event=2%",
+      "metrics": {
+        "wallet_address": "0xcb14f61711d913773f4b982af340fa7eae175358",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 116095.62,
+        "non_election_pnl": 100654.24,
+        "election_pnl": 15441.38,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.183,
+        "arbitrage_like_ratio": 0.183,
+        "single_event_dependency": 0.024,
+        "positive_single_event_dependency": 0.024,
+        "election_dependency": 0.133,
+        "avg_entry_price": 0.3674,
+        "low_price_ratio": 0.413,
+        "high_price_ratio": 0.053,
+        "market_diversity_ratio": 0.983,
+        "open_unrealized_roi": -0.249,
+        "topic_counts": {
+          "other": 153,
+          "sports": 55,
+          "politics": 36,
+          "geopolitics": 30,
+          "weather": 7,
+          "culture": 7,
+          "tech": 6,
+          "economics": 4,
+          "crypto": 2
+        },
+        "topic_pnl": {
+          "other": 69357.85,
+          "sports": 17123.95,
+          "politics": 11931.04,
+          "geopolitics": 8480.77,
+          "weather": 3685.55,
+          "culture": 2201.1,
+          "tech": 1568.93,
+          "economics": 1096.76,
+          "crypto": 649.69
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "90946858908509503172731774494091540616416221763225603850370541944018942488697",
+          "amount": 144.81,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a tablet in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "73789386951785961634843164245972952207876232232196453335930808090515877552624",
+          "amount": 124.13,
+          "prices": [
+            0.131,
+            0.869
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "80447937560636138474473008630355047311560041627893286747878042109733464769201",
+          "amount": 120.0,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a phone in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "69823967277555741592442629731784907339708874153642676882590957848976639565274",
+          "amount": 110.0,
+          "prices": [
+            0.175,
+            0.825
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "100438160506691254090437551267093665892351344574774405219038833438488138343331",
+          "amount": 58.5,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce earbuds or headphones in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "16040470176590332178266575986841073712697460370218768293287706373316090538021",
+          "amount": 50.0,
+          "prices": [
+            0.305,
+            0.695
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x03805a13a0b3e058f55f6c6af95389d4f431073d",
+      "name": "donthackme",
+      "source_market_count": 4,
+      "total_holder_amount": 2916.85,
+      "max_holder_amount": 1823.69,
+      "score": 56.83,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=1026995, non_election=553680, pf=999.00, sports=9%, single_event=8%",
+      "metrics": {
+        "wallet_address": "0x03805a13a0b3e058f55f6c6af95389d4f431073d",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 1026995.45,
+        "non_election_pnl": 553679.93,
+        "election_pnl": 473315.52,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.09,
+        "arbitrage_like_ratio": 0.09,
+        "single_event_dependency": 0.084,
+        "positive_single_event_dependency": 0.084,
+        "election_dependency": 0.461,
+        "avg_entry_price": 0.2264,
+        "low_price_ratio": 0.597,
+        "high_price_ratio": 0.083,
+        "market_diversity_ratio": 0.937,
+        "open_unrealized_roi": -0.949,
+        "topic_counts": {
+          "other": 131,
+          "politics": 86,
+          "sports": 27,
+          "tech": 19,
+          "geopolitics": 18,
+          "weather": 8,
+          "economics": 7,
+          "culture": 3,
+          "crypto": 1
+        },
+        "topic_pnl": {
+          "politics": 439082.93,
+          "sports": 254396.87,
+          "other": 195951.21,
+          "tech": 53167.64,
+          "economics": 37499.93,
+          "geopolitics": 34984.54,
+          "weather": 8690.31,
+          "crypto": 2358.54,
+          "culture": 863.49
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "Who will close Warner Bros. acquisition?",
+          "question": "No listed company closes Warner Bros acquisition by June 30, 2027",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "49926194611744648925636799110670225431413950541722856824815549402042051978566",
+          "amount": 1823.69,
+          "prices": [
+            0.145,
+            0.855
+          ],
+          "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+        },
+        {
+          "event": "Who will close Warner Bros. acquisition?",
+          "question": "Will Paramount close Warner Bros acquisition?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "23256019137586319539165692276469250213112768854758556344817552607255928262054",
+          "amount": 398.73,
+          "prices": [
+            0.735,
+            0.265
+          ],
+          "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+        },
+        {
+          "event": "Which company has second best AI model end of June?",
+          "question": "Will Anthropic have the second best AI model at the end of June 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "5538562443875428867500672375202854162152939479748531464040733138526462851199",
+          "amount": 393.82,
+          "prices": [
+            0.68,
+            0.32
+          ],
+          "link": "https://polymarket.com/event/which-company-has-second-best-ai-model-end-of-june"
+        },
+        {
+          "event": "Which company has second best AI model end of June?",
+          "question": "Will Google have the second best AI model at the end of June 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "46732361156533554200273167444716682745731173212840610770514652310112222825772",
+          "amount": 300.6,
+          "prices": [
+            0.255,
+            0.745
+          ],
+          "link": "https://polymarket.com/event/which-company-has-second-best-ai-model-end-of-june"
+        }
+      ]
+    },
+    {
+      "wallet": "0x74957ea27ac4fbdee46d861fdae357859ff67fcf",
+      "name": "ultralisk",
+      "source_market_count": 7,
+      "total_holder_amount": 491.13,
+      "max_holder_amount": 233.0,
+      "score": 56.76,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=116965, non_election=100537, pf=999.00, sports=7%, single_event=1%",
+      "metrics": {
+        "wallet_address": "0x74957ea27ac4fbdee46d861fdae357859ff67fcf",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 116964.52,
+        "non_election_pnl": 100536.8,
+        "election_pnl": 16427.72,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.073,
+        "arbitrage_like_ratio": 0.08,
+        "single_event_dependency": 0.012,
+        "positive_single_event_dependency": 0.012,
+        "election_dependency": 0.14,
+        "avg_entry_price": 0.0977,
+        "low_price_ratio": 0.727,
+        "high_price_ratio": 0.0,
+        "market_diversity_ratio": 0.913,
+        "open_unrealized_roi": 0.174,
+        "topic_counts": {
+          "crypto": 80,
+          "other": 58,
+          "geopolitics": 53,
+          "politics": 33,
+          "weather": 29,
+          "sports": 22,
+          "tech": 19,
+          "economics": 3,
+          "culture": 3
+        },
+        "topic_pnl": {
+          "crypto": 34999.3,
+          "geopolitics": 23257.68,
+          "other": 22301.81,
+          "politics": 13595.73,
+          "weather": 8051.49,
+          "sports": 6530.37,
+          "tech": 6038.6,
+          "economics": 1179.38,
+          "culture": 1010.16
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination",
+        "lottery_like_entry_distribution"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce earbuds or headphones in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "16040470176590332178266575986841073712697460370218768293287706373316090538021",
+          "amount": 233.0,
+          "prices": [
+            0.305,
+            0.695
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "20826236952766096458839542076301237144154160218855573686197597978501264662054",
+          "amount": 95.06,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a tablet in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "73789386951785961634843164245972952207876232232196453335930808090515877552624",
+          "amount": 46.05,
+          "prices": [
+            0.131,
+            0.869
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "77120919023569550198628906932983149373349506964926056595149258435958662028903",
+          "amount": 40.0,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "105793471410600103279818302661836433120260173055196756819977205026613295786512",
+          "amount": 40.0,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce glasses in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "7860813783788365228940933442491468403797619020807014292210819082168277140152",
+          "amount": 20.0,
+          "prices": [
+            0.19,
+            0.81
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "33556425348842945888862947363547939786425713052621883310070994908857865863131",
+          "amount": 17.02,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xa3e22cd32aa9238ef7dbcfb4761e33b9eaa1fdf8",
+      "name": "pootytherewardfarmer",
+      "source_market_count": 6,
+      "total_holder_amount": 124.2,
+      "max_holder_amount": 29.0,
+      "score": 56.6,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=38263, non_election=27136, pf=999.00, sports=4%, single_event=1%",
+      "metrics": {
+        "wallet_address": "0xa3e22cd32aa9238ef7dbcfb4761e33b9eaa1fdf8",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 38262.89,
+        "non_election_pnl": 27136.27,
+        "election_pnl": 11126.62,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.04,
+        "arbitrage_like_ratio": 0.047,
+        "single_event_dependency": 0.009,
+        "positive_single_event_dependency": 0.009,
+        "election_dependency": 0.291,
+        "avg_entry_price": 0.238,
+        "low_price_ratio": 0.417,
+        "high_price_ratio": 0.017,
+        "market_diversity_ratio": 0.997,
+        "open_unrealized_roi": -0.332,
+        "topic_counts": {
+          "other": 90,
+          "politics": 81,
+          "geopolitics": 57,
+          "tech": 24,
+          "weather": 12,
+          "sports": 12,
+          "culture": 10,
+          "crypto": 9,
+          "economics": 5
+        },
+        "topic_pnl": {
+          "other": 10547.28,
+          "politics": 10251.12,
+          "geopolitics": 8446.04,
+          "tech": 3059.78,
+          "weather": 1506.28,
+          "sports": 1425.88,
+          "crypto": 1236.16,
+          "culture": 1203.34,
+          "economics": 587.01
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce glasses in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "38445023851151660993666237267712981362686626593721378545175263940037718392453",
+          "amount": 29.0,
+          "prices": [
+            0.19,
+            0.81
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a tablet in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "73789386951785961634843164245972952207876232232196453335930808090515877552624",
+          "amount": 25.0,
+          "prices": [
+            0.131,
+            0.869
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "33556425348842945888862947363547939786425713052621883310070994908857865863131",
+          "amount": 20.52,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "80447937560636138474473008630355047311560041627893286747878042109733464769201",
+          "amount": 18.68,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "100438160506691254090437551267093665892351344574774405219038833438488138343331",
+          "amount": 15.65,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "24535511360909789070465577593343267401226583512825755634755701071660338255675",
+          "amount": 15.35,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x510f4963b66b1b18505faab74b0bb943d1dda43c",
+      "name": "PPMT",
+      "source_market_count": 4,
+      "total_holder_amount": 142.0,
+      "max_holder_amount": 75.8,
+      "score": 53.64,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=9978, non_election=8433, pf=999.00, sports=5%, single_event=2%",
+      "metrics": {
+        "wallet_address": "0x510f4963b66b1b18505faab74b0bb943d1dda43c",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 9978.2,
+        "non_election_pnl": 8433.46,
+        "election_pnl": 1544.74,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.05,
+        "arbitrage_like_ratio": 0.05,
+        "single_event_dependency": 0.021,
+        "positive_single_event_dependency": 0.021,
+        "election_dependency": 0.155,
+        "avg_entry_price": 0.6423,
+        "low_price_ratio": 0.207,
+        "high_price_ratio": 0.513,
+        "market_diversity_ratio": 0.903,
+        "open_unrealized_roi": -0.515,
+        "topic_counts": {
+          "other": 104,
+          "weather": 62,
+          "geopolitics": 56,
+          "politics": 34,
+          "sports": 15,
+          "tech": 13,
+          "crypto": 11,
+          "economics": 3,
+          "culture": 2
+        },
+        "topic_pnl": {
+          "other": 3700.91,
+          "geopolitics": 1989.15,
+          "weather": 1758.1,
+          "politics": 1132.15,
+          "sports": 491.34,
+          "crypto": 402.88,
+          "tech": 374.5,
+          "economics": 84.42,
+          "culture": 44.75
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "20826236952766096458839542076301237144154160218855573686197597978501264662054",
+          "amount": 75.8,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "Who will close Warner Bros. acquisition?",
+          "question": "No listed company closes Warner Bros acquisition by June 30, 2027",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "92247462418331121567176516538364198127633745062455470091774998340990979894644",
+          "amount": 44.95,
+          "prices": [
+            0.145,
+            0.855
+          ],
+          "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a phone in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "69823967277555741592442629731784907339708874153642676882590957848976639565274",
+          "amount": 18.71,
+          "prices": [
+            0.175,
+            0.825
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "77120919023569550198628906932983149373349506964926056595149258435958662028903",
+          "amount": 2.54,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xea41ce13c290a4491f946b5976c79c901ff80782",
+      "name": "BuBu12",
+      "source_market_count": 5,
+      "total_holder_amount": 5.52,
+      "max_holder_amount": 1.14,
+      "score": 53.32,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=605, non_election=599, pf=21.95, sports=0%, single_event=5%",
+      "metrics": {
+        "wallet_address": "0xea41ce13c290a4491f946b5976c79c901ff80782",
+        "closed_positions_count": 300,
+        "open_positions_count": 62,
+        "net_pnl": 604.61,
+        "non_election_pnl": 598.63,
+        "election_pnl": 5.98,
+        "profit_factor": 21.955,
+        "win_rate": 0.87,
+        "sports_ratio": 0.0,
+        "arbitrage_like_ratio": 0.0,
+        "single_event_dependency": 0.048,
+        "positive_single_event_dependency": 0.05,
+        "election_dependency": 0.01,
+        "avg_entry_price": 0.7181,
+        "low_price_ratio": 0.023,
+        "high_price_ratio": 0.307,
+        "market_diversity_ratio": 0.963,
+        "open_unrealized_roi": 0.078,
+        "topic_counts": {
+          "crypto": 226,
+          "geopolitics": 30,
+          "other": 14,
+          "politics": 13,
+          "tech": 12,
+          "economics": 5
+        },
+        "topic_pnl": {
+          "crypto": 579.29,
+          "geopolitics": 20.08,
+          "politics": 5.08,
+          "tech": 2.15,
+          "economics": -1.69,
+          "other": -0.3
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "90946858908509503172731774494091540616416221763225603850370541944018942488697",
+          "amount": 1.14,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "6214606943107197115529634171182195163539818508116179312208172739501841301622",
+          "amount": 1.12,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "100438160506691254090437551267093665892351344574774405219038833438488138343331",
+          "amount": 1.11,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a clip-on device for clothing in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "114784670885945594181757783149439949907793234250983100877211012007137571587032",
+          "amount": 1.11,
+          "prices": [
+            0.21,
+            0.79
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a tablet in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "73789386951785961634843164245972952207876232232196453335930808090515877552624",
+          "amount": 1.04,
+          "prices": [
+            0.131,
+            0.869
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x1cdd071bb612de6d66d0c882b676c663697de595",
+      "name": "Lavincey",
+      "source_market_count": 4,
+      "total_holder_amount": 245.43,
+      "max_holder_amount": 88.2,
+      "score": 52.62,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=515900, non_election=414778, pf=999.00, sports=22%, single_event=3%",
+      "metrics": {
+        "wallet_address": "0x1cdd071bb612de6d66d0c882b676c663697de595",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 515899.57,
+        "non_election_pnl": 414778.31,
+        "election_pnl": 101121.26,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.217,
+        "arbitrage_like_ratio": 0.217,
+        "single_event_dependency": 0.025,
+        "positive_single_event_dependency": 0.025,
+        "election_dependency": 0.196,
+        "avg_entry_price": 0.1396,
+        "low_price_ratio": 0.787,
+        "high_price_ratio": 0.047,
+        "market_diversity_ratio": 1.0,
+        "open_unrealized_roi": -0.821,
+        "topic_counts": {
+          "geopolitics": 99,
+          "other": 85,
+          "sports": 65,
+          "politics": 42,
+          "economics": 3,
+          "weather": 3,
+          "tech": 2,
+          "culture": 1
+        },
+        "topic_pnl": {
+          "geopolitics": 202850.24,
+          "other": 138167.79,
+          "politics": 82116.17,
+          "sports": 79997.3,
+          "economics": 7412.29,
+          "weather": 2645.13,
+          "tech": 1885.39,
+          "culture": 825.27
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination",
+        "lottery_like_entry_distribution"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "105793471410600103279818302661836433120260173055196756819977205026613295786512",
+          "amount": 88.2,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "15596881315836367767699003429490212721537835348949574643253042524587080151396",
+          "amount": 82.0,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "Which company has second best AI model end of June?",
+          "question": "Will Google have the second best AI model at the end of June 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "34259708138713628324985799192959228781142905350383459948552349770868947944528",
+          "amount": 70.23,
+          "prices": [
+            0.255,
+            0.745
+          ],
+          "link": "https://polymarket.com/event/which-company-has-second-best-ai-model-end-of-june"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "24535511360909789070465577593343267401226583512825755634755701071660338255675",
+          "amount": 5.0,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x9cb35555b913c805a62a2e34bce4ef14f0e81367",
+      "name": "Colala",
+      "source_market_count": 4,
+      "total_holder_amount": 134.88,
+      "max_holder_amount": 44.95,
+      "score": 52.26,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=9638, non_election=8143, pf=999.00, sports=7%, single_event=2%",
+      "metrics": {
+        "wallet_address": "0x9cb35555b913c805a62a2e34bce4ef14f0e81367",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 9638.27,
+        "non_election_pnl": 8143.09,
+        "election_pnl": 1495.18,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.067,
+        "arbitrage_like_ratio": 0.067,
+        "single_event_dependency": 0.024,
+        "positive_single_event_dependency": 0.024,
+        "election_dependency": 0.155,
+        "avg_entry_price": 0.6404,
+        "low_price_ratio": 0.177,
+        "high_price_ratio": 0.493,
+        "market_diversity_ratio": 0.923,
+        "open_unrealized_roi": -0.731,
+        "topic_counts": {
+          "other": 96,
+          "weather": 81,
+          "geopolitics": 46,
+          "politics": 36,
+          "sports": 20,
+          "tech": 13,
+          "crypto": 4,
+          "economics": 2,
+          "culture": 2
+        },
+        "topic_pnl": {
+          "other": 3128.18,
+          "weather": 2595.67,
+          "geopolitics": 1634.58,
+          "politics": 1071.72,
+          "sports": 537.91,
+          "tech": 343.41,
+          "crypto": 225.28,
+          "economics": 52.28,
+          "culture": 49.25
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "33556425348842945888862947363547939786425713052621883310070994908857865863131",
+          "amount": 44.95,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce glasses in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "38445023851151660993666237267712981362686626593721378545175263940037718392453",
+          "amount": 30.0,
+          "prices": [
+            0.19,
+            0.81
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "Which company has second best AI model end of June?",
+          "question": "Will Google have the second best AI model at the end of June 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "34259708138713628324985799192959228781142905350383459948552349770868947944528",
+          "amount": 29.97,
+          "prices": [
+            0.255,
+            0.745
+          ],
+          "link": "https://polymarket.com/event/which-company-has-second-best-ai-model-end-of-june"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a tablet in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "73789386951785961634843164245972952207876232232196453335930808090515877552624",
+          "amount": 29.96,
+          "prices": [
+            0.131,
+            0.869
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xd0385ab1f5af08f8616413204f9f546bcf1f3142",
+      "name": "MrRobertHouse",
+      "source_market_count": 11,
+      "total_holder_amount": 50.49,
+      "max_holder_amount": 24.72,
+      "score": 50.23,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=243, non_election=239, pf=999.00, sports=1%, single_event=8%",
+      "metrics": {
+        "wallet_address": "0xd0385ab1f5af08f8616413204f9f546bcf1f3142",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 243.32,
+        "non_election_pnl": 239.18,
+        "election_pnl": 4.15,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.007,
+        "arbitrage_like_ratio": 0.007,
+        "single_event_dependency": 0.082,
+        "positive_single_event_dependency": 0.082,
+        "election_dependency": 0.017,
+        "avg_entry_price": 0.6968,
+        "low_price_ratio": 0.0,
+        "high_price_ratio": 0.203,
+        "market_diversity_ratio": 1.0,
+        "open_unrealized_roi": -0.027,
+        "topic_counts": {
+          "crypto": 170,
+          "weather": 60,
+          "other": 43,
+          "geopolitics": 15,
+          "politics": 6,
+          "tech": 3,
+          "sports": 2,
+          "culture": 1
+        },
+        "topic_pnl": {
+          "crypto": 160.77,
+          "other": 36.78,
+          "weather": 27.44,
+          "geopolitics": 11.82,
+          "politics": 3.62,
+          "tech": 1.26,
+          "sports": 1.17,
+          "culture": 0.46
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "33556425348842945888862947363547939786425713052621883310070994908857865863131",
+          "amount": 24.72,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a tablet in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "73789386951785961634843164245972952207876232232196453335930808090515877552624",
+          "amount": 5.45,
+          "prices": [
+            0.131,
+            0.869
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Elon Musk be TIME Person of the Year 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "36475764291538498636301650492688342688311507777887518387099681125573792449698",
+          "amount": 3.85,
+          "prices": [
+            0.18,
+            0.82
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "90946858908509503172731774494091540616416221763225603850370541944018942488697",
+          "amount": 2.33,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "100438160506691254090437551267093665892351344574774405219038833438488138343331",
+          "amount": 2.25,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "6214606943107197115529634171182195163539818508116179312208172739501841301622",
+          "amount": 2.22,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "80447937560636138474473008630355047311560041627893286747878042109733464769201",
+          "amount": 2.22,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a clip-on device for clothing in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "114784670885945594181757783149439949907793234250983100877211012007137571587032",
+          "amount": 2.2,
+          "prices": [
+            0.21,
+            0.79
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Marco Rubio be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "34549773038979064901724285499914776654132933909773184675996537142779268108127",
+          "amount": 2.13,
+          "prices": [
+            0.355,
+            0.645
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will James Talarico be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "111597729371760155208100172414381200777957149730404680620365117456232056799422",
+          "amount": 2.08,
+          "prices": [
+            0.24,
+            0.76
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x48c4eb13fe07ea639df857bc82258ef5a47219e5",
+      "name": "moonrise-clump",
+      "source_market_count": 5,
+      "total_holder_amount": 13.83,
+      "max_holder_amount": 6.76,
+      "score": 50.12,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=293, non_election=247, pf=999.00, sports=0%, single_event=6%",
+      "metrics": {
+        "wallet_address": "0x48c4eb13fe07ea639df857bc82258ef5a47219e5",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 292.85,
+        "non_election_pnl": 247.04,
+        "election_pnl": 45.8,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.0,
+        "arbitrage_like_ratio": 0.0,
+        "single_event_dependency": 0.061,
+        "positive_single_event_dependency": 0.061,
+        "election_dependency": 0.156,
+        "avg_entry_price": 0.7714,
+        "low_price_ratio": 0.013,
+        "high_price_ratio": 0.463,
+        "market_diversity_ratio": 0.997,
+        "open_unrealized_roi": 0.024,
+        "topic_counts": {
+          "other": 104,
+          "geopolitics": 84,
+          "politics": 40,
+          "tech": 24,
+          "crypto": 23,
+          "weather": 22,
+          "economics": 3
+        },
+        "topic_pnl": {
+          "other": 121.0,
+          "geopolitics": 93.49,
+          "politics": 30.83,
+          "tech": 18.87,
+          "crypto": 18.79,
+          "weather": 8.87,
+          "economics": 0.99
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "33556425348842945888862947363547939786425713052621883310070994908857865863131",
+          "amount": 6.76,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "90946858908509503172731774494091540616416221763225603850370541944018942488697",
+          "amount": 2.27,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "100438160506691254090437551267093665892351344574774405219038833438488138343331",
+          "amount": 2.25,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a clip-on device for clothing in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "114784670885945594181757783149439949907793234250983100877211012007137571587032",
+          "amount": 1.49,
+          "prices": [
+            0.21,
+            0.79
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "6214606943107197115529634171182195163539818508116179312208172739501841301622",
+          "amount": 1.06,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x30f67d821c57a54e25e5e521dbd3b5b18309004f",
+      "name": "shiifoo",
+      "source_market_count": 9,
+      "total_holder_amount": 496.13,
+      "max_holder_amount": 96.92,
+      "score": 48.31,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=15612, non_election=12686, pf=999.00, sports=13%, single_event=2%",
+      "metrics": {
+        "wallet_address": "0x30f67d821c57a54e25e5e521dbd3b5b18309004f",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 15612.46,
+        "non_election_pnl": 12686.05,
+        "election_pnl": 2926.41,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.133,
+        "arbitrage_like_ratio": 0.133,
+        "single_event_dependency": 0.024,
+        "positive_single_event_dependency": 0.024,
+        "election_dependency": 0.187,
+        "avg_entry_price": 0.3833,
+        "low_price_ratio": 0.15,
+        "high_price_ratio": 0.003,
+        "market_diversity_ratio": 0.987,
+        "open_unrealized_roi": -0.249,
+        "topic_counts": {
+          "crypto": 155,
+          "other": 57,
+          "sports": 40,
+          "politics": 31,
+          "geopolitics": 9,
+          "tech": 5,
+          "economics": 2,
+          "culture": 1
+        },
+        "topic_pnl": {
+          "crypto": 5580.44,
+          "other": 4809.34,
+          "politics": 2298.96,
+          "sports": 1547.55,
+          "geopolitics": 751.56,
+          "tech": 516.98,
+          "economics": 77.13,
+          "culture": 30.5
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce earbuds or headphones in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "16040470176590332178266575986841073712697460370218768293287706373316090538021",
+          "amount": 96.92,
+          "prices": [
+            0.305,
+            0.695
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "6214606943107197115529634171182195163539818508116179312208172739501841301622",
+          "amount": 96.35,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce glasses in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "7860813783788365228940933442491468403797619020807014292210819082168277140152",
+          "amount": 95.26,
+          "prices": [
+            0.19,
+            0.81
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "90946858908509503172731774494091540616416221763225603850370541944018942488697",
+          "amount": 95.07,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a tablet in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "73789386951785961634843164245972952207876232232196453335930808090515877552624",
+          "amount": 40.08,
+          "prices": [
+            0.131,
+            0.869
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "105793471410600103279818302661836433120260173055196756819977205026613295786512",
+          "amount": 25.52,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Shehbaz Sharif be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "14704364337221156454384409567424396003915390765729895004695230356621961826440",
+          "amount": 25.06,
+          "prices": [
+            0.28,
+            0.72
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Mohammad-Bagher Ghalibaf be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "36907940124880352863825757054347831984792202604070891338546580060775045647937",
+          "amount": 15.03,
+          "prices": [
+            0.35,
+            0.65
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a clip-on device for clothing in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "14297574727087523604876851617000352443381479544462660285614372795163263811991",
+          "amount": 6.83,
+          "prices": [
+            0.21,
+            0.79
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xc602e34792d9a5e129f3404daef2df43d1d37fc1",
+      "name": "Dr.PNL",
+      "source_market_count": 4,
+      "total_holder_amount": 119.28,
+      "max_holder_amount": 60.51,
+      "score": 44.52,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=60808, non_election=52690, pf=999.00, sports=14%, single_event=27%",
+      "metrics": {
+        "wallet_address": "0xc602e34792d9a5e129f3404daef2df43d1d37fc1",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 60808.11,
+        "non_election_pnl": 52689.69,
+        "election_pnl": 8118.42,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.137,
+        "arbitrage_like_ratio": 0.137,
+        "single_event_dependency": 0.273,
+        "positive_single_event_dependency": 0.273,
+        "election_dependency": 0.134,
+        "avg_entry_price": 0.3158,
+        "low_price_ratio": 0.413,
+        "high_price_ratio": 0.087,
+        "market_diversity_ratio": 0.99,
+        "open_unrealized_roi": -0.102,
+        "topic_counts": {
+          "other": 97,
+          "geopolitics": 62,
+          "politics": 49,
+          "sports": 41,
+          "tech": 25,
+          "economics": 13,
+          "crypto": 10,
+          "culture": 2,
+          "weather": 1
+        },
+        "topic_pnl": {
+          "crypto": 28401.49,
+          "other": 10681.22,
+          "politics": 7352.57,
+          "geopolitics": 6833.21,
+          "sports": 2535.68,
+          "tech": 2438.43,
+          "economics": 2391.42,
+          "culture": 130.27,
+          "weather": 43.83
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce earbuds or headphones in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "2495741164869514855992472185546919768592825594811693043740639350245507358833",
+          "amount": 60.51,
+          "prices": [
+            0.305,
+            0.695
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "77120919023569550198628906932983149373349506964926056595149258435958662028903",
+          "amount": 23.17,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "20826236952766096458839542076301237144154160218855573686197597978501264662054",
+          "amount": 20.0,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "15596881315836367767699003429490212721537835348949574643253042524587080151396",
+          "amount": 15.6,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x23ed02fdee555e7a7790f9ce79efccebf9dfaebc",
+      "name": "niglette",
+      "source_market_count": 7,
+      "total_holder_amount": 83.11,
+      "max_holder_amount": 24.88,
+      "score": 40.68,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=7085, non_election=5538, pf=328.53, sports=4%, single_event=12%",
+      "metrics": {
+        "wallet_address": "0x23ed02fdee555e7a7790f9ce79efccebf9dfaebc",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 7084.8,
+        "non_election_pnl": 5537.62,
+        "election_pnl": 1547.18,
+        "profit_factor": 328.526,
+        "win_rate": 0.553,
+        "sports_ratio": 0.043,
+        "arbitrage_like_ratio": 0.043,
+        "single_event_dependency": 0.119,
+        "positive_single_event_dependency": 0.12,
+        "election_dependency": 0.218,
+        "avg_entry_price": 0.251,
+        "low_price_ratio": 0.64,
+        "high_price_ratio": 0.113,
+        "market_diversity_ratio": 0.99,
+        "open_unrealized_roi": -0.58,
+        "topic_counts": {
+          "other": 87,
+          "weather": 81,
+          "geopolitics": 47,
+          "politics": 43,
+          "sports": 13,
+          "crypto": 9,
+          "tech": 8,
+          "culture": 7,
+          "economics": 5
+        },
+        "topic_pnl": {
+          "other": 3040.65,
+          "geopolitics": 1616.5,
+          "politics": 1096.32,
+          "weather": 941.04,
+          "culture": 149.84,
+          "sports": 128.84,
+          "tech": 81.16,
+          "crypto": 30.75,
+          "economics": -0.31
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination"
+      ],
+      "source_markets": [
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Marco Rubio be TIME Person of the Year 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "80715501435278800376538251697430664442452728911302405234327845338824540021870",
+          "amount": 24.88,
+          "prices": [
+            0.355,
+            0.645
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Shehbaz Sharif be TIME Person of the Year 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "20710961152362241880774442976502891078724213888530081154312839354174397302350",
+          "amount": 15.76,
+          "prices": [
+            0.28,
+            0.72
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Mohammad-Bagher Ghalibaf be TIME Person of the Year 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "19529461727473340015632106766376024119061265189139390324721125014506108674892",
+          "amount": 15.03,
+          "prices": [
+            0.35,
+            0.65
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Jeremy Hansen be TIME Person of the Year 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "18068959109553661931790112639773899175554897183189397093171814149635609935799",
+          "amount": 12.38,
+          "prices": [
+            0.105,
+            0.895
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Reid Wiseman be TIME Person of the Year 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "98727053670810188490443574758442026915055539356758025977721425782935482884614",
+          "amount": 5.06,
+          "prices": [
+            0.295,
+            0.705
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will ChatGPT be TIME Person of the Year 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "78815940021045606641440422428300777753054439603144468994915704317778192677336",
+          "amount": 5.0,
+          "prices": [
+            0.275,
+            0.725
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Victor Glover be TIME Person of the Year 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "75367588828315360472160079256172432293386038873034820850918099354645625473",
+          "amount": 5.0,
+          "prices": [
+            0.285,
+            0.715
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x94746ed6c69bdd5d5711b18d781d3978ef705091",
+      "name": "TraderProMax",
+      "source_market_count": 8,
+      "total_holder_amount": 243.84,
+      "max_holder_amount": 67.42,
+      "score": 37.07,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=9243, non_election=8331, pf=999.00, sports=19%, single_event=1%",
+      "metrics": {
+        "wallet_address": "0x94746ed6c69bdd5d5711b18d781d3978ef705091",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 9242.94,
+        "non_election_pnl": 8331.17,
+        "election_pnl": 911.76,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.187,
+        "arbitrage_like_ratio": 0.187,
+        "single_event_dependency": 0.01,
+        "positive_single_event_dependency": 0.01,
+        "election_dependency": 0.099,
+        "avg_entry_price": 0.1378,
+        "low_price_ratio": 0.65,
+        "high_price_ratio": 0.027,
+        "market_diversity_ratio": 0.97,
+        "open_unrealized_roi": -0.227,
+        "topic_counts": {
+          "other": 127,
+          "sports": 56,
+          "geopolitics": 35,
+          "politics": 28,
+          "tech": 24,
+          "crypto": 22,
+          "economics": 5,
+          "weather": 3
+        },
+        "topic_pnl": {
+          "other": 3843.18,
+          "sports": 1651.04,
+          "geopolitics": 1026.67,
+          "tech": 930.6,
+          "politics": 871.27,
+          "crypto": 640.97,
+          "economics": 198.27,
+          "weather": 80.92
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination",
+        "lottery_like_entry_distribution"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce glasses in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "38445023851151660993666237267712981362686626593721378545175263940037718392453",
+          "amount": 67.42,
+          "prices": [
+            0.19,
+            0.81
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "20826236952766096458839542076301237144154160218855573686197597978501264662054",
+          "amount": 43.49,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a clip-on device for clothing in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "14297574727087523604876851617000352443381479544462660285614372795163263811991",
+          "amount": 26.19,
+          "prices": [
+            0.21,
+            0.79
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "24535511360909789070465577593343267401226583512825755634755701071660338255675",
+          "amount": 25.0,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a tablet in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "17404766932259944299339052130465690929883335900321910320466617668484369055750",
+          "amount": 25.0,
+          "prices": [
+            0.131,
+            0.869
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "77120919023569550198628906932983149373349506964926056595149258435958662028903",
+          "amount": 24.99,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "105793471410600103279818302661836433120260173055196756819977205026613295786512",
+          "amount": 24.99,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "15596881315836367767699003429490212721537835348949574643253042524587080151396",
+          "amount": 6.76,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x807ccea75c5f34b63728794f42fde9cb3ac6f1e3",
+      "name": "CryptoGerm",
+      "source_market_count": 5,
+      "total_holder_amount": 355.36,
+      "max_holder_amount": 148.88,
+      "score": 34.34,
+      "verdict": "watch",
+      "summary": "watch: 140 closed, pnl=230, non_election=246, pf=1.63, sports=1%, single_event=9%",
+      "metrics": {
+        "wallet_address": "0x807ccea75c5f34b63728794f42fde9cb3ac6f1e3",
+        "closed_positions_count": 140,
+        "open_positions_count": 25,
+        "net_pnl": 229.78,
+        "non_election_pnl": 245.73,
+        "election_pnl": -15.95,
+        "profit_factor": 1.627,
+        "win_rate": 0.436,
+        "sports_ratio": 0.014,
+        "arbitrage_like_ratio": 0.014,
+        "single_event_dependency": 0.085,
+        "positive_single_event_dependency": 0.137,
+        "election_dependency": 0.069,
+        "avg_entry_price": 0.1521,
+        "low_price_ratio": 0.679,
+        "high_price_ratio": 0.0,
+        "market_diversity_ratio": 0.993,
+        "open_unrealized_roi": -0.032,
+        "topic_counts": {
+          "other": 69,
+          "tech": 30,
+          "politics": 15,
+          "economics": 8,
+          "crypto": 8,
+          "geopolitics": 7,
+          "sports": 2,
+          "culture": 1
+        },
+        "topic_pnl": {
+          "other": 130.79,
+          "tech": 105.61,
+          "politics": -51.78,
+          "sports": 35.05,
+          "geopolitics": 23.33,
+          "crypto": -14.84,
+          "culture": 2.25,
+          "economics": -0.63
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": false,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "lottery_like_entry_distribution"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "24535511360909789070465577593343267401226583512825755634755701071660338255675",
+          "amount": 148.88,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a phone in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "4967389004560237148087059097306936016483726557350463241288661442119258090198",
+          "amount": 100.09,
+          "prices": [
+            0.175,
+            0.825
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "20826236952766096458839542076301237144154160218855573686197597978501264662054",
+          "amount": 40.0,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "15596881315836367767699003429490212721537835348949574643253042524587080151396",
+          "amount": 37.4,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "105793471410600103279818302661836433120260173055196756819977205026613295786512",
+          "amount": 28.99,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xdf43b6f9cc4696f0447d62f6cb2eed705e921330",
+      "name": "ineedtostop",
+      "source_market_count": 8,
+      "total_holder_amount": 103.67,
+      "max_holder_amount": 46.4,
+      "score": 34.26,
+      "verdict": "watch",
+      "summary": "watch: 300 closed, pnl=749, non_election=655, pf=999.00, sports=0%, single_event=30%",
+      "metrics": {
+        "wallet_address": "0xdf43b6f9cc4696f0447d62f6cb2eed705e921330",
+        "closed_positions_count": 300,
+        "open_positions_count": 86,
+        "net_pnl": 748.89,
+        "non_election_pnl": 655.18,
+        "election_pnl": 93.71,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.0,
+        "arbitrage_like_ratio": 0.0,
+        "single_event_dependency": 0.298,
+        "positive_single_event_dependency": 0.298,
+        "election_dependency": 0.125,
+        "avg_entry_price": 0.8954,
+        "low_price_ratio": 0.007,
+        "high_price_ratio": 0.81,
+        "market_diversity_ratio": 0.997,
+        "open_unrealized_roi": -0.052,
+        "topic_counts": {
+          "politics": 129,
+          "other": 84,
+          "geopolitics": 78,
+          "tech": 6,
+          "crypto": 2,
+          "weather": 1
+        },
+        "topic_pnl": {
+          "geopolitics": 608.06,
+          "other": 66.99,
+          "politics": 66.33,
+          "tech": 6.98,
+          "weather": 0.36,
+          "crypto": 0.16
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination",
+        "favorite_grinder_entry_distribution"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce earbuds or headphones in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "2495741164869514855992472185546919768592825594811693043740639350245507358833",
+          "amount": 46.4,
+          "prices": [
+            0.305,
+            0.695
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "90946858908509503172731774494091540616416221763225603850370541944018942488697",
+          "amount": 18.57,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "80447937560636138474473008630355047311560041627893286747878042109733464769201",
+          "amount": 17.41,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a clip-on device for clothing in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "114784670885945594181757783149439949907793234250983100877211012007137571587032",
+          "amount": 7.49,
+          "prices": [
+            0.21,
+            0.79
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a tablet in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "73789386951785961634843164245972952207876232232196453335930808090515877552624",
+          "amount": 4.24,
+          "prices": [
+            0.131,
+            0.869
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "6214606943107197115529634171182195163539818508116179312208172739501841301622",
+          "amount": 3.83,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "100438160506691254090437551267093665892351344574774405219038833438488138343331",
+          "amount": 3.4,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "33556425348842945888862947363547939786425713052621883310070994908857865863131",
+          "amount": 2.33,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xd8bcf0b7c03348686607d6e59abd74edff5967e2",
+      "name": "traboukos",
+      "source_market_count": 6,
+      "total_holder_amount": 2921.19,
+      "max_holder_amount": 1769.83,
+      "score": 27.63,
+      "verdict": "watch",
+      "summary": "watch: 43 closed, pnl=15930, non_election=14724, pf=33.73, sports=28%, single_event=17%",
+      "metrics": {
+        "wallet_address": "0xd8bcf0b7c03348686607d6e59abd74edff5967e2",
+        "closed_positions_count": 43,
+        "open_positions_count": 32,
+        "net_pnl": 15929.59,
+        "non_election_pnl": 14723.53,
+        "election_pnl": 1206.06,
+        "profit_factor": 33.734,
+        "win_rate": 0.767,
+        "sports_ratio": 0.279,
+        "arbitrage_like_ratio": 0.279,
+        "single_event_dependency": 0.166,
+        "positive_single_event_dependency": 0.171,
+        "election_dependency": 0.076,
+        "avg_entry_price": 0.6819,
+        "low_price_ratio": 0.047,
+        "high_price_ratio": 0.326,
+        "market_diversity_ratio": 0.977,
+        "open_unrealized_roi": -0.103,
+        "topic_counts": {
+          "geopolitics": 20,
+          "sports": 12,
+          "other": 8,
+          "politics": 2,
+          "weather": 1
+        },
+        "topic_pnl": {
+          "geopolitics": 13825.07,
+          "other": 1314.43,
+          "sports": 730.29,
+          "weather": 59.8,
+          "politics": 0.0
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": false,
+        "max_closed_rows": 300
+      },
+      "reasons": [],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a phone in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "69823967277555741592442629731784907339708874153642676882590957848976639565274",
+          "amount": 1769.83,
+          "prices": [
+            0.175,
+            0.825
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "33556425348842945888862947363547939786425713052621883310070994908857865863131",
+          "amount": 380.01,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "100438160506691254090437551267093665892351344574774405219038833438488138343331",
+          "amount": 363.25,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "90946858908509503172731774494091540616416221763225603850370541944018942488697",
+          "amount": 187.1,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "80447937560636138474473008630355047311560041627893286747878042109733464769201",
+          "amount": 121.0,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "6214606943107197115529634171182195163539818508116179312208172739501841301622",
+          "amount": 100.0,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xb755ecca2d4cf43ac52232cbbcb03b8eb601ccc8",
+      "name": "Notorious994",
+      "source_market_count": 4,
+      "total_holder_amount": 231.56,
+      "max_holder_amount": 73.64,
+      "score": 19.77,
+      "verdict": "watch",
+      "summary": "watch: 45 closed, pnl=45, non_election=44, pf=2.87, sports=18%, single_event=12%",
+      "metrics": {
+        "wallet_address": "0xb755ecca2d4cf43ac52232cbbcb03b8eb601ccc8",
+        "closed_positions_count": 45,
+        "open_positions_count": 16,
+        "net_pnl": 44.51,
+        "non_election_pnl": 44.2,
+        "election_pnl": 0.31,
+        "profit_factor": 2.869,
+        "win_rate": 0.711,
+        "sports_ratio": 0.178,
+        "arbitrage_like_ratio": 0.178,
+        "single_event_dependency": 0.115,
+        "positive_single_event_dependency": 0.155,
+        "election_dependency": 0.007,
+        "avg_entry_price": 0.7526,
+        "low_price_ratio": 0.022,
+        "high_price_ratio": 0.467,
+        "market_diversity_ratio": 1.0,
+        "open_unrealized_roi": -0.047,
+        "topic_counts": {
+          "other": 17,
+          "geopolitics": 9,
+          "sports": 8,
+          "politics": 6,
+          "weather": 2,
+          "economics": 1,
+          "culture": 1,
+          "crypto": 1
+        },
+        "topic_pnl": {
+          "geopolitics": 27.19,
+          "other": 17.66,
+          "sports": -3.94,
+          "economics": 3.33,
+          "weather": -1.82,
+          "culture": 1.47,
+          "politics": 0.31,
+          "crypto": 0.3
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": false,
+        "max_closed_rows": 300
+      },
+      "reasons": [],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a tablet in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "73789386951785961634843164245972952207876232232196453335930808090515877552624",
+          "amount": 73.64,
+          "prices": [
+            0.131,
+            0.869
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "80447937560636138474473008630355047311560041627893286747878042109733464769201",
+          "amount": 67.95,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "6214606943107197115529634171182195163539818508116179312208172739501841301622",
+          "amount": 55.56,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "33556425348842945888862947363547939786425713052621883310070994908857865863131",
+          "amount": 34.42,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xa450e8e421aa2ead0be10e9cf080c80846747a2a",
+      "name": "0xa450e8E421AA2EAd0bE10e9Cf080C80846747A2A-1769397250269",
+      "source_market_count": 7,
+      "total_holder_amount": 61.24,
+      "max_holder_amount": 13.51,
+      "score": 10.08,
+      "verdict": "watch",
+      "summary": "watch: 23 closed, pnl=12, non_election=11, pf=1.34, sports=9%, single_event=15%",
+      "metrics": {
+        "wallet_address": "0xa450e8e421aa2ead0be10e9cf080c80846747a2a",
+        "closed_positions_count": 23,
+        "open_positions_count": 58,
+        "net_pnl": 11.57,
+        "non_election_pnl": 11.4,
+        "election_pnl": 0.16,
+        "profit_factor": 1.341,
+        "win_rate": 0.696,
+        "sports_ratio": 0.087,
+        "arbitrage_like_ratio": 0.087,
+        "single_event_dependency": 0.147,
+        "positive_single_event_dependency": 0.257,
+        "election_dependency": 0.014,
+        "avg_entry_price": 0.6117,
+        "low_price_ratio": 0.087,
+        "high_price_ratio": 0.13,
+        "market_diversity_ratio": 1.0,
+        "open_unrealized_roi": -0.396,
+        "topic_counts": {
+          "other": 10,
+          "geopolitics": 7,
+          "economics": 2,
+          "sports": 2,
+          "politics": 1,
+          "culture": 1
+        },
+        "topic_pnl": {
+          "geopolitics": 7.49,
+          "other": 7.27,
+          "culture": -5.0,
+          "sports": 1.06,
+          "economics": 0.58,
+          "politics": 0.16
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": false,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "closed_positions_count_lt_30",
+        "profit_factor_lt_1_5"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a phone in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "69823967277555741592442629731784907339708874153642676882590957848976639565274",
+          "amount": 13.51,
+          "prices": [
+            0.175,
+            0.825
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "6214606943107197115529634171182195163539818508116179312208172739501841301622",
+          "amount": 10.42,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "90946858908509503172731774494091540616416221763225603850370541944018942488697",
+          "amount": 10.41,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a tablet in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "73789386951785961634843164245972952207876232232196453335930808090515877552624",
+          "amount": 10.31,
+          "prices": [
+            0.131,
+            0.869
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a clip-on device for clothing in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "114784670885945594181757783149439949907793234250983100877211012007137571587032",
+          "amount": 5.75,
+          "prices": [
+            0.21,
+            0.79
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "33556425348842945888862947363547939786425713052621883310070994908857865863131",
+          "amount": 5.68,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "80447937560636138474473008630355047311560041627893286747878042109733464769201",
+          "amount": 5.15,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x537daa735333cd98e2b3750a63456b6f3b73c08e",
+      "name": "testingcheek",
+      "source_market_count": 4,
+      "total_holder_amount": 25.29,
+      "max_holder_amount": 8.79,
+      "score": 8.74,
+      "verdict": "watch",
+      "summary": "watch: 12 closed, pnl=27, non_election=17, pf=2.33, sports=0%, single_event=28%",
+      "metrics": {
+        "wallet_address": "0x537daa735333cd98e2b3750a63456b6f3b73c08e",
+        "closed_positions_count": 12,
+        "open_positions_count": 17,
+        "net_pnl": 26.62,
+        "non_election_pnl": 16.75,
+        "election_pnl": 9.87,
+        "profit_factor": 2.331,
+        "win_rate": 0.75,
+        "sports_ratio": 0.0,
+        "arbitrage_like_ratio": 0.0,
+        "single_event_dependency": 0.277,
+        "positive_single_event_dependency": 0.396,
+        "election_dependency": 0.371,
+        "avg_entry_price": 0.682,
+        "low_price_ratio": 0.0,
+        "high_price_ratio": 0.333,
+        "market_diversity_ratio": 1.0,
+        "open_unrealized_roi": -0.12,
+        "topic_counts": {
+          "weather": 5,
+          "politics": 3,
+          "tech": 2,
+          "other": 1,
+          "economics": 1
+        },
+        "topic_pnl": {
+          "tech": 19.34,
+          "weather": 7.69,
+          "economics": -5.0,
+          "politics": 4.43,
+          "other": 0.16
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": false,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "closed_positions_count_lt_30"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "80447937560636138474473008630355047311560041627893286747878042109733464769201",
+          "amount": 8.79,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "33556425348842945888862947363547939786425713052621883310070994908857865863131",
+          "amount": 5.68,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a tablet in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "73789386951785961634843164245972952207876232232196453335930808090515877552624",
+          "amount": 5.49,
+          "prices": [
+            0.131,
+            0.869
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "6214606943107197115529634171182195163539818508116179312208172739501841301622",
+          "amount": 5.32,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xa5e3044fd953605f9407d58c76e48fd75a394d7e",
+      "name": "peepeepooppoop",
+      "source_market_count": 6,
+      "total_holder_amount": 1190.5,
+      "max_holder_amount": 756.38,
+      "score": 42.42,
+      "verdict": "reject",
+      "summary": "reject: 300 closed, pnl=720460, non_election=681068, pf=999.00, sports=50%, single_event=3%",
+      "metrics": {
+        "wallet_address": "0xa5e3044fd953605f9407d58c76e48fd75a394d7e",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 720459.99,
+        "non_election_pnl": 681067.9,
+        "election_pnl": 39392.08,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.5,
+        "arbitrage_like_ratio": 0.507,
+        "single_event_dependency": 0.032,
+        "positive_single_event_dependency": 0.032,
+        "election_dependency": 0.055,
+        "avg_entry_price": 0.3674,
+        "low_price_ratio": 0.35,
+        "high_price_ratio": 0.067,
+        "market_diversity_ratio": 0.97,
+        "open_unrealized_roi": -0.69,
+        "topic_counts": {
+          "sports": 150,
+          "other": 73,
+          "geopolitics": 36,
+          "politics": 29,
+          "economics": 5,
+          "tech": 3,
+          "crypto": 2,
+          "culture": 1,
+          "weather": 1
+        },
+        "topic_pnl": {
+          "sports": 383061.11,
+          "other": 245989.34,
+          "geopolitics": 43253.41,
+          "politics": 35238.12,
+          "culture": 4748.04,
+          "economics": 3499.27,
+          "tech": 2136.17,
+          "crypto": 1799.94,
+          "weather": 734.58
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination",
+        "sports_ratio_high",
+        "arbitrage_or_sports_market_pattern"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce glasses in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "7860813783788365228940933442491468403797619020807014292210819082168277140152",
+          "amount": 756.38,
+          "prices": [
+            0.19,
+            0.81
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "33556425348842945888862947363547939786425713052621883310070994908857865863131",
+          "amount": 133.0,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce earbuds or headphones in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "2495741164869514855992472185546919768592825594811693043740639350245507358833",
+          "amount": 80.0,
+          "prices": [
+            0.305,
+            0.695
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "Who will close Warner Bros. acquisition?",
+          "question": "Will Paramount close Warner Bros acquisition?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "12068609223027041437214952122316923930875444851110633205851320421601762942510",
+          "amount": 78.89,
+          "prices": [
+            0.735,
+            0.265
+          ],
+          "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a phone in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "69823967277555741592442629731784907339708874153642676882590957848976639565274",
+          "amount": 75.0,
+          "prices": [
+            0.175,
+            0.825
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "100438160506691254090437551267093665892351344574774405219038833438488138343331",
+          "amount": 67.23,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xba8dd483ab52bf7fd1877ac323a5c2ae7747009d",
+      "name": "42012",
+      "source_market_count": 5,
+      "total_holder_amount": 1297.11,
+      "max_holder_amount": 300.0,
+      "score": 34.48,
+      "verdict": "reject",
+      "summary": "reject: 300 closed, pnl=162329, non_election=156251, pf=999.00, sports=60%, single_event=1%",
+      "metrics": {
+        "wallet_address": "0xba8dd483ab52bf7fd1877ac323a5c2ae7747009d",
+        "closed_positions_count": 300,
+        "open_positions_count": 90,
+        "net_pnl": 162328.52,
+        "non_election_pnl": 156251.4,
+        "election_pnl": 6077.12,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.603,
+        "arbitrage_like_ratio": 0.607,
+        "single_event_dependency": 0.009,
+        "positive_single_event_dependency": 0.009,
+        "election_dependency": 0.037,
+        "avg_entry_price": 0.3405,
+        "low_price_ratio": 0.117,
+        "high_price_ratio": 0.033,
+        "market_diversity_ratio": 0.993,
+        "open_unrealized_roi": -0.17,
+        "topic_counts": {
+          "sports": 181,
+          "other": 70,
+          "geopolitics": 12,
+          "politics": 10,
+          "tech": 10,
+          "crypto": 7,
+          "economics": 4,
+          "culture": 3,
+          "weather": 3
+        },
+        "topic_pnl": {
+          "sports": 98000.75,
+          "other": 40843.31,
+          "geopolitics": 5897.28,
+          "politics": 5221.26,
+          "tech": 4931.27,
+          "crypto": 2251.43,
+          "economics": 2059.37,
+          "weather": 1690.71,
+          "culture": 1433.13
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination",
+        "sports_ratio_high",
+        "arbitrage_or_sports_market_pattern"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "15596881315836367767699003429490212721537835348949574643253042524587080151396",
+          "amount": 300.0,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "77120919023569550198628906932983149373349506964926056595149258435958662028903",
+          "amount": 299.13,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce glasses in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "38445023851151660993666237267712981362686626593721378545175263940037718392453",
+          "amount": 299.12,
+          "prices": [
+            0.19,
+            0.81
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce earbuds or headphones in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "16040470176590332178266575986841073712697460370218768293287706373316090538021",
+          "amount": 299.02,
+          "prices": [
+            0.305,
+            0.695
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "105793471410600103279818302661836433120260173055196756819977205026613295786512",
+          "amount": 99.84,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x011f2d377e56119fb09196dffb0948ae55711122",
+      "name": "11122",
+      "source_market_count": 5,
+      "total_holder_amount": 1129.39,
+      "max_holder_amount": 715.33,
+      "score": 32.19,
+      "verdict": "reject",
+      "summary": "reject: 300 closed, pnl=6294537, non_election=4953721, pf=999.00, sports=51%, single_event=9%",
+      "metrics": {
+        "wallet_address": "0x011f2d377e56119fb09196dffb0948ae55711122",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 6294537.15,
+        "non_election_pnl": 4953721.13,
+        "election_pnl": 1340816.01,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.513,
+        "arbitrage_like_ratio": 0.513,
+        "single_event_dependency": 0.093,
+        "positive_single_event_dependency": 0.093,
+        "election_dependency": 0.213,
+        "avg_entry_price": 0.1485,
+        "low_price_ratio": 0.712,
+        "high_price_ratio": 0.03,
+        "market_diversity_ratio": 0.917,
+        "open_unrealized_roi": 0.156,
+        "topic_counts": {
+          "sports": 154,
+          "other": 42,
+          "politics": 39,
+          "geopolitics": 22,
+          "crypto": 10,
+          "culture": 10,
+          "economics": 9,
+          "weather": 8,
+          "tech": 6
+        },
+        "topic_pnl": {
+          "sports": 2702170.96,
+          "other": 1426598.86,
+          "politics": 958685.78,
+          "geopolitics": 679813.76,
+          "weather": 191274.49,
+          "crypto": 122595.29,
+          "economics": 79365.12,
+          "culture": 77471.46,
+          "tech": 56561.44
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination",
+        "sports_ratio_high",
+        "arbitrage_or_sports_market_pattern",
+        "lottery_like_entry_distribution"
+      ],
+      "source_markets": [
+        {
+          "event": "Who will close Warner Bros. acquisition?",
+          "question": "No listed company closes Warner Bros acquisition by June 30, 2027",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "49926194611744648925636799110670225431413950541722856824815549402042051978566",
+          "amount": 715.33,
+          "prices": [
+            0.145,
+            0.855
+          ],
+          "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+        },
+        {
+          "event": "Who will close Warner Bros. acquisition?",
+          "question": "Will Paramount close Warner Bros acquisition?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "12068609223027041437214952122316923930875444851110633205851320421601762942510",
+          "amount": 360.89,
+          "prices": [
+            0.735,
+            0.265
+          ],
+          "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Jerome Powell be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "4917727600977017653784321604136931411383144252055902733301510335200577014453",
+          "amount": 26.05,
+          "prices": [
+            0.085,
+            0.915
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will James Talarico be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "111597729371760155208100172414381200777957149730404680620365117456232056799422",
+          "amount": 20.0,
+          "prices": [
+            0.24,
+            0.76
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Taylor Swift be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "86722672886488891236625211440339711539485151218557543737719778041662018073249",
+          "amount": 7.13,
+          "prices": [
+            0.1,
+            0.9
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x2f26606ccc45a934838a97d44a30c32012ae0d8f",
+      "name": "GUINESS123",
+      "source_market_count": 9,
+      "total_holder_amount": 602.0,
+      "max_holder_amount": 338.0,
+      "score": 24.56,
+      "verdict": "reject",
+      "summary": "reject: 300 closed, pnl=133629, non_election=131730, pf=999.00, sports=85%, single_event=2%",
+      "metrics": {
+        "wallet_address": "0x2f26606ccc45a934838a97d44a30c32012ae0d8f",
+        "closed_positions_count": 300,
+        "open_positions_count": 200,
+        "net_pnl": 133628.61,
+        "non_election_pnl": 131729.88,
+        "election_pnl": 1898.73,
+        "profit_factor": 999.0,
+        "win_rate": 1.0,
+        "sports_ratio": 0.853,
+        "arbitrage_like_ratio": 0.853,
+        "single_event_dependency": 0.02,
+        "positive_single_event_dependency": 0.02,
+        "election_dependency": 0.014,
+        "avg_entry_price": 0.4919,
+        "low_price_ratio": 0.047,
+        "high_price_ratio": 0.01,
+        "market_diversity_ratio": 0.997,
+        "open_unrealized_roi": -0.71,
+        "topic_counts": {
+          "sports": 256,
+          "other": 35,
+          "crypto": 5,
+          "politics": 2,
+          "tech": 2
+        },
+        "topic_pnl": {
+          "sports": 114326.09,
+          "other": 12068.49,
+          "crypto": 4502.16,
+          "politics": 1898.73,
+          "tech": 833.14
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": true,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "history_truncated_needs_full_pagination",
+        "sports_ratio_high",
+        "arbitrage_or_sports_market_pattern"
+      ],
+      "source_markets": [
+        {
+          "event": "Who will close Warner Bros. acquisition?",
+          "question": "No listed company closes Warner Bros acquisition by June 30, 2027",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "92247462418331121567176516538364198127633745062455470091774998340990979894644",
+          "amount": 338.0,
+          "prices": [
+            0.145,
+            0.855
+          ],
+          "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Dario Amodei be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "23290231001956224045200722936263539744197541041811570296625986343049561705983",
+          "amount": 56.0,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Reid Wiseman be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "66857329199905570465368559658210223760264798803480282496856484065441495906273",
+          "amount": 50.0,
+          "prices": [
+            0.295,
+            0.705
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will ChatGPT be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "22076556895864251825445230615432784251365295047008338599447913775221108528802",
+          "amount": 50.0,
+          "prices": [
+            0.275,
+            0.725
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Victor Glover be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "46184468207884350472956586001359096407499319668760213167805292046622472002579",
+          "amount": 50.0,
+          "prices": [
+            0.285,
+            0.715
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Marco Rubio be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "34549773038979064901724285499914776654132933909773184675996537142779268108127",
+          "amount": 30.0,
+          "prices": [
+            0.355,
+            0.645
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Shehbaz Sharif be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "14704364337221156454384409567424396003915390765729895004695230356621961826440",
+          "amount": 13.0,
+          "prices": [
+            0.28,
+            0.72
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Jeremy Hansen be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "11629684724669838579107486241145562454602335832049201636246187319643204633328",
+          "amount": 10.0,
+          "prices": [
+            0.105,
+            0.895
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        },
+        {
+          "event": "TIME Person of the Year 2026",
+          "question": "Will Pope Leo XIV be TIME Person of the Year 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "95303672580215270288772409575952564223736310435417524375146690450384551256383",
+          "amount": 5.0,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/time-person-of-the-year-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0x2e673e522bf2880877f785415387f4c16859b536",
+      "name": "GRodBets",
+      "source_market_count": 6,
+      "total_holder_amount": 545.07,
+      "max_holder_amount": 152.37,
+      "score": -2.54,
+      "verdict": "reject",
+      "summary": "reject: 106 closed, pnl=-94, non_election=2, pf=0.62, sports=0%, single_event=11%",
+      "metrics": {
+        "wallet_address": "0x2e673e522bf2880877f785415387f4c16859b536",
+        "closed_positions_count": 106,
+        "open_positions_count": 11,
+        "net_pnl": -94.06,
+        "non_election_pnl": 2.26,
+        "election_pnl": -96.32,
+        "profit_factor": 0.623,
+        "win_rate": 0.264,
+        "sports_ratio": 0.0,
+        "arbitrage_like_ratio": 0.009,
+        "single_event_dependency": 0.107,
+        "positive_single_event_dependency": 0.28,
+        "election_dependency": 1.024,
+        "avg_entry_price": 0.2236,
+        "low_price_ratio": 0.491,
+        "high_price_ratio": 0.009,
+        "market_diversity_ratio": 0.981,
+        "open_unrealized_roi": -0.154,
+        "topic_counts": {
+          "tech": 39,
+          "politics": 28,
+          "other": 22,
+          "crypto": 11,
+          "economics": 3,
+          "geopolitics": 2,
+          "weather": 1
+        },
+        "topic_pnl": {
+          "politics": -96.32,
+          "other": 56.49,
+          "crypto": -36.98,
+          "tech": -22.36,
+          "economics": 3.14,
+          "geopolitics": 1.68,
+          "weather": 0.29
+        },
+        "address_entity_risk": "unknown",
+        "history_truncated": false,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "net_pnl_non_positive",
+        "profit_factor_lt_1_5",
+        "election_dependency_high"
+      ],
+      "source_markets": [
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a ring in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "105793471410600103279818302661836433120260173055196756819977205026613295786512",
+          "amount": 152.37,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a head-mounted display in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "24535511360909789070465577593343267401226583512825755634755701071660338255675",
+          "amount": 126.0,
+          "prices": [
+            0.115,
+            0.885
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a phone in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "4967389004560237148087059097306936016483726557350463241288661442119258090198",
+          "amount": 103.97,
+          "prices": [
+            0.175,
+            0.825
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a computer (Laptop/Desktop) in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "15596881315836367767699003429490212721537835348949574643253042524587080151396",
+          "amount": 60.0,
+          "prices": [
+            0.125,
+            0.875
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a watch in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "77120919023569550198628906932983149373349506964926056595149258435958662028903",
+          "amount": 51.74,
+          "prices": [
+            0.155,
+            0.845
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        },
+        {
+          "event": "What kind of product will OpenAI announce in 2026?",
+          "question": "Will OpenAI announce a necklace-style wearable in 2026?",
+          "outcome_index": 0,
+          "outcome": "Yes",
+          "asset": "20826236952766096458839542076301237144154160218855573686197597978501264662054",
+          "amount": 50.99,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/what-kind-of-product-will-openai-announce-in-2026"
+        }
+      ]
+    },
+    {
+      "wallet": "0xa5ef39c3d3e10d0b270233af41cac69796b12966",
+      "name": "",
+      "source_market_count": 6,
+      "total_holder_amount": 859966.06,
+      "max_holder_amount": 380182.76,
+      "score": -25.0,
+      "verdict": "reject",
+      "summary": "reject: 0 closed, pnl=0, non_election=0, pf=0.00, sports=0%, single_event=0%",
+      "metrics": {
+        "wallet_address": "0xa5ef39c3d3e10d0b270233af41cac69796b12966",
+        "closed_positions_count": 0,
+        "open_positions_count": 200,
+        "net_pnl": 0.0,
+        "non_election_pnl": 0.0,
+        "election_pnl": 0.0,
+        "profit_factor": 0.0,
+        "win_rate": 0.0,
+        "sports_ratio": 0.0,
+        "arbitrage_like_ratio": 0.0,
+        "single_event_dependency": 0.0,
+        "positive_single_event_dependency": 0.0,
+        "election_dependency": 0.0,
+        "avg_entry_price": 0.0,
+        "low_price_ratio": 0.0,
+        "high_price_ratio": 0.0,
+        "market_diversity_ratio": 0.0,
+        "open_unrealized_roi": 0.0,
+        "topic_counts": {},
+        "topic_pnl": {},
+        "address_entity_risk": "unknown",
+        "history_truncated": false,
+        "max_closed_rows": 300
+      },
+      "reasons": [
+        "closed_positions_count_lt_30",
+        "net_pnl_non_positive",
+        "non_election_pnl_non_positive",
+        "profit_factor_lt_1_5"
+      ],
+      "source_markets": [
+        {
+          "event": "Which company has best AI model end of June?",
+          "question": "Will Google have the best AI model at the end of June 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "55343546711440719852073804567266677523610031228702521608443447223099518953270",
+          "amount": 380182.76,
+          "prices": [
+            0.095,
+            0.905
+          ],
+          "link": "https://polymarket.com/event/which-company-has-best-ai-model-end-of-june"
+        },
+        {
+          "event": "Which company has best AI model end of June?",
+          "question": "Will Anthropic have the best AI model at the end of June 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "30662373172786599831266104485692607706499745571163346900841435096131975532212",
+          "amount": 380182.76,
+          "prices": [
+            0.8695,
+            0.1305
+          ],
+          "link": "https://polymarket.com/event/which-company-has-best-ai-model-end-of-june"
+        },
+        {
+          "event": "Who will close Warner Bros. acquisition?",
+          "question": "No listed company closes Warner Bros acquisition by June 30, 2027",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "92247462418331121567176516538364198127633745062455470091774998340990979894644",
+          "amount": 39987.03,
+          "prices": [
+            0.145,
+            0.855
+          ],
+          "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+        },
+        {
+          "event": "Who will close Warner Bros. acquisition?",
+          "question": "Will Paramount close Warner Bros acquisition?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "12068609223027041437214952122316923930875444851110633205851320421601762942510",
+          "amount": 39987.03,
+          "prices": [
+            0.735,
+            0.265
+          ],
+          "link": "https://polymarket.com/event/who-will-close-warner-bros-acquisition"
+        },
+        {
+          "event": "Which company has second best AI model end of June?",
+          "question": "Will Anthropic have the second best AI model at the end of June 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "5538562443875428867500672375202854162152939479748531464040733138526462851199",
+          "amount": 9813.24,
+          "prices": [
+            0.68,
+            0.32
+          ],
+          "link": "https://polymarket.com/event/which-company-has-second-best-ai-model-end-of-june"
+        },
+        {
+          "event": "Which company has second best AI model end of June?",
+          "question": "Will Google have the second best AI model at the end of June 2026?",
+          "outcome_index": 1,
+          "outcome": "No",
+          "asset": "34259708138713628324985799192959228781142905350383459948552349770868947944528",
+          "amount": 9813.24,
+          "prices": [
+            0.255,
+            0.745
+          ],
+          "link": "https://polymarket.com/event/which-company-has-second-best-ai-model-end-of-june"
+        }
+      ]
+    }
+  ]
+}

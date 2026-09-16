@@ -1,0 +1,299 @@
+import json
+import sqlite3
+
+import pytest
+
+from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
+from weather_dashboard.db.connection import apply_pragmas
+from weather_dashboard.ingest.pm_history_settlements import _signal_lookup_map, ingest
+
+
+@pytest.fixture
+def canonical_conn():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    apply_pragmas(conn)
+    apply_schema_canonical(conn)
+    yield conn
+    conn.close()
+
+
+def test_pm_history_ingest_writes_city_bracket_outcomes(canonical_conn, tmp_path):
+    canonical_conn.execute(
+        """
+        INSERT INTO signals (
+            signal_id, producer_system, producer_run_id, snapshot_ts_utc, snapshot_file,
+            target_date, city, city_pool, icao, bracket, unit, signal_side,
+            model_version, model_p_yes, forecast_source, market_price, edge, abs_edge,
+            condition_id, market_id, token_id, hours_to_settle
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "a" * 64,
+            "pm_agent_local",
+            "snapshot_20260601_1200",
+            "2026-06-01T12:00:00Z",
+            "snapshot.json",
+            "2026-06-01",
+            "Tokyo",
+            "t1_trading",
+            "RJTT",
+            "23",
+            "C",
+            "YES",
+            "gfs",
+            0.8,
+            "open_meteo_live_gfs",
+            0.55,
+            0.25,
+            0.25,
+            "condition-23",
+            "market-23",
+            "token-23",
+            18.0,
+        ),
+    )
+    canonical_conn.commit()
+
+    pmh_dir = tmp_path / "pm_history"
+    pmh_dir.mkdir()
+    (pmh_dir / "Tokyo_2026-06-01.json").write_text(
+        json.dumps(
+            {
+                "unit": "C",
+                "brackets": [
+                    {"label": "23", "final_price": 0.9995, "token_id": "token-23", "closed": True},
+                    {"label": "24", "final_price": 0.0005, "token_id": "token-24", "closed": True},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    stats = ingest(canonical_conn, str(pmh_dir))
+
+    assert stats["brackets_seen"] == 2
+    assert stats["settlement_outcomes_inserted"] == 2
+    assert stats["settlements_inserted"] == 2
+    assert stats["signal_identity_fallback"] == 1
+    assert stats["no_identity_match"] == 1
+    rows = canonical_conn.execute(
+        """
+        SELECT city, target_date, bracket, condition_id, raw_final_price,
+               final_price, settlement_status, source_path
+        FROM settlement_outcomes
+        ORDER BY bracket
+        """
+    ).fetchall()
+    assert [dict(row) for row in rows] == [
+        {
+            "city": "Tokyo",
+            "target_date": "2026-06-01",
+            "bracket": "23",
+            "condition_id": "condition-23",
+            "raw_final_price": 0.9995,
+            "final_price": 1.0,
+            "settlement_status": "settled",
+            "source_path": str(pmh_dir / "Tokyo_2026-06-01.json"),
+        },
+        {
+            "city": "Tokyo",
+            "target_date": "2026-06-01",
+            "bracket": "24",
+            "condition_id": None,
+            "raw_final_price": 0.0005,
+            "final_price": 0.0,
+            "settlement_status": "settled",
+            "source_path": str(pmh_dir / "Tokyo_2026-06-01.json"),
+        },
+    ]
+
+    stats_second = ingest(canonical_conn, str(pmh_dir))
+    assert stats_second["settlement_outcomes_inserted"] == 0
+    assert canonical_conn.execute("SELECT COUNT(*) FROM settlement_outcomes").fetchone()[0] == 2
+
+
+def test_pm_history_ingest_prefers_embedded_market_identity_without_signal(
+    canonical_conn, tmp_path
+):
+    pmh_dir = tmp_path / "pm_history"
+    pmh_dir.mkdir()
+    (pmh_dir / "Amsterdam_2026-09-01.json").write_text(
+        json.dumps(
+            {
+                "unit": "C",
+                "brackets": [
+                    {
+                        "label": "17",
+                        "final_price": 0.0005,
+                        "token_id": "token-17",
+                        "condition_id": "condition-17",
+                        "market_id": "market-17",
+                        "closed": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    stats = ingest(canonical_conn, str(pmh_dir))
+
+    assert stats["embedded_identity"] == 1
+    assert stats["signal_identity_fallback"] == 0
+    assert stats["no_identity_match"] == 0
+    row = canonical_conn.execute(
+        "SELECT condition_id, market_id, final_price, settlement_status FROM settlements"
+    ).fetchone()
+    assert dict(row) == {
+        "condition_id": "condition-17",
+        "market_id": "market-17",
+        "final_price": 0.0,
+        "settlement_status": "settled",
+    }
+
+
+def test_pm_history_ingest_rejects_embedded_signal_identity_mismatch(
+    canonical_conn, tmp_path
+):
+    canonical_conn.execute(
+        """
+        INSERT INTO signals (
+            signal_id, producer_system, producer_run_id, snapshot_ts_utc, snapshot_file,
+            target_date, city, city_pool, icao, bracket, unit, signal_side,
+            model_version, model_p_yes, forecast_source, market_price, edge, abs_edge,
+            condition_id, market_id, token_id, hours_to_settle
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "b" * 64, "pm_agent_local", "snapshot", "2026-09-01T12:00:00Z",
+            "snapshot.json", "2026-09-01", "Amsterdam", "t1_trading", "EHAM",
+            "17", "C", "YES", "gfs", 0.8, "source", 0.55, 0.25, 0.25,
+            "signal-condition", "signal-market", "token", 18.0,
+        ),
+    )
+    pmh_dir = tmp_path / "pm_history"
+    pmh_dir.mkdir()
+    (pmh_dir / "Amsterdam_2026-09-01.json").write_text(
+        json.dumps(
+            {
+                "unit": "C",
+                "brackets": [
+                    {
+                        "label": "17",
+                        "final_price": 0.0,
+                        "condition_id": "payload-condition",
+                        "market_id": "payload-market",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="condition_id mismatch"):
+        ingest(canonical_conn, str(pmh_dir))
+
+
+def test_pm_history_ingest_filters_target_date(canonical_conn, tmp_path):
+    pmh_dir = tmp_path / "pm_history"
+    pmh_dir.mkdir()
+    payload = {"unit": "C", "brackets": [{"label": "23", "final_price": 1.0}]}
+    for target_date in ("2026-07-14", "2026-07-15"):
+        (pmh_dir / f"Tokyo_{target_date}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    stats = ingest(
+        canonical_conn,
+        str(pmh_dir),
+        start_date="2026-07-15",
+        end_date="2026-07-15",
+        cities=["Tokyo"],
+    )
+
+    assert stats["files_seen"] == 1
+    assert canonical_conn.execute(
+        "SELECT DISTINCT target_date FROM settlement_outcomes"
+    ).fetchone()[0] == "2026-07-15"
+
+
+def test_signal_lookup_map_filters_target_date_before_scanning(canonical_conn):
+    rows = []
+    for index, target_date in enumerate(("2026-07-14", "2026-07-15"), start=1):
+        rows.append(
+            (
+                str(index) * 64,
+                "pm_agent_local",
+                f"snapshot_{index}",
+                f"{target_date}T12:00:00Z",
+                "snapshot.json",
+                target_date,
+                "Tokyo",
+                "t1_trading",
+                "RJTT",
+                "23",
+                "C",
+                "YES",
+                "gfs",
+                0.8,
+                "open_meteo_live_gfs",
+                0.55,
+                0.25,
+                0.25,
+                f"condition-{index}",
+                f"market-{index}",
+                f"token-{index}",
+                18.0,
+            )
+        )
+    canonical_conn.executemany(
+        """
+        INSERT INTO signals (
+            signal_id, producer_system, producer_run_id, snapshot_ts_utc, snapshot_file,
+            target_date, city, city_pool, icao, bracket, unit, signal_side,
+            model_version, model_p_yes, forecast_source, market_price, edge, abs_edge,
+            condition_id, market_id, token_id, hours_to_settle
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        rows,
+    )
+
+    lookup = _signal_lookup_map(
+        canonical_conn,
+        start_date="2026-07-15",
+        end_date="2026-07-15",
+    )
+
+    assert lookup == {
+        ("Tokyo", "2026-07-15", "23"): ("condition-2", "market-2")
+    }
+
+
+def test_signal_lookup_map_rejects_ambiguous_legacy_identity(canonical_conn):
+    base = (
+        "pm_agent_local", "snapshot", "2026-07-15T12:00:00Z", "snapshot.json",
+        "2026-07-15", "Tokyo", "t1_trading", "RJTT", "23", "C", "YES",
+        "gfs", 0.8, "open_meteo_live_gfs", 0.55, 0.25, 0.25,
+    )
+    canonical_conn.executemany(
+        """
+        INSERT INTO signals (
+            signal_id, producer_system, producer_run_id, snapshot_ts_utc, snapshot_file,
+            target_date, city, city_pool, icao, bracket, unit, signal_side,
+            model_version, model_p_yes, forecast_source, market_price, edge, abs_edge,
+            condition_id, market_id, token_id, hours_to_settle
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            ("c" * 64, *base, "condition-a", "market-a", "token-a", 18.0),
+            ("d" * 64, *base, "condition-b", "market-b", "token-b", 18.0),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="conflicting signal identity fallback"):
+        _signal_lookup_map(
+            canonical_conn,
+            start_date="2026-07-15",
+            end_date="2026-07-15",
+        )

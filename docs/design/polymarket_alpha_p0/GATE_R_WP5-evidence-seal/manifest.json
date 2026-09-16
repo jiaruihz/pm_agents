@@ -1,0 +1,31 @@
+{
+  "disposition": "COMPLETE",
+  "delivery_commit": "SAME_COMMIT_AS_THIS_MANIFEST",
+  "parent_commit": "0e4524c6",
+  "scope": "GATE_R_WP5_OFFLINE_ONLY",
+  "worker": {
+    "agent": "terra_worker",
+    "model": "gpt-5.6-terra",
+    "reasoning_effort": "medium",
+    "usage_telemetry": "unavailable"
+  },
+  "review": {
+    "agent": "luna_verifier",
+    "initial_disposition": "REQUEST_CHANGES",
+    "final_findings_closed": 2,
+    "usage_telemetry": "unavailable"
+  },
+  "tests": {
+    "focused": {"passed": 148, "failed": 0},
+    "full_alpha": {"passed": 724, "failed": 3},
+    "full_alpha_known_environment_failures": [
+      "test_security_final_p0_11.py::test_os_sandbox_canary_is_explicitly_not_run_without_sandbox_exec",
+      "test_security_os_sandbox_p0_11.py::test_os_sandbox_denies_raw_network_connect",
+      "test_security_os_sandbox_p0_11.py::test_os_sandbox_receives_explicit_secret_free_environment"
+    ],
+    "environment_failure": "nested sandbox-exec returns sandbox_apply: Operation not permitted"
+  },
+  "external_calls": 0,
+  "execution": "NO_ORDER",
+  "readiness_after_wp5": "AWAITING_EXPLICIT_WP6_CONTROLLED_PILOT_AUTHORIZATION"
+}

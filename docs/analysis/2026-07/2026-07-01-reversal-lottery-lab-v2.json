@@ -1,0 +1,57 @@
+{
+  "data_snapshot": {
+    "db_path": "runtime/weather.db",
+    "db_mtime_utc": "2026-07-01T08:42:49.843914032+00:00",
+    "gate_pass": true,
+    "fact_trades_live_real": {
+      "cost_usd": 2288.405722,
+      "executions": 508,
+      "fill_ids": 867,
+      "rows": 867
+    },
+    "fact_trades": {
+      "rows": 4412,
+      "min_date": "2026-05-06",
+      "max_date": "2026-06-30",
+      "fact_built_at_utc": "2026-07-01T08:04:15.729897+00:00"
+    },
+    "fact_signal_candidates": {
+      "rows": 41047,
+      "min_date": "2026-05-05",
+      "max_date": "2026-07-01",
+      "fact_built_at_utc": "2026-07-01T08:42:49.238944+00:00"
+    },
+    "low_price_yes_settled": {
+      "rows": 4381,
+      "min_date": "2026-05-06",
+      "max_date": "2026-06-26"
+    },
+    "low_price_yes_unsettled": {
+      "rows": 376,
+      "min_date": "2026-05-17",
+      "max_date": "2026-06-30",
+      "dates": 7,
+      "cities": 48
+    },
+    "low_price_yes_source_grain_overlay": {
+      "rows": 4381,
+      "min_date": "2026-05-06",
+      "max_date": "2026-06-26",
+      "dates": 51,
+      "cities": 49,
+      "fsc_settled_rows": 4381,
+      "overlay_filled_rows": 0
+    }
+  },
+  "low_price_overlay_rows": 4381,
+  "expression_rows": 3363,
+  "summary_rows": 48,
+  "detail_rows": 7649,
+  "artifacts": {
+    "summary": "docs/analysis/2026-07/generated/reversal_lottery_lab_v2/summary.csv",
+    "details": "docs/analysis/2026-07/generated/reversal_lottery_lab_v2/details.csv",
+    "daily": "docs/analysis/2026-07/generated/reversal_lottery_lab_v2/daily.csv",
+    "city": "docs/analysis/2026-07/generated/reversal_lottery_lab_v2/city_contribution.csv",
+    "regime": "docs/analysis/2026-07/generated/reversal_lottery_lab_v2/regime_contribution.csv"
+  }
+}

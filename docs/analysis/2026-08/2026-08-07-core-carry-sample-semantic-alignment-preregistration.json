@@ -1,0 +1,19 @@
+{
+  "schema_version": "weather_research_prereg_v1",
+  "research_id": "core_carry_llm_transition_card_v1",
+  "run_id": "sample_semantic_alignment_gpt54_20260807",
+  "frozen_before_formal_run": true,
+  "created_at_utc": "2026-08-07T04:05:00Z",
+  "hypothesis": "A blind LLM reading of each sample's PIT METAR sequence and forecast path can identify physical support, counterevidence, and omitted mechanisms that are materially inconsistent with the production Core v3 feature-contribution direction.",
+  "denominator": "The same 63 pre-label policy-contrast checkpoints: all 28 policy-selected v3 checkpoints, 7 earlier same-city-day non-positive-EV checkpoints, and 28 never-selected matched controls. Every underlying Core-scored row remains in the quantitative ledger.",
+  "information_order": [
+    "LLM receives only PIT weather observations, report/first-seen clocks, forecast curve and deterministic physical state",
+    "LLM card is frozen",
+    "production model logit contributions, market probability, policy role and settlement are attached afterward",
+    "human/structured audit classifies aligned, ambiguous, omitted or materially conflicting semantics"
+  ],
+  "production_model": "current_yes_core_carry_model_v3_no_peak_clock; market_logit + local hour + dewpoint depression + wind speed",
+  "primary_output": "Per-sample dossier with raw METAR sequence, LLM physical read, exact model feature contributions, omitted-present signals, settlement and a semantic alignment judgment.",
+  "analysis_boundary": "Retrospective mechanism audit only. No probability-head fitting, performance promotion, gate, veto or live action.",
+  "live_action": "None."
+}

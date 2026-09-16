@@ -1,0 +1,30 @@
+{
+  "schema_version": "tokyo_pre_cross_zero_notional_candidate_v2",
+  "user_facing_version": "Tokyo V2",
+  "human_summary": "cross前升温/离档模型：JMA首次到current+0.3/+0.4C时判断当前exact bracket最终是否会被向上离开",
+  "model_id": "weather.city_intraday_probability.tokyo_pre_cross_market_sharpening",
+  "candidate_grain_version": "tokyo_first_pre_cross_proximity_per_bracket_v1",
+  "effective_from_target_date": "2026-08-12",
+  "source": "jma_amedas",
+  "clock_requirement": "collector_exact_first_seen",
+  "state_rule": {
+    "source_rounded_bracket_equals_official_current": true,
+    "pre_cross_margin_c": [0.3, 0.5],
+    "interval": "left_closed_right_open",
+    "selection": "first state entry per target_date and exact bracket"
+  },
+  "posterior": {
+    "formula": "P_market_NO below 0.5 is unchanged; otherwise sigmoid(exponent * logit(P_market_NO))",
+    "market_confirmation_floor": 0.5,
+    "exponent": 2.0,
+    "weather_innovation_alpha": 0.0
+  },
+  "execution_uncertainty_reserve": {
+    "formula": "max(minimum_reserve, spread_multiplier * (ask - bid))",
+    "minimum_reserve": 0.001,
+    "spread_multiplier": 0.5
+  },
+  "side": "NO",
+  "shares_if_replayed": 5.0,
+  "live_notional": 0.0
+}

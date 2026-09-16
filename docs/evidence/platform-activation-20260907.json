@@ -1,0 +1,408 @@
+{
+  "date": "2026-09-07",
+  "acceptance": "passed_for_authorized_platform_control_plane_activation",
+  "scope": {
+    "updated": [
+      "controller-managed weather_dashboard_api",
+      "existing production reliability LaunchAgent",
+      "existing dashboard views",
+      "explicit platform control DB generation pointer"
+    ],
+    "not_restarted": [
+      "strategy runtimes",
+      "collectors",
+      "canonical JRS permission host"
+    ],
+    "new_executor": false,
+    "new_business_schema": false,
+    "mutation_ui": false,
+    "fund_parameters_changed": false
+  },
+  "deployed_code_sha": "9764201544bc19a3393de6e66c7ac76f0d80de49",
+  "release_root": "/Users/deepsleep/.local/share/pm_agents/releases/platform_control_plane/9764201544bc19a3393de6e66c7ac76f0d80de49",
+  "config_commit": "023230553c4d1de49e2e26c43a8cf5eaf4ff90d7",
+  "dashboard_handoff_commit": "de449f29d2b90b7bf0e010ee1b533bb8fb556178",
+  "active_db": "/Users/deepsleep/projects/pm_agents/runtime/platform/generations/production-20260907/platform_control.db",
+  "migration": {
+    "source": "/Users/deepsleep/projects/pm_agents-platform-closure/runtime/platform/generations/closure-verified-20260907/platform_control.db",
+    "method": "SQLite consistent backup; full iterdump parity before activation",
+    "schema": 2,
+    "previous_generations_retained": true,
+    "initial_catalog_instances": 44,
+    "production_catalog_conflicts": []
+  },
+  "controller": {
+    "action": "restart weather_dashboard_api --apply",
+    "target_postcondition": "healthy",
+    "target_issues": [],
+    "source_observed_at": "2026-09-06T16:22:46.651297Z",
+    "record_id": "d6109723cb6f3a03b0d84952a86950c38218c065f88a2931c59431b2dcc813b0",
+    "source_ref": "controller://platform-activation-20260907/dashboard-api-restart",
+    "source_hash": "fb9b603a8750ea0fcd3f5a9753847f8db421f45d5cc06fd1e7e750e2978f7ba0",
+    "seconds": {
+      "restart": 4.647819,
+      "post_verify": 23.811589,
+      "operation_total": 28.45946,
+      "initial_manifest": 16.006715,
+      "health_preflight": 2.187461,
+      "initial_plan": 0.00032,
+      "command_total": 46.656692
+    },
+    "overall_returncode": 2,
+    "overall_returncode_explanation": "Unrelated Amsterdam shadow artifact age 515 seconds at postcondition; target healthy, Amsterdam refreshed without PID change; later weather health has no critical runtime."
+  },
+  "supervisor": {
+    "owner_preserved": true,
+    "state_bytes_identical_while_maintenance_lock_held": true,
+    "flags_preserved": [
+      "--notify",
+      "--maintain-weather-route",
+      "--apply-safe",
+      "--apply-guarded-live",
+      "--apply-jrs-recovery"
+    ],
+    "interval_seconds": 60,
+    "observed_successful_cycles": [
+      "2026-09-06T16:26:40.152466Z",
+      "2026-09-06T16:29:16.364352Z",
+      "2026-09-06T16:36:52.544990Z",
+      "2026-09-06T16:41:41.531165Z"
+    ],
+    "native_repair_rows": 1694,
+    "new_repair_actions_during_observed_activation": 0
+  },
+  "final_snapshot": {
+    "observed_native_at": "2026-09-06T16:41:41.531165Z",
+    "native_status": "critical",
+    "active_keys": [
+      "crypto.runtime.incomplete"
+    ],
+    "pending_keys": [],
+    "projection": {
+      "authority_mode": "projection_only",
+      "journals": [
+        {
+          "inserted": 0,
+          "offset": 2185065,
+          "processed": 0,
+          "source": "/Users/deepsleep/Library/Application Support/pm_agents/production_reliability/events.jsonl",
+          "status": "caught_up"
+        },
+        {
+          "inserted": 0,
+          "offset": 3424938,
+          "processed": 0,
+          "source": "/Users/deepsleep/Library/Application Support/pm_agents/production_reliability/repair_actions.jsonl",
+          "status": "caught_up"
+        }
+      ],
+      "status": "ok"
+    },
+    "launchagent_only_paths_changed": true,
+    "counts": {
+      "managed_instance": 44,
+      "release": 36,
+      "platform_run": 2,
+      "metric": 137,
+      "incident": 3134,
+      "incident_event": 6267,
+      "incident_impact": 1186,
+      "operation_request": 0,
+      "operation_receipt": 0,
+      "workflow_step": 0
+    },
+    "integrity": "ok",
+    "foreign_key_findings": 0,
+    "api_desired_release": [
+      [
+        "platform_control_plane",
+        "9764201544bc19a3393de6e66c7ac76f0d80de49"
+      ]
+    ],
+    "manifest": {
+      "before_at": "2026-09-06T16:20:12+00:00",
+      "after_at": "2026-09-06T16:38:49+00:00",
+      "status": "warning",
+      "registered_before": 41,
+      "registered_after": 41,
+      "missing": [],
+      "pid_changes": {
+        "weather_dashboard_api": [
+          [
+            70578
+          ],
+          [
+            48133
+          ]
+        ]
+      },
+      "retained_pids": {
+        "europe_d1_distance2_dual_no_shadow_v1": [
+          70460
+        ],
+        "europe_d1_distance2_lineage_adapter_v1": [
+          70464
+        ],
+        "low_price_yes_integrated_tail_shadow_v2": [
+          70468
+        ],
+        "low_price_yes_lottery_shadow_v1": [
+          70472
+        ],
+        "market_implied_tail_residual_shadow_v1": [
+          70475
+        ],
+        "metar_reversal_false_fade_reheat_shadow_v1": [
+          70480
+        ],
+        "paired_bid_mm_shadow_v1": [
+          70491
+        ],
+        "regime_routed_no_shadow_v1": [
+          70498
+        ],
+        "tmax_distribution_edge_first_lock_no_current_yes_shadow_v1": [
+          70509
+        ],
+        "weather_amsterdam_wcir_frozen_shadow_v2": [
+          70528
+        ],
+        "weather_city_probability_runtime_v3": [
+          70543
+        ],
+        "weather_core_carry_near_core_ws_controller": [
+          70552
+        ],
+        "weather_current_yes_core_carry_event_rescore_shadow_v1": [
+          70558
+        ],
+        "weather_current_yes_core_carry_market_state_shadow_v2": [
+          70566
+        ],
+        "weather_current_yes_core_carry_tiny_live_v2": [
+          70571
+        ],
+        "weather_current_yes_heat_death_shadow_v1": [
+          70575
+        ],
+        "weather_data_feed_jrs": [
+          70583
+        ],
+        "weather_fast_source_prev_no_trial": [
+          70585
+        ],
+        "weather_fast_source_stale_book": [
+          70601
+        ],
+        "weather_first_selective_maker_v2_1_shadow": [
+          70615
+        ],
+        "weather_forecast_curve_collector_v1": [
+          70620
+        ],
+        "weather_forecast_run_capture_v1": [
+          72927
+        ],
+        "weather_helsinki_pre_cross_active_ladder_shadow": [
+          70646
+        ],
+        "weather_jrs_context_keeper": [
+          70191
+        ],
+        "weather_knmi_first_seen_ladder_v1": [
+          70653
+        ],
+        "weather_knmi_open_data_jrs": [
+          70659
+        ],
+        "weather_korea_first_seen_state_v1": [
+          70665
+        ],
+        "weather_live_cross_observations": [
+          70676
+        ],
+        "weather_market_books": [
+          70681,
+          70685
+        ],
+        "weather_mm_w3_risk_limited_paired_probe_shadow_v2": [
+          70690
+        ],
+        "weather_proposal_reward_shadow_v1": [
+          70697
+        ],
+        "weather_runtime_log_maintainer": [
+          70716
+        ],
+        "weather_scheduled_informed_maker_shadow_v1": [
+          70725
+        ],
+        "weather_source_event_ladder_repricing_shadow": [
+          70728,
+          70732
+        ],
+        "weather_tmin_cross_prev_no_shadow_v1": [
+          70736
+        ],
+        "weather_tmin_no_further_cooling_shadow_v1": [
+          70745
+        ],
+        "weather_tmin_no_further_cooling_tiny_live_v1": [
+          70753
+        ],
+        "weather_tmin_v2_2_probability_shadow_v1": [
+          70758
+        ],
+        "weather_tokyo_current_break_active_ladder_shadow_v1": [
+          70762
+        ],
+        "weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1": [
+          70766
+        ]
+      },
+      "db_route_status": "healthy"
+    },
+    "source_hashes": {
+      "/tmp/platform-activation.06SgnZ/switch-pre-manifest.json": "29a752a2438622151594fa76855536636ad2e9407445c51fcf9566dca90aea53",
+      "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/canonical_refresh/production_manifest.json": "5caae5ef44d6e9a2b9e2e326935557dd9faaff88cfa4fcea8756b30788330ad3",
+      "/tmp/platform-activation.06SgnZ/production-before.yaml": "389fed3fcd5105d91272a6deb14a054dc6bba1f0962c17078054d361474877a9",
+      "/tmp/platform-activation.06SgnZ/production-proposed.yaml": "5a21e924f6189488877fe6d6bc144c27c4989d2d9b40daac1dfcead3457caac8",
+      "/tmp/platform-activation.06SgnZ/supervisor-before.plist": "0949c0af73a700cd2ca4be824f2f6791e0ed481e7dbd2c918793ec1f2cf88e3c"
+    }
+  },
+  "canonical": {
+    "path": "/Volumes/jrs/pm_agents/runtime/weather.db",
+    "device": 16777244,
+    "inode": 54444,
+    "compatibility_same_file": true,
+    "storage_audit": "healthy",
+    "jrs_probes": "3 successful",
+    "preflight_at": "2026-09-06T16:38:54.602973Z",
+    "refresh_preflight": "ready",
+    "current_refresh_stages": "ingest_runtime_orders, clob_fill_sync_attempt_1, materialize_execution_evidence, build_fact_trades, fill_coverage_gate all passed, rc=0",
+    "old_failed_attempt": "clob_fill_sync_attempt_3 from 2026-09-03 is historical, not current invocation"
+  },
+  "live_journal_prefixes": {
+    "verified_unchanged": true,
+    "files": [
+      {
+        "path": "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/live_orders.jsonl",
+        "bytes": 3884804,
+        "lines": 554,
+        "sha256": "1a8ffcc9e44489cb0d4c73d478c5ce411318779ed75eb6650755edfbe5f7bdef"
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/orders.jsonl",
+        "bytes": 7955997,
+        "lines": 1036,
+        "sha256": "677dcd19a711795191c3fbb87741cad4e8541d7f9b51fe4af5537e616e90b016"
+      },
+      {
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v2/orders.jsonl",
+        "bytes": 64595,
+        "lines": 16,
+        "sha256": "bd32834b8cc6d867c7ba9fe27965144848339cb0567c5aeaaf213c6b47f88185"
+      }
+    ],
+    "note": "Tmin expected order journal absent before; no zero-activity inference."
+  },
+  "downstream_cli": {
+    "account_reconcile_exit": 0,
+    "scope": "2026-09-06 fill_date_bj, all declared live instances, 4 raw journals",
+    "fact_build_at": "2026-09-06T16:32:57.476937+00:00",
+    "max_fill_at": "2026-09-06T14:39:51+00:00",
+    "db_fills": 1653,
+    "raw_fills": 1653,
+    "db_not_in_raw": 0,
+    "raw_not_in_db": 0,
+    "standalone_coverage_exit": 0,
+    "gate_pass": true,
+    "missing_order_rows": 0,
+    "over_order_keys": 0,
+    "fill_cost_minus_fact_cost": 0,
+    "adjusted_db_minus_cache_cost": 0,
+    "matched_taker_zero_fee_without_evidence": 0,
+    "fee_lineage": {
+      "exact": 1140,
+      "maker_zero": 448,
+      "estimate": 65,
+      "unknown": 0
+    },
+    "note": "Compatibility/evidence check, not authenticated wallet cash bridge or PnL report."
+  },
+  "http": {
+    "all_status": 200,
+    "paths": [
+      "/health",
+      "/api/runs?limit=1",
+      "/api/live/summary",
+      "/api/platform/health",
+      "/api/platform/runs",
+      "/api/platform/incidents?limit=1",
+      "/api/platform/controller-results?limit=1"
+    ],
+    "platform_openapi_routes": 11
+  },
+  "browser": {
+    "real_not_mock": true,
+    "verified": [
+      "8000 same-origin operations page",
+      "actual API restart source hash and seven timing stages",
+      "native incident observer source clock",
+      "5174 existing operations page with latest native observation",
+      "5174 existing runs page: Weather 125 metrics and PM Barrier 12 metrics"
+    ],
+    "frontend_seven_files_match_release": true,
+    "dist_index_sha256": "59ed1356237e91871bb897552f2bab38d929fffe2ac5c6f89dce98754672968a",
+    "note": "Controller detail top-level total unknown without source total field; explicit command_total stage remains visible."
+  },
+  "tests": {
+    "passed": 308,
+    "deselected": 1,
+    "failed": 0,
+    "warning": "existing Starlette TestClient deprecation",
+    "known_baseline_deselection": "test_committed_production_spec_declares_current_live_control_plane: zero_notional_shadow expectation vs current zero_notional_action_shadow; reproduced on previous base",
+    "frontend_build": "TypeScript and Vite passed"
+  },
+  "review": {
+    "agent": "activation_merge_review",
+    "model": "gpt-5.6-luna",
+    "effort": "medium",
+    "scope": "Read-only one-turn review of merged weather_production_manifest.py attribution and PID/checkout ownership helpers; no production, writes, tests or subagents",
+    "findings": "No code defect; unresolved git index administrative state fixed in merge commit; some narrow explicit fallback tests absent",
+    "fixes": "Retained attributed_deployed_sha and managed_runtime_pid_sessions/runtime_evidence_for_process together; resolved index then reran full relevant suite",
+    "usage": {
+      "input": 202796,
+      "cached_input": 165632,
+      "output": 1912,
+      "reasoning": 916,
+      "total": 204708
+    },
+    "rollout": "/Users/deepsleep/.codex/sessions/2026/09/07/rollout-2026-09-07T00-14-08-01a0777f-a13d-78b3-8a5d-9f23cd0dae87.jsonl"
+  },
+  "limitations": [
+    "Pre-existing crypto.runtime.incomplete remains critical; not repaired or muted in this scoped weather activation.",
+    "Freqtrade historical 2-strategy/50-metric source remains unbound: 22 dataset files drifted and original code dirty; adapter support is not proof of historical reproducibility.",
+    "Weather daily coverage retains 8 historical version-binding gaps.",
+    "JRS recovery_improved is not permanent TCC proof; reboot/login/lock matrix not executed.",
+    "Dashboard mutation, strategy deployment/rollback transaction and forced live recovery drills not executed."
+  ],
+  "rollback": {
+    "not_executed": true,
+    "old_control_sha": "6ac3384d1807dd11e863aeb6556142ee36f28b92",
+    "old_release_retained": true,
+    "method": "Commit scoped production YAML change to restore API control_plane release and remove optional platform pointer; restart only registered API through controller. Under native supervisor maintenance lock, install previous accepted supervisor release with exact existing flags/state root. Do not restore stale state.json or rewind/delete raw, fills, DB evidence. Other control_plane consumers remain pinned to old release throughout.",
+    "baseline_config_git": "023230553c4d1de49e2e26c43a8cf5eaf4ff90d7^:src/strategies/runtime/production.yaml"
+  },
+  "worktrees": {
+    "integration": "codex/platform-closure-20260906; retained for source/evidence, not running production",
+    "production": "detached 9764201544bc19a3393de6e66c7ac76f0d80de49; API and LaunchAgent references active; never cleanup while referenced",
+    "generated_ignored": [
+      "production .venv binding",
+      ".env binding",
+      "frontend dist",
+      "Python caches"
+    ],
+    "main": "unrelated research and other task commits preserved"
+  }
+}

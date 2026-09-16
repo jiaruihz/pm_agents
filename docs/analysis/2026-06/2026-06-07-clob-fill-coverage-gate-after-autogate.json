@@ -1,0 +1,48 @@
+{
+  "cache_checks": {
+    "/home/rui/projects/pm_agent/runtime/weather_edge_v1/clob_fills.jsonl": {
+      "cost_usd": 3457.594072,
+      "distinct_executions": 785,
+      "distinct_fill_ids": 1302,
+      "missing_order_cost_usd": 0.0,
+      "missing_order_rows": 0,
+      "multi_fill_executions": 348,
+      "over_order_cost_usd": 0.0,
+      "over_order_excess_cost_usd": 0.0,
+      "over_order_keys": 0,
+      "rows": 1302,
+      "top_over_order": []
+    }
+  },
+  "db": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "db_fill_cost_minus_fact_cost": 0.0,
+  "db_fills": {
+    "cost_usd": 3457.594072,
+    "distinct_executions": 785,
+    "distinct_fill_ids": 1302,
+    "missing_order_cost_usd": 0.0,
+    "missing_order_rows": 0,
+    "multi_fill_executions": 348,
+    "over_order_cost_usd": 0.0,
+    "over_order_excess_cost_usd": 0.0,
+    "over_order_keys": 0,
+    "rows": 1302,
+    "top_over_order": []
+  },
+  "db_vs_primary_cache": {
+    "cache_not_in_db": 0,
+    "db_cost_minus_cache_cost": 0.0,
+    "db_not_in_cache": 0,
+    "sample_cache_not_in_db": [],
+    "sample_db_not_in_cache": []
+  },
+  "fact_trades_live_real": {
+    "cost_usd": 3457.594072,
+    "executions": 785,
+    "fill_ids": 1302,
+    "rows": 1302
+  },
+  "fail_reasons": [],
+  "gate_pass": true,
+  "order_caps": 1007
+}

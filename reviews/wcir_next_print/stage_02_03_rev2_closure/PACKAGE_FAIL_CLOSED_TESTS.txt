@@ -1,0 +1,10 @@
+$ .venv/bin/pytest -q tests/research_tests/test_wcir_stage23_rev2_closure.py -k full_package
+exit_code=0
+.....                                                                    [100%]
+=============================== warnings summary ===============================
+tests/research_tests/test_wcir_stage23_rev2_closure.py::test_full_package_verifier_fails_closed[duplicate]
+  /Users/deepsleep/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/zipfile/__init__.py:1624: UserWarning: Duplicate name: 'evidence.bin'
+    return self._open_to_write(zinfo, force_zip64=force_zip64)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+5 passed, 9 deselected, 1 warning in 0.02s

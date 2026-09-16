@@ -1,0 +1,2173 @@
+{
+  "clob_fill_coverage_gate": {
+    "db_fill_cost_minus_fact_cost": 0.0,
+    "fail_reasons": [],
+    "gate_pass": true,
+    "missing_order_rows": null,
+    "order_caps": 604,
+    "over_order_keys": null
+  },
+  "data_self_check": {
+    "clob_orders_with_fills": [
+      {
+        "orders": 33,
+        "status": "error",
+        "with_fill": 0
+      },
+      {
+        "orders": 961,
+        "status": "submitted",
+        "with_fill": 855
+      }
+    ],
+    "fact_built_at_utc": "2026-06-14T07:15:01.773373+00:00",
+    "fact_signal_candidates_coverage": {
+      "eligible": 9986,
+      "live_filled": 348,
+      "paper_ordered": 3768,
+      "rows": 29207
+    },
+    "fact_trades_by_class": [
+      {
+        "rows": 855,
+        "trade_class": "live_real"
+      },
+      {
+        "rows": 624,
+        "trade_class": "live_simulated"
+      },
+      {
+        "rows": 2285,
+        "trade_class": "paper"
+      },
+      {
+        "rows": 636,
+        "trade_class": "snapshot_replay"
+      }
+    ],
+    "fact_trades_by_settlement": [
+      {
+        "rows": 150,
+        "settlement_status": null
+      },
+      {
+        "rows": 4250,
+        "settlement_status": "settled"
+      }
+    ]
+  },
+  "db_path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+  "event_count": 94,
+  "fresh_cycle": {
+    "executed_cycle": true,
+    "generated_at_utc": "2026-06-14T07:08:56.735631+00:00",
+    "max_snapshot_age_seconds": 180.0,
+    "reason": "fresh",
+    "snapshot_age_seconds": 86.734,
+    "snapshot_path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots/2026-06-14/orderbook_snapshot_20260614_1500.jsonl.gz",
+    "verdict": "FRESH_SNAPSHOT_CYCLE_RAN"
+  },
+  "generated_at_utc": "2026-06-14T07:19:07.424133+00:00",
+  "live_blockers": [
+    "no_all_leg_basket_executor",
+    "no_partial_fill_cancel_or_unwind_rule",
+    "no_forward_paper_ledger_for_current_scanner",
+    "deployment_requires_weather_strategy_deploy"
+  ],
+  "live_now": false,
+  "paper_execution_gate": {
+    "blockers": [
+      {
+        "code": "live_equivalent_paper_ledger_empty",
+        "max_snapshot_age_seconds": 180.0,
+        "message": "No paper baskets were recorded within the configured snapshot TTL, so forward evidence is observation-only."
+      },
+      {
+        "code": "paper_baskets_not_live_equivalent",
+        "max_recording_age_seconds": 1353.209,
+        "max_snapshot_age_seconds": 180.0,
+        "message": "Some paper baskets were recorded after the snapshot TTL and cannot count toward live-prep forward evidence.",
+        "stale_recorded_baskets": 2,
+        "ttl_non_equivalent_baskets": 2
+      },
+      {
+        "code": "source_snapshot_invalid",
+        "message": "Some paper baskets reference source snapshot files that are missing or changed after recording; exclude them from live-prep counts.",
+        "source_snapshot_invalid_baskets": 1,
+        "source_snapshot_invalid_opportunities": [
+          {
+            "city": "Austin",
+            "event_date": "2026-06-15",
+            "event_slug": "highest-temperature-in-austin-on-june-15-2026",
+            "recorded_at_utc": "2026-06-14T07:08:56.828455+00:00",
+            "source_snapshot_blockers": [
+              "source_snapshot_changed_after_recording"
+            ],
+            "source_snapshot_changed_after_recording_seconds": 334.172,
+            "source_snapshot_mtime_utc": "2026-06-14T07:14:31+00:00",
+            "source_snapshot_path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots/2026-06-14/orderbook_snapshot_20260614_1500.jsonl.gz",
+            "source_snapshot_status": "source_snapshot_changed_after_recording"
+          }
+        ]
+      },
+      {
+        "code": "forward_settled_baskets_low",
+        "message": "Need more settled live-equivalent forward paper baskets before deploy review.",
+        "required": 20,
+        "ttl_equivalent_settled_exactly_one_winner": 0
+      },
+      {
+        "code": "forward_settled_active_dates_low",
+        "message": "Need more active settled event dates before deploy review; same-day baskets are correlated.",
+        "required": 7,
+        "ttl_equivalent_settled_active_event_dates": 0,
+        "ttl_equivalent_settled_event_dates": []
+      },
+      {
+        "code": "forward_roi_not_ready",
+        "message": "Live-equivalent forward paper ROI has not passed the live-prep threshold.",
+        "required": 0.02,
+        "roi": null
+      },
+      {
+        "code": "positive_basket_rate_not_ready",
+        "message": "Live-equivalent forward positive basket rate has not passed the live-prep threshold.",
+        "positive_basket_rate": null,
+        "required": 0.55
+      },
+      {
+        "code": "dry_run_executor_state_missing",
+        "message": "No all-YES dry-run executor state artifact is available for deploy review.",
+        "path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/all_yes_underround_paper_v0/latest_executor_readiness.json"
+      },
+      {
+        "code": "dry_run_executor_plan_bridge_missing",
+        "message": "No all-YES executor-plan bridge artifact is available for deploy review.",
+        "path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/all_yes_underround_paper_v0/executor_trade_plan_summary.json"
+      },
+      {
+        "code": "live_executor_missing",
+        "message": "This script is paper-only; live requires weather-strategy-deploy plus signed all-leg-or-none execution and partial-fill handling."
+      }
+    ],
+    "eval": {
+      "baskets": 3,
+      "command": "eval",
+      "db_path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+      "duplicate_opportunity_baskets": 0,
+      "generated_at_utc": "2026-06-14T07:18:59.724894+00:00",
+      "live_prep_pending": 2,
+      "max_snapshot_age_seconds": 180.0,
+      "pending": 3,
+      "pending_due_status_counts": {
+        "not_due_missing_rows": 2
+      },
+      "pending_missing_settlement_legs": 20,
+      "pending_reason_counts": {
+        "missing_settlement_rows": 2
+      },
+      "pending_unresolved_settlement_legs": 0,
+      "positive_basket_rate": null,
+      "quarantine_invalid_shape_before_utc": "2026-06-14T06:00:00+00:00",
+      "raw_baskets": 3,
+      "run_dir": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/all_yes_underround_paper_v0",
+      "settled": 0,
+      "settled_active_event_dates": 0,
+      "settled_cost_usd": 0,
+      "settled_event_dates": [],
+      "settled_exactly_one_winner": 0,
+      "settled_pnl_usd": 0,
+      "settled_roi": null,
+      "settlement_now_utc": "2026-06-14T07:18:59.723376+00:00",
+      "settlement_schedule": {
+        "lag_days": 1,
+        "pipeline_hour_utc": 9,
+        "pipeline_minute_utc": 20
+      },
+      "shape_invalid_baskets": 0,
+      "shape_invalid_current_baskets": 0,
+      "shape_invalid_current_opportunities": [],
+      "shape_invalid_opportunities": [],
+      "shape_invalid_quarantined_baskets": 0,
+      "shape_valid_baskets": 2,
+      "source_snapshot_invalid_baskets": 1,
+      "source_snapshot_invalid_opportunities": [
+        {
+          "city": "Austin",
+          "event_date": "2026-06-15",
+          "event_slug": "highest-temperature-in-austin-on-june-15-2026",
+          "recorded_at_utc": "2026-06-14T07:08:56.828455+00:00",
+          "source_snapshot_blockers": [
+            "source_snapshot_changed_after_recording"
+          ],
+          "source_snapshot_changed_after_recording_seconds": 334.172,
+          "source_snapshot_mtime_utc": "2026-06-14T07:14:31+00:00",
+          "source_snapshot_path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots/2026-06-14/orderbook_snapshot_20260614_1500.jsonl.gz",
+          "source_snapshot_status": "source_snapshot_changed_after_recording"
+        }
+      ],
+      "stale_recorded_baskets": 2,
+      "ttl_equivalent_baskets": 0,
+      "ttl_equivalent_pending": 0,
+      "ttl_equivalent_pending_active_event_dates": 0,
+      "ttl_equivalent_pending_due_status_counts": {},
+      "ttl_equivalent_pending_event_dates": [],
+      "ttl_equivalent_pending_missing_settlement_legs": 0,
+      "ttl_equivalent_pending_reason_counts": {},
+      "ttl_equivalent_pending_settlement_audit": [],
+      "ttl_equivalent_pending_unresolved_settlement_legs": 0,
+      "ttl_equivalent_positive_basket_rate": null,
+      "ttl_equivalent_settled_active_event_dates": 0,
+      "ttl_equivalent_settled_cost_usd": 0,
+      "ttl_equivalent_settled_event_dates": [],
+      "ttl_equivalent_settled_exactly_one_winner": 0,
+      "ttl_equivalent_settled_pnl_usd": 0,
+      "ttl_equivalent_settled_roi": null,
+      "ttl_non_equivalent_baskets": 2,
+      "ttl_recording_age_seconds_max": 1353.209,
+      "unique_opportunity_baskets": 3,
+      "winner_count_anomaly": 0
+    },
+    "live_now": false,
+    "passed": [
+      {
+        "code": "clob_coverage_gate_pass",
+        "freshness": {
+          "db_path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+          "fact_age_seconds": 237.952,
+          "fact_built_at_error": null,
+          "fact_built_at_utc": "2026-06-14T07:15:01.773373+00:00",
+          "gate_file_age_seconds": 227.288,
+          "gate_file_mtime_utc": "2026-06-14T07:15:12.437439+00:00",
+          "gate_path": "/Users/deepsleep/projects/pm_agents/runtime/_dashboard_logs/clob_fill_coverage_gate.json",
+          "max_gate_fact_age_hours": 48.0,
+          "stale": false,
+          "stale_reasons": []
+        },
+        "message": "CLOB fill coverage gate passes and evidence is fresh enough for live-prep gating."
+      },
+      {
+        "baskets": 3,
+        "code": "paper_ledger_exists",
+        "message": "Paper basket ledger has recorded all-leg baskets."
+      },
+      {
+        "allowed_candidates": 1,
+        "code": "current_guard_audit_has_allowed",
+        "message": "At least one current scanner candidate passes the shared all-leg guard.",
+        "rejected_candidates": 1,
+        "rejections": [
+          {
+            "basket_id": "all_yes_underround_basket_v0|2026-06-14T07:00:36Z|2026-06-14|Atlanta|highest-temperature-in-atlanta-on-june-14-2026",
+            "city": "Atlanta",
+            "event_date": "2026-06-14",
+            "guard": {
+              "allow": false,
+              "basket_cost_usd": 4.88,
+              "blockers": [
+                "snapshot_too_old"
+              ],
+              "expected_profit_usd": 0.12,
+              "leg_orders": [],
+              "reason": "blocked"
+            }
+          }
+        ]
+      },
+      {
+        "code": "dry_run_live_plan_available",
+        "message": "All-YES dry-run live plan artifact is present and non-submitting.",
+        "planned_baskets": 0,
+        "rejected_baskets": 0,
+        "scanner_candidate_count": 0
+      }
+    ],
+    "verdict": "NOT_READY_ACCUMULATE_PAPER_SHADOW"
+  },
+  "paper_monitor": {
+    "blocker_codes": [
+      "live_equivalent_paper_ledger_empty",
+      "paper_baskets_not_live_equivalent",
+      "source_snapshot_invalid",
+      "forward_settled_baskets_low",
+      "forward_settled_active_dates_low",
+      "forward_roi_not_ready",
+      "positive_basket_rate_not_ready",
+      "dry_run_executor_state_missing",
+      "dry_run_executor_plan_bridge_missing",
+      "live_executor_missing"
+    ],
+    "latest_scanner_candidate_count": 2,
+    "max_snapshot_age_seconds": 180.0,
+    "paper_baskets": 3,
+    "passed_codes": [
+      "clob_coverage_gate_pass",
+      "paper_ledger_exists",
+      "current_guard_audit_has_allowed",
+      "dry_run_live_plan_available"
+    ],
+    "pending_by_city": {
+      "Austin": 1,
+      "Busan": 1,
+      "MexicoCity": 1
+    },
+    "pending_by_event_date": {
+      "2026-06-14": 2,
+      "2026-06-15": 1
+    },
+    "verdict": "NOT_READY_ACCUMULATE_PAPER_SHADOW"
+  },
+  "paper_shadow_candidate_count": 1,
+  "paper_shadow_candidates": [
+    {
+      "ask_legs": 7,
+      "blockers": [],
+      "city": "Atlanta",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-atlanta-on-june-14-2026",
+      "legs": 7,
+      "legs_detail": [
+        {
+          "ask_size": 11.96,
+          "best_ask": 0.05,
+          "best_bid": 0.036,
+          "bracket": "84-85",
+          "condition_id": "0x305ffb1454941f31e7387613ab3be363a99580c16bbe680d33a52220e7365332"
+        },
+        {
+          "ask_size": 25.0,
+          "best_ask": 0.242,
+          "best_bid": 0.237,
+          "bracket": "86-87",
+          "condition_id": "0x6804aee3595af4956c42efdfd8bc55af335c90e91eced4b47ca8ad42bc1750ea"
+        },
+        {
+          "ask_size": 5.0,
+          "best_ask": 0.47,
+          "best_bid": 0.46,
+          "bracket": "88-89",
+          "condition_id": "0x2d50764a7608a6127c290a6498775c356247daba89e83f2fdb24155c8638fd69"
+        },
+        {
+          "ask_size": 63.99,
+          "best_ask": 0.13,
+          "best_bid": 0.12,
+          "bracket": "90-91",
+          "condition_id": "0xcedc4e261f82303ea3875ae0f12f557e470211087f1e810fcf2563cacd7a6cb0"
+        },
+        {
+          "ask_size": 5.95,
+          "best_ask": 0.059,
+          "best_bid": 0.033,
+          "bracket": "92-93",
+          "condition_id": "0x159e1971339f87b97a365a6f0bbf149f40d98bc30afbd8b4bb8e7ed6ad6d0ac7"
+        },
+        {
+          "ask_size": 5.0,
+          "best_ask": 0.02,
+          "best_bid": 0.013,
+          "bracket": "94-95",
+          "condition_id": "0x20b29674b1cea69467835fb81c73e203c19d2d341efc7989ba694f68475fc8be"
+        },
+        {
+          "ask_size": 182.45,
+          "best_ask": 0.005,
+          "best_bid": 0.001,
+          "bracket": "96-97",
+          "condition_id": "0x193ef9358fe2c4996492e2cd327e4c473cf7a46c1cd2b6d92333d600317e9ba3"
+        }
+      ],
+      "max_yes_spread": 0.026,
+      "min_ask_size": 5.0,
+      "min_share_basket": {
+        "cost_usd": 4.88,
+        "gross_profit_usd": 0.12,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:01:09+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:01:05+00:00",
+      "paper_shadow_candidate": true,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 7
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 4.88,
+        "gross_profit_usd": 0.12,
+        "shares_per_leg": 5.0
+      },
+      "total_yes_ask_cost": 0.976,
+      "underround": 0.024
+    }
+  ],
+  "parameters": {
+    "max_spread": 0.05,
+    "min_leg_count": 5,
+    "min_shares": 5.0,
+    "min_underround": 0.02,
+    "telemetry_underround_thresholds": [
+      0.005,
+      0.01,
+      0.02
+    ],
+    "top_n": 20
+  },
+  "snapshot_path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots/2026-06-14/orderbook_snapshot_20260614_1500.jsonl.gz",
+  "snapshot_summary": {
+    "event_dates": {
+      "2026-06-14": 614,
+      "2026-06-15": 952
+    },
+    "orderbook_fetched_at_utc_max": "2026-06-14T07:14:31+00:00",
+    "orderbook_fetched_at_utc_min": "2026-06-14T07:00:40+00:00",
+    "rows": 1566,
+    "snapshot_ts_utc_max": "2026-06-14T07:00:36Z",
+    "snapshot_ts_utc_min": "2026-06-14T07:00:36Z",
+    "yes_event_count": 94,
+    "yes_rows": 783
+  },
+  "station_basis_gate": {
+    "blockers": [
+      {
+        "code": "forward_eval_not_ready",
+        "message": "Station-basis v1 forward shadow has not passed live-prep thresholds.",
+        "verdict": "NOT_READY_ACCUMULATE_SHADOW"
+      },
+      {
+        "code": "yes_bucket_forward_rule_fail",
+        "failures": [
+          "settled<40",
+          "roi<+15%",
+          "positive_day_rate<55%"
+        ],
+        "message": "yes_bucket forward live-core thresholds fail: settled<40,roi<+15%,positive_day_rate<55%.",
+        "summary": {
+          "all_settled": 0,
+          "max_live_core_ask": 0.9,
+          "price_excluded_settled": 0,
+          "settled": 0
+        }
+      },
+      {
+        "code": "no_d1_exh_forward_rule_fail",
+        "failures": [
+          "settled<40"
+        ],
+        "message": "no_d1_exh forward live-core thresholds fail: settled<40.",
+        "summary": {
+          "all_settled": 1,
+          "cities": [
+            "PanamaCity"
+          ],
+          "cost": 8.25,
+          "daily_t": null,
+          "days": 1,
+          "max_live_core_ask": 0.9,
+          "pnl": 1.75,
+          "positive_day_rate": 1.0,
+          "positive_days": 1,
+          "price_excluded_settled": 0,
+          "roi": 0.21212121212121213,
+          "settled": 1,
+          "win_rate": 1.0
+        }
+      },
+      {
+        "ask_band_counts": {
+          "0.97-0.995": 5,
+          ">0.995": 12,
+          "no_ask": 21
+        },
+        "code": "recent_candidates_price_or_liquidity_blocked",
+        "message": "Recent station-basis v1 weather-qualified candidates were blocked by price or missing asks.",
+        "min_ask_row": {
+          "ask": 0.98,
+          "bracket": "84-85\u00b0F",
+          "city": "Chicago",
+          "rule": "no_d1_exh",
+          "side": "BUY_NO",
+          "status": "ask_out_of_band",
+          "ts_utc": "2026-06-13T21:03:29.685239+00:00",
+          "win_roi_if_fills": 0.020408
+        },
+        "status_counts": {
+          "ask_out_of_band": 17,
+          "duplicate": 8,
+          "no_asks": 13
+        },
+        "window_hours": 24
+      }
+    ],
+    "entries": 1,
+    "live_now": false,
+    "pending": 0,
+    "settled": 1,
+    "verdict": "NOT_READY_ACCUMULATE_SHADOW"
+  },
+  "target_metric": "current_all_yes_underround_equal_share_basket",
+  "top_baskets": [
+    {
+      "ask_legs": 10,
+      "blockers": [
+        "top_of_book_capacity_below_min_shares"
+      ],
+      "city": "MexicoCity",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-mexico-city-on-june-14-2026",
+      "legs": 10,
+      "legs_detail": [
+        {
+          "ask_size": 587.12,
+          "best_ask": 0.006,
+          "best_bid": 0.001,
+          "bracket": "20",
+          "condition_id": "0xbe2532ff4d2e09d2876a1f4970f1c1054672da6a1bf25af983c830d6ad1b129a"
+        },
+        {
+          "ask_size": 30.58,
+          "best_ask": 0.005,
+          "best_bid": 0.001,
+          "bracket": "21",
+          "condition_id": "0x460c04c819fb3e15b0dbc970bd6a0f62e586b043255b877e400cc65414fd69d2"
+        },
+        {
+          "ask_size": 12.67,
+          "best_ask": 0.014,
+          "best_bid": 0.002,
+          "bracket": "22",
+          "condition_id": "0x74cfc8c0bf49c43cd5f8d9d9200f21b1892c0e46c1c24922b227c9d200759e49"
+        },
+        {
+          "ask_size": 13.91,
+          "best_ask": 0.04,
+          "best_bid": 0.02,
+          "bracket": "23",
+          "condition_id": "0x27f1762c831400b431043450b0f4bfdeb80be7297dadcc10b3be648111541ecd"
+        },
+        {
+          "ask_size": 11.86,
+          "best_ask": 0.12,
+          "best_bid": 0.09,
+          "bracket": "24",
+          "condition_id": "0x8d71dc3e56d331a2e072d5e7db63432a41675989404f54df3ef9165d25c3528b"
+        },
+        {
+          "ask_size": 10.0,
+          "best_ask": 0.35,
+          "best_bid": 0.33,
+          "bracket": "25",
+          "condition_id": "0x0c3955e3061c7d18b73284abebf2942e17f7b1e69e4a0e839c914f39ad0a502c"
+        },
+        {
+          "ask_size": 20.02,
+          "best_ask": 0.32,
+          "best_bid": 0.29,
+          "bracket": "26",
+          "condition_id": "0x8ce1d9a3e758c0cc027d622d04842595eaa2bffa6f1d1fe45f3fe406f47e7abb"
+        },
+        {
+          "ask_size": 1.83,
+          "best_ask": 0.1,
+          "best_bid": 0.09,
+          "bracket": "27",
+          "condition_id": "0x2e1e1d6ce54a64cf16b5ffb3a3907612ab1f3d4abfafc228e78bbf88260e005e"
+        },
+        {
+          "ask_size": 4.02,
+          "best_ask": 0.011,
+          "best_bid": 0.01,
+          "bracket": "28",
+          "condition_id": "0x928ecec0081e4f583e2a7e26344605d34f71a5a3b32b0303121858dd94fe90a6"
+        },
+        {
+          "ask_size": 59.76,
+          "best_ask": 0.008,
+          "best_bid": 0.002,
+          "bracket": "29+",
+          "condition_id": "0x3b6f826317627e4af90decd57d17778c0aa8ee2554d1f2aa3d747fa99b9077b6"
+        }
+      ],
+      "max_yes_spread": 0.03,
+      "min_ask_size": 1.83,
+      "min_share_basket": {
+        "cost_usd": 4.87,
+        "gross_profit_usd": 0.13,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:04:14+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:04:08+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 10
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 1.7824,
+        "gross_profit_usd": 0.0476,
+        "shares_per_leg": 1.83
+      },
+      "total_yes_ask_cost": 0.974,
+      "underround": 0.026
+    },
+    {
+      "ask_legs": 7,
+      "blockers": [],
+      "city": "Atlanta",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-atlanta-on-june-14-2026",
+      "legs": 7,
+      "legs_detail": [
+        {
+          "ask_size": 11.96,
+          "best_ask": 0.05,
+          "best_bid": 0.036,
+          "bracket": "84-85",
+          "condition_id": "0x305ffb1454941f31e7387613ab3be363a99580c16bbe680d33a52220e7365332"
+        },
+        {
+          "ask_size": 25.0,
+          "best_ask": 0.242,
+          "best_bid": 0.237,
+          "bracket": "86-87",
+          "condition_id": "0x6804aee3595af4956c42efdfd8bc55af335c90e91eced4b47ca8ad42bc1750ea"
+        },
+        {
+          "ask_size": 5.0,
+          "best_ask": 0.47,
+          "best_bid": 0.46,
+          "bracket": "88-89",
+          "condition_id": "0x2d50764a7608a6127c290a6498775c356247daba89e83f2fdb24155c8638fd69"
+        },
+        {
+          "ask_size": 63.99,
+          "best_ask": 0.13,
+          "best_bid": 0.12,
+          "bracket": "90-91",
+          "condition_id": "0xcedc4e261f82303ea3875ae0f12f557e470211087f1e810fcf2563cacd7a6cb0"
+        },
+        {
+          "ask_size": 5.95,
+          "best_ask": 0.059,
+          "best_bid": 0.033,
+          "bracket": "92-93",
+          "condition_id": "0x159e1971339f87b97a365a6f0bbf149f40d98bc30afbd8b4bb8e7ed6ad6d0ac7"
+        },
+        {
+          "ask_size": 5.0,
+          "best_ask": 0.02,
+          "best_bid": 0.013,
+          "bracket": "94-95",
+          "condition_id": "0x20b29674b1cea69467835fb81c73e203c19d2d341efc7989ba694f68475fc8be"
+        },
+        {
+          "ask_size": 182.45,
+          "best_ask": 0.005,
+          "best_bid": 0.001,
+          "bracket": "96-97",
+          "condition_id": "0x193ef9358fe2c4996492e2cd327e4c473cf7a46c1cd2b6d92333d600317e9ba3"
+        }
+      ],
+      "max_yes_spread": 0.026,
+      "min_ask_size": 5.0,
+      "min_share_basket": {
+        "cost_usd": 4.88,
+        "gross_profit_usd": 0.12,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:01:09+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:01:05+00:00",
+      "paper_shadow_candidate": true,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 7
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 4.88,
+        "gross_profit_usd": 0.12,
+        "shares_per_leg": 5.0
+      },
+      "total_yes_ask_cost": 0.976,
+      "underround": 0.024
+    },
+    {
+      "ask_legs": 11,
+      "blockers": [
+        "underround_below_threshold"
+      ],
+      "city": "Munich",
+      "event_date": "2026-06-15",
+      "event_slug": "highest-temperature-in-munich-on-june-15-2026",
+      "legs": 11,
+      "legs_detail": [
+        {
+          "ask_size": 30.0,
+          "best_ask": 0.003,
+          "best_bid": 0.001,
+          "bracket": "16",
+          "condition_id": "0x5643a000d850534dbb7bcb3d66569317b7258b3f8a42e031b7216b0bd0ffa5c7"
+        },
+        {
+          "ask_size": 5.0,
+          "best_ask": 0.003,
+          "best_bid": 0.001,
+          "bracket": "17",
+          "condition_id": "0x9b155cb386ea5f773395a99432ee879f1cb5beb297d6680e18b6b55c6451e111"
+        },
+        {
+          "ask_size": 348.8,
+          "best_ask": 0.008,
+          "best_bid": 0.005,
+          "bracket": "18",
+          "condition_id": "0x8c96a8bcd586e7d12fb538331b0b5c8c1974155f44e5f00fa37451d62f9d20a8"
+        },
+        {
+          "ask_size": 54.0,
+          "best_ask": 0.02,
+          "best_bid": 0.019,
+          "bracket": "19",
+          "condition_id": "0x67752cffa665c72084794002edc6da3b885285f7528504c0927979c3a085443b"
+        },
+        {
+          "ask_size": 10.77,
+          "best_ask": 0.08,
+          "best_bid": 0.06,
+          "bracket": "20",
+          "condition_id": "0xd35cab02002022b434bd47aef1118ebeb89e9199b84ecb4e214ad5d5922302c7"
+        },
+        {
+          "ask_size": 19.77,
+          "best_ask": 0.3,
+          "best_bid": 0.28,
+          "bracket": "21",
+          "condition_id": "0xc14ceaa63cee492eb1d32af671215afe4bee45e6af8972dffcff55b2b0131ea5"
+        },
+        {
+          "ask_size": 11.29,
+          "best_ask": 0.37,
+          "best_bid": 0.36,
+          "bracket": "22",
+          "condition_id": "0x30586b257a245753f46eac56775bd126e8be00f770e00bb179970621454f1370"
+        },
+        {
+          "ask_size": 5.0,
+          "best_ask": 0.13,
+          "best_bid": 0.12,
+          "bracket": "23",
+          "condition_id": "0x856b0c7774086a767911a2d986565879fbe8a89f872895d1305b05de5578c8e9"
+        },
+        {
+          "ask_size": 51.98,
+          "best_ask": 0.06,
+          "best_bid": 0.04,
+          "bracket": "24",
+          "condition_id": "0xeed816c7e14e56bbd90df70efcc25743d7f5b31bc87c78a74990aaf4a10de786"
+        },
+        {
+          "ask_size": 91.78,
+          "best_ask": 0.01,
+          "best_bid": 0.006,
+          "bracket": "25",
+          "condition_id": "0x253ed3ffe3355d494d518afb8bb6633408c3633d5f42f8042e2e35b9f4f40b68"
+        },
+        {
+          "ask_size": 30.21,
+          "best_ask": 0.007,
+          "best_bid": 0.003,
+          "bracket": "26+",
+          "condition_id": "0xd3c07d6fbac036049353d35402457756c773c66a73ce3477efd173c146a83808"
+        }
+      ],
+      "max_yes_spread": 0.02,
+      "min_ask_size": 5.0,
+      "min_share_basket": {
+        "cost_usd": 4.955,
+        "gross_profit_usd": 0.045,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:11:51+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:11:45+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 11
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 4.955,
+        "gross_profit_usd": 0.045,
+        "shares_per_leg": 5.0
+      },
+      "total_yes_ask_cost": 0.991,
+      "underround": 0.009
+    },
+    {
+      "ask_legs": 11,
+      "blockers": [
+        "underround_below_threshold"
+      ],
+      "city": "Austin",
+      "event_date": "2026-06-15",
+      "event_slug": "highest-temperature-in-austin-on-june-15-2026",
+      "legs": 11,
+      "legs_detail": [
+        {
+          "ask_size": 147.42,
+          "best_ask": 0.005,
+          "best_bid": 0.001,
+          "bracket": "73",
+          "condition_id": "0x8e6d620e841ca38d9cdc1c05e4b6217c734d1d9626fe5843050c676d0c704b31"
+        },
+        {
+          "ask_size": 52.47,
+          "best_ask": 0.009,
+          "best_bid": 0.003,
+          "bracket": "74-75",
+          "condition_id": "0x679d1308e86bd75dc86327602456bebdd8ddf21da330b224ba925877a7cbd0c5"
+        },
+        {
+          "ask_size": 45.0,
+          "best_ask": 0.038,
+          "best_bid": 0.005,
+          "bracket": "76-77",
+          "condition_id": "0x994452e3a03eeafc16af00f9ff35a03598dae0392fa46d0c943346feea07c9fa"
+        },
+        {
+          "ask_size": 27.66,
+          "best_ask": 0.04,
+          "best_bid": 0.018,
+          "bracket": "78-79",
+          "condition_id": "0x4aadbd80185331dd6f4dcdaa364024c700cc4b8f720b45fd7541e30d91da49c7"
+        },
+        {
+          "ask_size": 80.3,
+          "best_ask": 0.12,
+          "best_bid": 0.1,
+          "bracket": "80-81",
+          "condition_id": "0xea7640ca912d4ededa49d83286c9e22118b276c02c8551eec93b03dccc867b05"
+        },
+        {
+          "ask_size": 27.95,
+          "best_ask": 0.35,
+          "best_bid": 0.33,
+          "bracket": "82-83",
+          "condition_id": "0xdab568e57fb3035846cf30676f552e37592a6ceef706513a933c1ba579b2d2af"
+        },
+        {
+          "ask_size": 59.04,
+          "best_ask": 0.26,
+          "best_bid": 0.25,
+          "bracket": "84-85",
+          "condition_id": "0x5be7c71ea9ea013842740d4944f4a9e0d16b19a70871ee44b2179287fcba8b84"
+        },
+        {
+          "ask_size": 35.93,
+          "best_ask": 0.12,
+          "best_bid": 0.1,
+          "bracket": "86-87",
+          "condition_id": "0x701cb8fcce2de37cbe15a0250e40405b1614f9b40fe5ae89477b2c47829fc17e"
+        },
+        {
+          "ask_size": 37.92,
+          "best_ask": 0.03,
+          "best_bid": 0.018,
+          "bracket": "88-89",
+          "condition_id": "0x8305420cbd1b2edd27a775b3d7b950175dc94b43745354b861ed6d15eb4452d4"
+        },
+        {
+          "ask_size": 33.5,
+          "best_ask": 0.019,
+          "best_bid": 0.013,
+          "bracket": "90-91",
+          "condition_id": "0x610028daaf3abc5ac4cca2666b26348f681c8d1ae4689d218bd5d3e52bd965a9"
+        },
+        {
+          "ask_size": 104.85,
+          "best_ask": 0.009,
+          "best_bid": 0.006,
+          "bracket": "92+",
+          "condition_id": "0x0a48226e23edf55c833d64cbb9fc3800bd32eba0e2fbc0066c1fbbcd0cd2c86a"
+        }
+      ],
+      "max_yes_spread": 0.033,
+      "min_ask_size": 27.66,
+      "min_share_basket": {
+        "cost_usd": 5.0,
+        "gross_profit_usd": 0.0,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:07:32+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:07:26+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 11
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 27.66,
+        "gross_profit_usd": 0.0,
+        "shares_per_leg": 27.66
+      },
+      "total_yes_ask_cost": 1.0,
+      "underround": 0.0
+    },
+    {
+      "ask_legs": 3,
+      "blockers": [
+        "leg_count_below_live_floor",
+        "underround_below_threshold"
+      ],
+      "city": "Tokyo",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-tokyo-on-june-14-2026",
+      "legs": 3,
+      "legs_detail": [
+        {
+          "ask_size": 198.37,
+          "best_ask": 0.998,
+          "best_bid": 0.994,
+          "bracket": "26",
+          "condition_id": "0x551c1830b89407c98b3f784fd89c539cbbd291e8f0d2ef95cdc88444d62ffb9d"
+        },
+        {
+          "ask_size": 32.0,
+          "best_ask": 0.004,
+          "best_bid": 0.001,
+          "bracket": "27",
+          "condition_id": "0xe023524cecbdb8e42763fdeab10dc3f6b9ab57a26b1138f2f03f061e899024e3"
+        },
+        {
+          "ask_size": 97.71,
+          "best_ask": 0.002,
+          "best_bid": 0.001,
+          "bracket": "28",
+          "condition_id": "0x8c5a138927f59b039f2a35ebab903be5525ecc65712c9bfc7688a282c27cb09a"
+        }
+      ],
+      "max_yes_spread": 0.004,
+      "min_ask_size": 32.0,
+      "min_share_basket": {
+        "cost_usd": 5.02,
+        "gross_profit_usd": -0.02,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:06:28+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:06:27+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 3
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 32.128,
+        "gross_profit_usd": -0.128,
+        "shares_per_leg": 32.0
+      },
+      "total_yes_ask_cost": 1.004,
+      "underround": -0.004
+    },
+    {
+      "ask_legs": 4,
+      "blockers": [
+        "leg_count_below_live_floor",
+        "underround_below_threshold"
+      ],
+      "city": "Manila",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-manila-on-june-14-2026",
+      "legs": 4,
+      "legs_detail": [
+        {
+          "ask_size": 70.0,
+          "best_ask": 0.97,
+          "best_bid": 0.968,
+          "bracket": "32",
+          "condition_id": "0x8d8923985706ba0d3619374ba8757be312775aba43076bf5189eb8f0d80f3fe7"
+        },
+        {
+          "ask_size": 7.5,
+          "best_ask": 0.029,
+          "best_bid": 0.002,
+          "bracket": "33",
+          "condition_id": "0x6ba286fc6216891c15de050e01f7f8f845b9eebeb5ef1a42d518f402338f079b"
+        },
+        {
+          "ask_size": 74.87,
+          "best_ask": 0.005,
+          "best_bid": null,
+          "bracket": "34",
+          "condition_id": "0x78c0e208840aa949cace3bb508dc164ba9741cc0981c0dd4c3840d875753f1ca"
+        },
+        {
+          "ask_size": 153.4,
+          "best_ask": 0.001,
+          "best_bid": null,
+          "bracket": "35",
+          "condition_id": "0xbb2d72f13bc91b8449249e252a454ecfc78316b70873dfd6784ca60f4499dcab"
+        }
+      ],
+      "max_yes_spread": 0.027,
+      "min_ask_size": 7.5,
+      "min_share_basket": {
+        "cost_usd": 5.025,
+        "gross_profit_usd": -0.025,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:04:06+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:04:04+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 4
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 7.5375,
+        "gross_profit_usd": -0.0375,
+        "shares_per_leg": 7.5
+      },
+      "total_yes_ask_cost": 1.005,
+      "underround": -0.005
+    },
+    {
+      "ask_legs": 3,
+      "blockers": [
+        "leg_count_below_live_floor",
+        "underround_below_threshold"
+      ],
+      "city": "KualaLumpur",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-kuala-lumpur-on-june-14-2026",
+      "legs": 3,
+      "legs_detail": [
+        {
+          "ask_size": 34.09,
+          "best_ask": 0.998,
+          "best_bid": 0.99,
+          "bracket": "32",
+          "condition_id": "0x74318e0673d72fb26a96bcae09d131cfeb786da962be3c6c6e91c6240f25b65a"
+        },
+        {
+          "ask_size": 10.0,
+          "best_ask": 0.006,
+          "best_bid": 0.002,
+          "bracket": "33",
+          "condition_id": "0x6f2a48d1f5b941001c65b52446b17044e6cdedcefef3f048843718359de270c6"
+        },
+        {
+          "ask_size": 293.88,
+          "best_ask": 0.002,
+          "best_bid": 0.001,
+          "bracket": "35+",
+          "condition_id": "0xa05489b793b012dcfb8c74ed88dc4c452cc88b490571b4d89185c603c8b5c523"
+        }
+      ],
+      "max_yes_spread": 0.008,
+      "min_ask_size": 10.0,
+      "min_share_basket": {
+        "cost_usd": 5.03,
+        "gross_profit_usd": -0.03,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:03:21+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:03:20+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 3
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 10.06,
+        "gross_profit_usd": -0.06,
+        "shares_per_leg": 10.0
+      },
+      "total_yes_ask_cost": 1.006,
+      "underround": -0.006
+    },
+    {
+      "ask_legs": 4,
+      "blockers": [
+        "leg_count_below_live_floor",
+        "underround_below_threshold"
+      ],
+      "city": "Singapore",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-singapore-on-june-14-2026",
+      "legs": 4,
+      "legs_detail": [
+        {
+          "ask_size": 1289.53,
+          "best_ask": 0.999,
+          "best_bid": 0.987,
+          "bracket": "32",
+          "condition_id": "0x86cb30c0f8d757bb0d2ec549e82c9b45688491419b15b1d881012d93f9c953de"
+        },
+        {
+          "ask_size": 313.02,
+          "best_ask": 0.004,
+          "best_bid": 0.001,
+          "bracket": "33",
+          "condition_id": "0x8fb56d8f1462a4b3ac87d7cd4b5b8e3a179fee8f7247d7f5128a9788d9ea08aa"
+        },
+        {
+          "ask_size": 49.0,
+          "best_ask": 0.005,
+          "best_bid": 0.001,
+          "bracket": "34",
+          "condition_id": "0x26eb927439f1585e0f907ab6b81fd226bf9e9508b43ec63b14eb820c1e588c7c"
+        },
+        {
+          "ask_size": 283.1,
+          "best_ask": 0.001,
+          "best_bid": null,
+          "bracket": "35+",
+          "condition_id": "0x92eb833452b1a81cf10b86b7c3f8784c8303cd1458066f7290234991a05c7a4f"
+        }
+      ],
+      "max_yes_spread": 0.012,
+      "min_ask_size": 49.0,
+      "min_share_basket": {
+        "cost_usd": 5.045,
+        "gross_profit_usd": -0.045,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:06:16+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:06:14+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 4
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 49.441,
+        "gross_profit_usd": -0.441,
+        "shares_per_leg": 49.0
+      },
+      "total_yes_ask_cost": 1.009,
+      "underround": -0.009
+    },
+    {
+      "ask_legs": 8,
+      "blockers": [
+        "underround_below_threshold",
+        "top_of_book_capacity_below_min_shares"
+      ],
+      "city": "NYC",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-nyc-on-june-14-2026",
+      "legs": 8,
+      "legs_detail": [
+        {
+          "ask_size": 20.0,
+          "best_ask": 0.01,
+          "best_bid": 0.002,
+          "bracket": "83",
+          "condition_id": "0x04ce283e178c8c6f9f26ad4edb9156b06d6b913272948bd8b0659836e63e9f35"
+        },
+        {
+          "ask_size": 35.53,
+          "best_ask": 0.06,
+          "best_bid": 0.05,
+          "bracket": "84-85",
+          "condition_id": "0x6a49d185916a39cfa2ba211c80a2e096617e16709185fb71e7f49c7244fe62b4"
+        },
+        {
+          "ask_size": 15.0,
+          "best_ask": 0.27,
+          "best_bid": 0.26,
+          "bracket": "86-87",
+          "condition_id": "0x51f859276c2201f19f007149124c1b66ce44e1fd8a6faeb667671074c6f6f2e1"
+        },
+        {
+          "ask_size": 221.38,
+          "best_ask": 0.52,
+          "best_bid": 0.49,
+          "bracket": "88-89",
+          "condition_id": "0x736c9214a674d3dd878e06027dc9dcd4d1b101555756a95579f6895a9b3cb1df"
+        },
+        {
+          "ask_size": 1.11,
+          "best_ask": 0.12,
+          "best_bid": 0.11,
+          "bracket": "90-91",
+          "condition_id": "0x442e0cdb1a2f82e6dc248006de9a84e18f5182c45277b79ded9e44030625f238"
+        },
+        {
+          "ask_size": 24.0,
+          "best_ask": 0.022,
+          "best_bid": 0.021,
+          "bracket": "92-93",
+          "condition_id": "0x0869fdd737c408e5c8601c51e30d90566f134812944f84cb19a7fd4ff6c655df"
+        },
+        {
+          "ask_size": 513.91,
+          "best_ask": 0.006,
+          "best_bid": 0.004,
+          "bracket": "94-95",
+          "condition_id": "0x83c87e2078eb14dc8aff80a16098958a652303a5400c8bdf60f4c353d21bfa11"
+        },
+        {
+          "ask_size": 41.65,
+          "best_ask": 0.003,
+          "best_bid": 0.001,
+          "bracket": "96-97",
+          "condition_id": "0x8ec158a4a80a0c4f23aafad6e9190244f5a845193c1be5a3a80ccad85bf8f64c"
+        }
+      ],
+      "max_yes_spread": 0.03,
+      "min_ask_size": 1.11,
+      "min_share_basket": {
+        "cost_usd": 5.055,
+        "gross_profit_usd": -0.055,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:04:54+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:04:50+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 8
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 1.1222,
+        "gross_profit_usd": -0.0122,
+        "shares_per_leg": 1.11
+      },
+      "total_yes_ask_cost": 1.011,
+      "underround": -0.011
+    },
+    {
+      "ask_legs": 3,
+      "blockers": [
+        "leg_count_below_live_floor",
+        "underround_below_threshold"
+      ],
+      "city": "Busan",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-busan-on-june-14-2026",
+      "legs": 3,
+      "legs_detail": [
+        {
+          "ask_size": 1014.66,
+          "best_ask": 0.999,
+          "best_bid": 0.99,
+          "bracket": "29",
+          "condition_id": "0x1a70c9157fd6429bacfe0021b26f0a5559d70ede7e7e6ab2280d67938c70b06a"
+        },
+        {
+          "ask_size": 83.24,
+          "best_ask": 0.005,
+          "best_bid": 0.001,
+          "bracket": "30",
+          "condition_id": "0x274f7c45bbac2b601d739f1e3190dc27edb4a51c9bf15b88e8fa3c20784ad837"
+        },
+        {
+          "ask_size": 64.1,
+          "best_ask": 0.008,
+          "best_bid": 0.001,
+          "bracket": "31",
+          "condition_id": "0xd1420a6578663b7ba591de8470adb81fc9933ec70292097c9b008322f8212652"
+        }
+      ],
+      "max_yes_spread": 0.009,
+      "min_ask_size": 64.1,
+      "min_share_basket": {
+        "cost_usd": 5.06,
+        "gross_profit_usd": -0.06,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:01:44+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:01:43+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 3
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 64.8692,
+        "gross_profit_usd": -0.7692,
+        "shares_per_leg": 64.1
+      },
+      "total_yes_ask_cost": 1.012,
+      "underround": -0.012
+    },
+    {
+      "ask_legs": 6,
+      "blockers": [
+        "underround_below_threshold",
+        "top_of_book_capacity_below_min_shares",
+        "spread_above_threshold"
+      ],
+      "city": "Chengdu",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-chengdu-on-june-14-2026",
+      "legs": 6,
+      "legs_detail": [
+        {
+          "ask_size": 5619.91,
+          "best_ask": 0.01,
+          "best_bid": null,
+          "bracket": "31",
+          "condition_id": "0x03836e33cf319cbd61c1122f60373354c5052763f2999fcb1e2fb7f458f70303"
+        },
+        {
+          "ask_size": 64.1,
+          "best_ask": 0.77,
+          "best_bid": 0.72,
+          "bracket": "32",
+          "condition_id": "0xf208666bc7eaa1d960b76287507c3b18e9b6168cd949e3f1e682b3a968389ad6"
+        },
+        {
+          "ask_size": 0.46,
+          "best_ask": 0.16,
+          "best_bid": 0.12,
+          "bracket": "33",
+          "condition_id": "0xe210c62d635d6106213f6233018fd718c22290d02b747de5b28756b435764cc3"
+        },
+        {
+          "ask_size": 30.0,
+          "best_ask": 0.059,
+          "best_bid": 0.021,
+          "bracket": "34",
+          "condition_id": "0x60fc24a2873955d74eec551b9a42be0ef927165dc13e234ab02e6702d5353704"
+        },
+        {
+          "ask_size": 198.57,
+          "best_ask": 0.01,
+          "best_bid": 0.003,
+          "bracket": "35",
+          "condition_id": "0xd0ffe174eaecde27cbd86fb83e938b69b39f81d9cfc087821753270e16ad8010"
+        },
+        {
+          "ask_size": 102.74,
+          "best_ask": 0.003,
+          "best_bid": 0.002,
+          "bracket": "36",
+          "condition_id": "0xb09227beca3daea46d2deff51c7fef303050cbd5b3eae33a234d86bc530f3407"
+        }
+      ],
+      "max_yes_spread": 0.05,
+      "min_ask_size": 0.46,
+      "min_share_basket": {
+        "cost_usd": 5.06,
+        "gross_profit_usd": -0.06,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:01:59+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:01:56+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 6
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 0.4655,
+        "gross_profit_usd": -0.0055,
+        "shares_per_leg": 0.46
+      },
+      "total_yes_ask_cost": 1.012,
+      "underround": -0.012
+    },
+    {
+      "ask_legs": 7,
+      "blockers": [
+        "underround_below_threshold"
+      ],
+      "city": "Amsterdam",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-amsterdam-on-june-14-2026",
+      "legs": 7,
+      "legs_detail": [
+        {
+          "ask_size": 20.0,
+          "best_ask": 0.009,
+          "best_bid": 0.001,
+          "bracket": "15",
+          "condition_id": "0xc5f8e6822ce7b54e2b4d4ef583dfd3de4f928b710ff8962a669bfc6fdba49fc1"
+        },
+        {
+          "ask_size": 129.5,
+          "best_ask": 0.13,
+          "best_bid": 0.1,
+          "bracket": "16",
+          "condition_id": "0x2d3b18d8cecae4c42babc12f5131faeab5d94719523b0bc0161d734124b3cfde"
+        },
+        {
+          "ask_size": 129.91,
+          "best_ask": 0.52,
+          "best_bid": 0.49,
+          "bracket": "17",
+          "condition_id": "0x2146dd4d3fa6d9a542f867d35bea687b7c51f2c586a9624fe009ea3e9551d898"
+        },
+        {
+          "ask_size": 6.43,
+          "best_ask": 0.3,
+          "best_bid": 0.29,
+          "bracket": "18",
+          "condition_id": "0xe52345ff799dc881af0e281d1ed54bcb3cb042e2fce12ad5eb517ba8edbc13da"
+        },
+        {
+          "ask_size": 25.0,
+          "best_ask": 0.047,
+          "best_bid": 0.032,
+          "bracket": "19",
+          "condition_id": "0xc3a9b5bf16d006c57aedec68272b16f541ac08be135907764462ab07e7fa164c"
+        },
+        {
+          "ask_size": 87.34,
+          "best_ask": 0.003,
+          "best_bid": 0.001,
+          "bracket": "20",
+          "condition_id": "0xd23d3cfa294f3ac3cefcaf16a03ee3ee7ffeb1dfa36e3da58ce4e48b4d9cd9b6"
+        },
+        {
+          "ask_size": 8.0,
+          "best_ask": 0.004,
+          "best_bid": null,
+          "bracket": "21",
+          "condition_id": "0xf8784ec26aab315d54311a07e850362f87b480eb0e42853cb8e1b9fb68aef12b"
+        }
+      ],
+      "max_yes_spread": 0.03,
+      "min_ask_size": 6.43,
+      "min_share_basket": {
+        "cost_usd": 5.065,
+        "gross_profit_usd": -0.065,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:00:45+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:00:40+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 7
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 6.5136,
+        "gross_profit_usd": -0.0836,
+        "shares_per_leg": 6.43
+      },
+      "total_yes_ask_cost": 1.013,
+      "underround": -0.013
+    },
+    {
+      "ask_legs": 3,
+      "blockers": [
+        "leg_count_below_live_floor",
+        "underround_below_threshold"
+      ],
+      "city": "HongKong",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-hong-kong-on-june-14-2026",
+      "legs": 3,
+      "legs_detail": [
+        {
+          "ask_size": 71.07,
+          "best_ask": 0.97,
+          "best_bid": 0.96,
+          "bracket": "29",
+          "condition_id": "0x43da1a4811bf364b4ac144ed5d52b274d0873ac256bb2cb82eeba3256f29ba62"
+        },
+        {
+          "ask_size": 31.01,
+          "best_ask": 0.04,
+          "best_bid": 0.03,
+          "bracket": "30",
+          "condition_id": "0x94bcb471b5075af0a1703ecb4fa974d32568844524a8182cb5c14e25e36fd7e9"
+        },
+        {
+          "ask_size": 79.33,
+          "best_ask": 0.005,
+          "best_bid": 0.001,
+          "bracket": "31",
+          "condition_id": "0x0342c3c12374c621801b26c06f5840fd6a95ff1de44146b14a7575ed1b3c5fb1"
+        }
+      ],
+      "max_yes_spread": 0.01,
+      "min_ask_size": 31.01,
+      "min_share_basket": {
+        "cost_usd": 5.075,
+        "gross_profit_usd": -0.075,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:02:48+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:02:47+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 3
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 31.4751,
+        "gross_profit_usd": -0.4651,
+        "shares_per_leg": 31.01
+      },
+      "total_yes_ask_cost": 1.015,
+      "underround": -0.015
+    },
+    {
+      "ask_legs": 3,
+      "blockers": [
+        "leg_count_below_live_floor",
+        "underround_below_threshold"
+      ],
+      "city": "Shenzhen",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-shenzhen-on-june-14-2026",
+      "legs": 3,
+      "legs_detail": [
+        {
+          "ask_size": 817.6,
+          "best_ask": 0.999,
+          "best_bid": 0.99,
+          "bracket": "31",
+          "condition_id": "0x824a72fdb683068130e13f12170e911892d22356016f3a05acad072a734e62e3"
+        },
+        {
+          "ask_size": 30.0,
+          "best_ask": 0.011,
+          "best_bid": 0.002,
+          "bracket": "32",
+          "condition_id": "0xd990ce2f6d6967ca08d6c0db39b634afad418d44e176cdcb5ee693720689b5f2"
+        },
+        {
+          "ask_size": 63.5,
+          "best_ask": 0.005,
+          "best_bid": 0.001,
+          "bracket": "33",
+          "condition_id": "0xe3e8865a742856e5d65525e36a62cd370bd09434d6850b9e69698e4c7554dbbc"
+        }
+      ],
+      "max_yes_spread": 0.009,
+      "min_ask_size": 30.0,
+      "min_share_basket": {
+        "cost_usd": 5.075,
+        "gross_profit_usd": -0.075,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:06:12+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:06:11+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 3
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 30.45,
+        "gross_profit_usd": -0.45,
+        "shares_per_leg": 30.0
+      },
+      "total_yes_ask_cost": 1.015,
+      "underround": -0.015
+    },
+    {
+      "ask_legs": 3,
+      "blockers": [
+        "leg_count_below_live_floor",
+        "underround_below_threshold"
+      ],
+      "city": "Seoul",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-seoul-on-june-14-2026",
+      "legs": 3,
+      "legs_detail": [
+        {
+          "ask_size": 830.61,
+          "best_ask": 0.999,
+          "best_bid": 0.997,
+          "bracket": "26",
+          "condition_id": "0x35bb592a2807cf73f294c4d830a7cd6db6e64d3b49b466d1481ebec3ec406e28"
+        },
+        {
+          "ask_size": 30.0,
+          "best_ask": 0.007,
+          "best_bid": null,
+          "bracket": "27",
+          "condition_id": "0xd93d3aa87598bc585089ce12a646a4f361dc6ce541788e75739df2988b6de668"
+        },
+        {
+          "ask_size": 12.62,
+          "best_ask": 0.009,
+          "best_bid": null,
+          "bracket": "28",
+          "condition_id": "0x7eb014e394fa1a7e2dde86ae5c503949cff3afa99db97f39d5669507210f1e5f"
+        }
+      ],
+      "max_yes_spread": 0.002,
+      "min_ask_size": 12.62,
+      "min_share_basket": {
+        "cost_usd": 5.075,
+        "gross_profit_usd": -0.075,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:06:00+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:05:58+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 3
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 12.8093,
+        "gross_profit_usd": -0.1893,
+        "shares_per_leg": 12.62
+      },
+      "total_yes_ask_cost": 1.015,
+      "underround": -0.015
+    },
+    {
+      "ask_legs": 11,
+      "blockers": [
+        "underround_below_threshold",
+        "top_of_book_capacity_below_min_shares"
+      ],
+      "city": "Dallas",
+      "event_date": "2026-06-15",
+      "event_slug": "highest-temperature-in-dallas-on-june-15-2026",
+      "legs": 11,
+      "legs_detail": [
+        {
+          "ask_size": 69.57,
+          "best_ask": 0.009,
+          "best_bid": 0.002,
+          "bracket": "73",
+          "condition_id": "0xfbd68b7fc6579cbd915a347f0d524dbff665e2acbfb01955db2d1dbb80f8b61c"
+        },
+        {
+          "ask_size": 441.62,
+          "best_ask": 0.012,
+          "best_bid": 0.003,
+          "bracket": "74-75",
+          "condition_id": "0x6087cd0c378d396f9f7f7f20624c709ec187e0596946be656b3c6cf2f4e26cf3"
+        },
+        {
+          "ask_size": 30.0,
+          "best_ask": 0.047,
+          "best_bid": 0.018,
+          "bracket": "76-77",
+          "condition_id": "0x0f603708e324fb4df308dec8f20257f4f1c29a79e2e7e97eef179f3fc6a402af"
+        },
+        {
+          "ask_size": 76.58,
+          "best_ask": 0.13,
+          "best_bid": 0.12,
+          "bracket": "78-79",
+          "condition_id": "0x836dd30870374745157da226a54ad7780039ba69366e8ff4d145f650393f4984"
+        },
+        {
+          "ask_size": 1.02,
+          "best_ask": 0.32,
+          "best_bid": 0.29,
+          "bracket": "80-81",
+          "condition_id": "0x6c1644887c0b6525a2298351f5e7b42ae79962cee7b519fb198b06b41f893be7"
+        },
+        {
+          "ask_size": 45.35,
+          "best_ask": 0.29,
+          "best_bid": 0.28,
+          "bracket": "82-83",
+          "condition_id": "0xfc426276bc6f7a8781bf7243779f815f6743ea993420e0aa581ee4d798211364"
+        },
+        {
+          "ask_size": 5.5,
+          "best_ask": 0.12,
+          "best_bid": 0.1,
+          "bracket": "84-85",
+          "condition_id": "0x153f5b05f913e1725b44b7b060b42b2faa09c1dfa2ecad5e363f400f239bc5ff"
+        },
+        {
+          "ask_size": 13.1,
+          "best_ask": 0.04,
+          "best_bid": 0.016,
+          "bracket": "86-87",
+          "condition_id": "0x56ee0a60ef33904ad076cd126790e3cfe915a0c74919e3bc806d51f1ef2aed05"
+        },
+        {
+          "ask_size": 39.0,
+          "best_ask": 0.031,
+          "best_bid": 0.015,
+          "bracket": "88-89",
+          "condition_id": "0xfdcdb9e1ca8dc768e170dd8591316bbc90b04c88072bd886dd2df6389c16ebd2"
+        },
+        {
+          "ask_size": 452.4,
+          "best_ask": 0.01,
+          "best_bid": 0.002,
+          "bracket": "90-91",
+          "condition_id": "0xbaabc5d95ca55094b7aa3e1f15accb5e631df0458403ee4dea6db4d980064d7f"
+        },
+        {
+          "ask_size": 20.04,
+          "best_ask": 0.008,
+          "best_bid": 0.002,
+          "bracket": "92+",
+          "condition_id": "0xa4501fc99b37db9a1df0b926c46d444b1bee79f585a6e4173704744b2ae24b5f"
+        }
+      ],
+      "max_yes_spread": 0.03,
+      "min_ask_size": 1.02,
+      "min_share_basket": {
+        "cost_usd": 5.085,
+        "gross_profit_usd": -0.085,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:08:52+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:08:46+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 11
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 1.0373,
+        "gross_profit_usd": -0.0173,
+        "shares_per_leg": 1.02
+      },
+      "total_yes_ask_cost": 1.017,
+      "underround": -0.017
+    },
+    {
+      "ask_legs": 11,
+      "blockers": [
+        "underround_below_threshold"
+      ],
+      "city": "Busan",
+      "event_date": "2026-06-15",
+      "event_slug": "highest-temperature-in-busan-on-june-15-2026",
+      "legs": 11,
+      "legs_detail": [
+        {
+          "ask_size": 165.0,
+          "best_ask": 0.009,
+          "best_bid": 0.003,
+          "bracket": "24",
+          "condition_id": "0xcd3196adc168cb8ab41f2664d5584d11d59f1b2b9743291e4e2691d18fca7db7"
+        },
+        {
+          "ask_size": 100.0,
+          "best_ask": 0.019,
+          "best_bid": 0.002,
+          "bracket": "25",
+          "condition_id": "0x78ead15cd380296c4592f7e619c7c66c90a1068f9ab4fb3a452a132f5ff22120"
+        },
+        {
+          "ask_size": 45.0,
+          "best_ask": 0.03,
+          "best_bid": 0.013,
+          "bracket": "26",
+          "condition_id": "0x0543adbc673863a4dc129e965ea34a70f00e5bca9149919a8cc8fe7a8604fb86"
+        },
+        {
+          "ask_size": 45.92,
+          "best_ask": 0.25,
+          "best_bid": 0.21,
+          "bracket": "27",
+          "condition_id": "0x10f5b014bfabebfbff6e65dc4d6b1ec3e94e476751e1008cb95953156941bc81"
+        },
+        {
+          "ask_size": 5.0,
+          "best_ask": 0.39,
+          "best_bid": 0.38,
+          "bracket": "28",
+          "condition_id": "0x82813dcc8f54bab9b6f82d9f99c48bca15fe3241085ef444d5eb367b96ca8a9e"
+        },
+        {
+          "ask_size": 5.0,
+          "best_ask": 0.24,
+          "best_bid": 0.22,
+          "bracket": "29",
+          "condition_id": "0x1411897bd48bb18ee403bcba34cae585671456ab8500e609d63c737a391d5cff"
+        },
+        {
+          "ask_size": 24.41,
+          "best_ask": 0.05,
+          "best_bid": 0.038,
+          "bracket": "30",
+          "condition_id": "0xbba4639ad9f0e0254aff584bbbb1c1da4ad2ef01a056593e47b2815bae56b28f"
+        },
+        {
+          "ask_size": 50.0,
+          "best_ask": 0.02,
+          "best_bid": 0.015,
+          "bracket": "31",
+          "condition_id": "0xda7eaaeab329d443f4e3d054223d85481b66592e2d7c30c3ea810bae5fe2f969"
+        },
+        {
+          "ask_size": 64.05,
+          "best_ask": 0.004,
+          "best_bid": 0.003,
+          "bracket": "32",
+          "condition_id": "0xa7af73f071152a236e6e6ffeeeb11e902a6e1597a683306698571ad5072b055c"
+        },
+        {
+          "ask_size": 50.0,
+          "best_ask": 0.004,
+          "best_bid": 0.003,
+          "bracket": "33",
+          "condition_id": "0x6421fd906954536bcef03f4d475bb218fe4f9b5c1ae0c90843ad1dab1068966c"
+        },
+        {
+          "ask_size": 70.41,
+          "best_ask": 0.003,
+          "best_bid": 0.001,
+          "bracket": "34+",
+          "condition_id": "0xad729c0c6f6d6f4ce1ca79c302bec99a602b6a8d132133c71a37f516b07a419c"
+        }
+      ],
+      "max_yes_spread": 0.04,
+      "min_ask_size": 5.0,
+      "min_share_basket": {
+        "cost_usd": 5.095,
+        "gross_profit_usd": -0.095,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:08:04+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:07:57+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 11
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 5.095,
+        "gross_profit_usd": -0.095,
+        "shares_per_leg": 5.0
+      },
+      "total_yes_ask_cost": 1.019,
+      "underround": -0.019
+    },
+    {
+      "ask_legs": 7,
+      "blockers": [
+        "underround_below_threshold"
+      ],
+      "city": "Lucknow",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-lucknow-on-june-14-2026",
+      "legs": 7,
+      "legs_detail": [
+        {
+          "ask_size": 121.54,
+          "best_ask": 0.012,
+          "best_bid": 0.005,
+          "bracket": "35",
+          "condition_id": "0xef68afc69d48e327a6e7d84382346bdb61a40dcf2215327d7d8ee053857c0f7d"
+        },
+        {
+          "ask_size": 51.2,
+          "best_ask": 0.1,
+          "best_bid": 0.07,
+          "bracket": "36",
+          "condition_id": "0xd39ad4892901cd6f203462447ecbaf149421d39aa272f6365a8d9926fa735ec3"
+        },
+        {
+          "ask_size": 17.06,
+          "best_ask": 0.5,
+          "best_bid": 0.48,
+          "bracket": "37",
+          "condition_id": "0x0905039df88b3a741392b030a5c0e42189482b4dcc9c973ed4f60eb55b67017d"
+        },
+        {
+          "ask_size": 288.1,
+          "best_ask": 0.36,
+          "best_bid": 0.34,
+          "bracket": "38",
+          "condition_id": "0x389ce287efe6f5620d11b68df6c239561093d6d9d19b493673a96249ad617401"
+        },
+        {
+          "ask_size": 35.0,
+          "best_ask": 0.043,
+          "best_bid": 0.02,
+          "bracket": "39",
+          "condition_id": "0x8e25cc7fcd4087d9af5aa34a7ffca269c51f199729d3f78dd90c05a10a951088"
+        },
+        {
+          "ask_size": 49.72,
+          "best_ask": 0.002,
+          "best_bid": 0.001,
+          "bracket": "40",
+          "condition_id": "0xed2f2b04ccb808fee87f5ba5ac8df99a6223d7436a369897a2e094b6c7769de5"
+        },
+        {
+          "ask_size": 829.58,
+          "best_ask": 0.005,
+          "best_bid": 0.001,
+          "bracket": "41",
+          "condition_id": "0xfffcebc02b996de364bc8491ea6b72bba87bc281e40bf59eb7d64a57c9ad512a"
+        }
+      ],
+      "max_yes_spread": 0.03,
+      "min_ask_size": 17.06,
+      "min_share_basket": {
+        "cost_usd": 5.11,
+        "gross_profit_usd": -0.11,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:03:52+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:03:48+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 7
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 17.4353,
+        "gross_profit_usd": -0.3753,
+        "shares_per_leg": 17.06
+      },
+      "total_yes_ask_cost": 1.022,
+      "underround": -0.022
+    },
+    {
+      "ask_legs": 11,
+      "blockers": [
+        "underround_below_threshold"
+      ],
+      "city": "SanFrancisco",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-san-francisco-on-june-14-2026",
+      "legs": 11,
+      "legs_detail": [
+        {
+          "ask_size": 10.0,
+          "best_ask": 0.029,
+          "best_bid": 0.02,
+          "bracket": "67",
+          "condition_id": "0x4a3ba810d5a51857a9580350c78438eb5a8e3c5edde25e1c2e328c385dcd62b6"
+        },
+        {
+          "ask_size": 10.75,
+          "best_ask": 0.07,
+          "best_bid": 0.04,
+          "bracket": "68-69",
+          "condition_id": "0x86104c7c825ac34d88d808697c35823379e68b9e26f68686f5d382c30241a68d"
+        },
+        {
+          "ask_size": 13.69,
+          "best_ask": 0.27,
+          "best_bid": 0.26,
+          "bracket": "70-71",
+          "condition_id": "0x8991ed6a9c4f2aa76c507bbf10cfbe1b81abe56dbd1f37bcaaa82b28ff50fa5f"
+        },
+        {
+          "ask_size": 15.35,
+          "best_ask": 0.32,
+          "best_bid": 0.3,
+          "bracket": "72-73",
+          "condition_id": "0xaa128a28962704bf44db3ef3a9228d058e14385a572454770319a3021f1a6558"
+        },
+        {
+          "ask_size": 9.67,
+          "best_ask": 0.23,
+          "best_bid": 0.21,
+          "bracket": "74-75",
+          "condition_id": "0x10fbd148d270696236cb38ad2e43b4d48fb8f45033c05289019e0fe457287fbf"
+        },
+        {
+          "ask_size": 43.0,
+          "best_ask": 0.05,
+          "best_bid": 0.04,
+          "bracket": "76-77",
+          "condition_id": "0xc1e3f3936271b7a7e2ca7c842db6a7b7c50ff46a1d41e536d4729fe532ecaf16"
+        },
+        {
+          "ask_size": 10.0,
+          "best_ask": 0.037,
+          "best_bid": 0.014,
+          "bracket": "78-79",
+          "condition_id": "0x9325baa5213ac7c10e3686256f29d42af4bfca3a92498efb16c1e60a1ed83774"
+        },
+        {
+          "ask_size": 60.0,
+          "best_ask": 0.008,
+          "best_bid": 0.002,
+          "bracket": "80-81",
+          "condition_id": "0xcfa0bbb6a5448a82cdf346b77a76ff74ba7c1600dddcd1a6048cc7cbf9fd3515"
+        },
+        {
+          "ask_size": 31.04,
+          "best_ask": 0.005,
+          "best_bid": 0.002,
+          "bracket": "82-83",
+          "condition_id": "0xce4550ecaefda07271b30d332e5c1209173d1bb0b838bcc4787f842c6810deb8"
+        },
+        {
+          "ask_size": 10.0,
+          "best_ask": 0.004,
+          "best_bid": 0.001,
+          "bracket": "84-85",
+          "condition_id": "0x606c164e28a7e5b18fc389dce4088b5c4729121686fcc60e6d835b99b47bd87d"
+        },
+        {
+          "ask_size": 8.0,
+          "best_ask": 0.003,
+          "best_bid": null,
+          "bracket": "86+",
+          "condition_id": "0x5acae75dde03ab5a7ab95a620d2d47e00da9ebc12b438f3ef1ee974cea715bc3"
+        }
+      ],
+      "max_yes_spread": 0.03,
+      "min_ask_size": 8.0,
+      "min_share_basket": {
+        "cost_usd": 5.13,
+        "gross_profit_usd": -0.13,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:05:33+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:05:26+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 11
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 8.208,
+        "gross_profit_usd": -0.208,
+        "shares_per_leg": 8.0
+      },
+      "total_yes_ask_cost": 1.026,
+      "underround": -0.026
+    },
+    {
+      "ask_legs": 2,
+      "blockers": [
+        "leg_count_below_live_floor",
+        "underround_below_threshold",
+        "spread_above_threshold"
+      ],
+      "city": "Guangzhou",
+      "event_date": "2026-06-14",
+      "event_slug": "highest-temperature-in-guangzhou-on-june-14-2026",
+      "legs": 2,
+      "legs_detail": [
+        {
+          "ask_size": 10.51,
+          "best_ask": 0.873,
+          "best_bid": 0.764,
+          "bracket": "32",
+          "condition_id": "0xe83a9128672cc6f354d25041ab828c7edce8b0b906b0663f41d242cfceb9bc63"
+        },
+        {
+          "ask_size": 30.0,
+          "best_ask": 0.154,
+          "best_bid": 0.087,
+          "bracket": "33+",
+          "condition_id": "0x504c8e47dbd25835c2e800408616f67a671f1197c0ec6517637dbb010938526f"
+        }
+      ],
+      "max_yes_spread": 0.109,
+      "min_ask_size": 10.51,
+      "min_share_basket": {
+        "cost_usd": 5.135,
+        "gross_profit_usd": -0.135,
+        "payout_if_any_leg_wins_usd": 5.0,
+        "shares_per_leg": 5.0
+      },
+      "missing_asks": 0,
+      "orderbook_fetched_at_utc_max": "2026-06-14T07:02:33+00:00",
+      "orderbook_fetched_at_utc_min": "2026-06-14T07:02:32+00:00",
+      "paper_shadow_candidate": false,
+      "snapshot_ts_utc": "2026-06-14T07:00:36Z",
+      "statuses": {
+        "ok": 2
+      },
+      "top_of_book_capacity": {
+        "cost_usd": 10.7938,
+        "gross_profit_usd": -0.2838,
+        "shares_per_leg": 10.51
+      },
+      "total_yes_ask_cost": 1.027,
+      "underround": -0.027
+    }
+  ],
+  "underround_threshold_telemetry": [
+    {
+      "candidate_count": 2,
+      "threshold": 0.005,
+      "top_candidates": [
+        {
+          "city": "Atlanta",
+          "event_date": "2026-06-14",
+          "max_yes_spread": 0.026,
+          "min_ask_size": 5.0,
+          "total_yes_ask_cost": 0.976,
+          "underround": 0.024
+        },
+        {
+          "city": "Munich",
+          "event_date": "2026-06-15",
+          "max_yes_spread": 0.02,
+          "min_ask_size": 5.0,
+          "total_yes_ask_cost": 0.991,
+          "underround": 0.009
+        }
+      ]
+    },
+    {
+      "candidate_count": 1,
+      "threshold": 0.01,
+      "top_candidates": [
+        {
+          "city": "Atlanta",
+          "event_date": "2026-06-14",
+          "max_yes_spread": 0.026,
+          "min_ask_size": 5.0,
+          "total_yes_ask_cost": 0.976,
+          "underround": 0.024
+        }
+      ]
+    },
+    {
+      "candidate_count": 1,
+      "threshold": 0.02,
+      "top_candidates": [
+        {
+          "city": "Atlanta",
+          "event_date": "2026-06-14",
+          "max_yes_spread": 0.026,
+          "min_ask_size": 5.0,
+          "total_yes_ask_cost": 0.976,
+          "underround": 0.024
+        }
+      ]
+    }
+  ],
+  "verdict": "PAPER_SHADOW_ENGINEERING_CANDIDATE"
+}

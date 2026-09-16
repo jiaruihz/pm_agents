@@ -1,0 +1,62 @@
+{
+  "by_city": {
+    "Amsterdam": {
+      "city_gate": 22,
+      "event_count": 87,
+      "paired_primary": 22,
+      "reaction_plus_30s": 22
+    },
+    "Busan": {
+      "city_gate": 56,
+      "event_count": 385,
+      "paired_primary": 56,
+      "reaction_plus_30s": 56
+    },
+    "Helsinki": {
+      "city_gate": 4,
+      "event_count": 59,
+      "paired_primary": 4,
+      "reaction_plus_30s": 4
+    },
+    "Seoul": {
+      "city_gate": 0,
+      "event_count": 268,
+      "paired_primary": 0,
+      "reaction_plus_30s": 0
+    },
+    "Tokyo": {
+      "city_gate": 7,
+      "event_count": 42,
+      "paired_primary": 7,
+      "reaction_plus_30s": 7
+    }
+  },
+  "canonical_headlines_from_single_row_table": {
+    "baseline_intersection": 1,
+    "bootstrap": 89,
+    "city_gate": 89,
+    "date_concentration": 89,
+    "primary_oracle": 89,
+    "reaction_primary_aggregate": 89
+  },
+  "immutable_aggregate_reconciliation": {
+    "bootstrap_input_contract": "same canonical rows with paired_primary and non-null PnL grouped by target_date",
+    "city_gates_verified": true,
+    "date_concentration_verified": true
+  },
+  "legacy_reaction_mismatch_count": 1,
+  "legacy_reaction_mismatch_rows": [
+    {
+      "canonical_reaction_included": false,
+      "city": "Busan",
+      "disposition": "EXCLUDE_NONCAUSAL_ENTRY_AFTER_OFFICIAL_FIRST_SEEN",
+      "effective_lead_seconds": -46.442961999999994,
+      "event_id": "819527fa18591a1a0759fed3e073e90ee3f807b00e2ad17f6b3b446503456695",
+      "old_reaction_feasible": true,
+      "target_date": "2026-08-18"
+    }
+  ],
+  "resolution": "The old reaction builder checked book feasibility but omitted the primary oracle's effective_lead_seconds > 0 guard. One Busan row entered after official first_seen. The immutable legacy files are unchanged; the closure table applies the primary causal gate to every layer.",
+  "row_count": 841,
+  "status": "PASS"
+}

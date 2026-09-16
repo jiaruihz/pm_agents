@@ -1,0 +1,41 @@
+{
+  "schema": "alpha_market20_evidence_seal_v1",
+  "run_id": "market20-20260829-candidate-scan",
+  "run_time_utc": "2026-08-28T16:34:31Z",
+  "disposition": "CANDIDATE_STAGE_COMPLETE_WITH_LIMITATIONS",
+  "execution": "NO_ORDER",
+  "gamma": {
+    "http_status": 200,
+    "events": 50,
+    "nested_markets": 608,
+    "raw_bytes": 2370159,
+    "raw_sha256": "433b2f5c1afa334d099c88b834803d68eb0bd338b836985c6c15c552fc069ba6",
+    "redirect_count": 0,
+    "auth_headers_present": false
+  },
+  "selection": {
+    "normalized_snapshots": 229,
+    "normalization_error_receipts": 379,
+    "deterministic_eligible": 192,
+    "recall_hits": 20,
+    "candidates": 20
+  },
+  "idempotent_replay": {
+    "runs": 2,
+    "recall_hits_after_replay": 20,
+    "candidates_after_replay": 20
+  },
+  "downstream": {
+    "glm": "FAILED_NO_IMPORT",
+    "rule_a": "NOT_RUN",
+    "formal_paired_book": "NOT_REQUESTED",
+    "gpt_pro": "NOT_RUN",
+    "rule_b": "NOT_REACHED",
+    "prediction_ledger": "NOT_REACHED"
+  },
+  "tests": {
+    "passed": 71,
+    "failed": 0,
+    "duration_seconds": 1.41
+  }
+}

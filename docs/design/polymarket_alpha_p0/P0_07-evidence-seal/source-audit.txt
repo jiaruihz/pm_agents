@@ -1,0 +1,9 @@
+src/polymarket_alpha/rules: passed=True violations=0
+src/polymarket_alpha: passed=True violations=0
+
+Audit implementation:
+src.polymarket_alpha.security.audit_source_tree
+
+The audit parsed every Python file without importing or executing it and found
+no network, child-process, dynamic-import, order/signing, or dynamic-code
+capability violation.

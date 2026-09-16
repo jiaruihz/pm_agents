@@ -1,0 +1,1534 @@
+{
+  "generated_at_utc": "2026-06-09T15:16:56.414504+00:00",
+  "target_metric": "forecast_quality_regime_signal_value",
+  "scope": "local research only; no N100/live config changed; no live action",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "data_audit": {
+    "db_last_modified_utc": "2026-06-09T15:09:06.567273+00:00",
+    "fact_signal_candidates_rows": 25100,
+    "fact_trades_rows": 5473,
+    "decision_sets_used": 270,
+    "fact_signal_candidates_unsettled_rows": 0,
+    "fact_signal_candidates_missing_bracket_rows": 0,
+    "fact_signal_candidates_columns": [
+      "candidate_id",
+      "condition_id",
+      "market_id",
+      "side",
+      "event_date",
+      "bracket",
+      "city",
+      "city_pool",
+      "icao",
+      "unit",
+      "forecast_source",
+      "model_version",
+      "time_bucket",
+      "window",
+      "decision_window_label",
+      "decision_hours_to_settle",
+      "decision_snapshot_ts_utc",
+      "decision_window_missing",
+      "model_p_yes",
+      "market_yes_price",
+      "edge",
+      "abs_edge",
+      "decision_entry_price",
+      "yes_spread",
+      "no_spread",
+      "yes_depth_ask_5c",
+      "no_depth_ask_5c",
+      "first_seen_ts_utc",
+      "last_seen_ts_utc",
+      "n_snapshots",
+      "edge_max",
+      "edge_mean",
+      "best_entry_price",
+      "seen",
+      "eligible",
+      "paper_ordered",
+      "live_filled",
+      "paper_order_id",
+      "paper_entry_price",
+      "paper_shares",
+      "paper_snapshot_ts_utc",
+      "fill_id",
+      "live_fill_price",
+      "live_fill_qty",
+      "live_pnl_usd",
+      "slippage_vs_paper",
+      "settlement_status",
+      "final_yes",
+      "bracket_hit",
+      "win_by_count",
+      "counterfactual_pnl",
+      "counterfactual_pnl_best",
+      "fact_built_at_utc"
+    ],
+    "fact_trades_columns": [
+      "fill_id",
+      "execution_id",
+      "order_id",
+      "plan_id",
+      "signal_id",
+      "run_id",
+      "config_id",
+      "strategy_id",
+      "strategy_name",
+      "execution_mode",
+      "fill_status",
+      "order_status",
+      "trade_class",
+      "code_version",
+      "execution_policy",
+      "sizing_mode",
+      "venue",
+      "producer_system",
+      "producer_run_id",
+      "universe_id",
+      "city",
+      "city_pool",
+      "icao",
+      "target_date",
+      "bracket",
+      "unit",
+      "side",
+      "signal_side",
+      "forecast_source",
+      "model_version",
+      "condition_id",
+      "market_id",
+      "token_id",
+      "market_key",
+      "city_day_key",
+      "order_ts_utc",
+      "order_date_bj",
+      "order_date_local",
+      "fill_ts_utc",
+      "snapshot_ts_utc",
+      "hours_to_settle",
+      "model_p_yes",
+      "market_price",
+      "edge",
+      "abs_edge",
+      "plan_price",
+      "limit_price",
+      "entry_price_window",
+      "fill_price",
+      "fill_qty",
+      "desired_shares",
+      "order_shares",
+      "fees_usd",
+      "cost_usd",
+      "cost_usd_at_plan",
+      "notional",
+      "settlement_id",
+      "settlement_join_method",
+      "settlement_match_count",
+      "settlement_status",
+      "settled",
+      "final_yes",
+      "pnl_usd_at_fill",
+      "pnl_usd_at_plan",
+      "win_by_count",
+      "contract_won",
+      "bracket_hit",
+      "val_mid",
+      "val_bid",
+      "val_last_fill",
+      "unrealized_pnl_mid",
+      "val_snapshot_ts_utc",
+      "fact_built_at_utc"
+    ]
+  },
+  "mandatory_self_check": {
+    "max_fact_built_at_utc": "2026-06-09T15:08:45.011642+00:00",
+    "trade_class_distribution": [
+      {
+        "trade_class": "live_real",
+        "n": 1405
+      },
+      {
+        "trade_class": "live_simulated",
+        "n": 1147
+      },
+      {
+        "trade_class": "paper",
+        "n": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "n": 636
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "settlement_status": null,
+        "n": 172
+      },
+      {
+        "settlement_status": "settled",
+        "n": 5301
+      }
+    ],
+    "candidate_coverage": [
+      {
+        "rows": 25100,
+        "eligible": 8300,
+        "paper_ordered": 3127,
+        "live_filled": 554
+      }
+    ],
+    "order_fill_coverage": [
+      {
+        "status": "error",
+        "orders": 151,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 1635,
+        "with_fill": 1405
+      }
+    ]
+  },
+  "coverage": {
+    "source_model": [
+      {
+        "forecast_source": "open_meteo_live_ecmwf",
+        "model_version": "ecmwf",
+        "rows": 14343
+      },
+      {
+        "forecast_source": "open_meteo_live_gfs",
+        "model_version": "gfs",
+        "rows": 10757
+      }
+    ],
+    "city": [
+      {
+        "city": "NYC",
+        "rows": 734
+      },
+      {
+        "city": "Miami",
+        "rows": 677
+      },
+      {
+        "city": "Shanghai",
+        "rows": 660
+      },
+      {
+        "city": "Madrid",
+        "rows": 658
+      },
+      {
+        "city": "Warsaw",
+        "rows": 629
+      },
+      {
+        "city": "Beijing",
+        "rows": 617
+      },
+      {
+        "city": "Seoul",
+        "rows": 608
+      },
+      {
+        "city": "LA",
+        "rows": 607
+      },
+      {
+        "city": "Austin",
+        "rows": 604
+      },
+      {
+        "city": "BuenosAires",
+        "rows": 595
+      },
+      {
+        "city": "Paris",
+        "rows": 583
+      },
+      {
+        "city": "London",
+        "rows": 565
+      },
+      {
+        "city": "SaoPaulo",
+        "rows": 557
+      },
+      {
+        "city": "Chicago",
+        "rows": 554
+      },
+      {
+        "city": "Houston",
+        "rows": 551
+      },
+      {
+        "city": "Tokyo",
+        "rows": 548
+      },
+      {
+        "city": "CapeTown",
+        "rows": 545
+      },
+      {
+        "city": "Wuhan",
+        "rows": 544
+      },
+      {
+        "city": "Atlanta",
+        "rows": 541
+      },
+      {
+        "city": "Moscow",
+        "rows": 539
+      },
+      {
+        "city": "Amsterdam",
+        "rows": 534
+      },
+      {
+        "city": "Helsinki",
+        "rows": 529
+      },
+      {
+        "city": "Chongqing",
+        "rows": 528
+      },
+      {
+        "city": "Ankara",
+        "rows": 526
+      },
+      {
+        "city": "MexicoCity",
+        "rows": 526
+      },
+      {
+        "city": "Chengdu",
+        "rows": 521
+      },
+      {
+        "city": "Guangzhou",
+        "rows": 520
+      },
+      {
+        "city": "KualaLumpur",
+        "rows": 515
+      },
+      {
+        "city": "Busan",
+        "rows": 501
+      },
+      {
+        "city": "Munich",
+        "rows": 497
+      },
+      {
+        "city": "Taipei",
+        "rows": 491
+      },
+      {
+        "city": "Singapore",
+        "rows": 489
+      },
+      {
+        "city": "Dallas",
+        "rows": 483
+      },
+      {
+        "city": "TelAviv",
+        "rows": 477
+      },
+      {
+        "city": "Istanbul",
+        "rows": 476
+      },
+      {
+        "city": "Manila",
+        "rows": 476
+      },
+      {
+        "city": "PanamaCity",
+        "rows": 468
+      },
+      {
+        "city": "Milan",
+        "rows": 462
+      },
+      {
+        "city": "SanFrancisco",
+        "rows": 461
+      },
+      {
+        "city": "Seattle",
+        "rows": 457
+      },
+      {
+        "city": "Shenzhen",
+        "rows": 454
+      },
+      {
+        "city": "Wellington",
+        "rows": 450
+      },
+      {
+        "city": "Denver",
+        "rows": 446
+      },
+      {
+        "city": "Jeddah",
+        "rows": 446
+      },
+      {
+        "city": "Karachi",
+        "rows": 434
+      },
+      {
+        "city": "HongKong",
+        "rows": 409
+      },
+      {
+        "city": "Lucknow",
+        "rows": 375
+      },
+      {
+        "city": "Jakarta",
+        "rows": 148
+      },
+      {
+        "city": "Lagos",
+        "rows": 85
+      }
+    ]
+  },
+  "cache_audit": {
+    "exists": true,
+    "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data",
+    "top_level": {
+      "backfill_30d_summary.json": {
+        "files": 1,
+        "sample": "runtime/weather_edge_v1/market_data/backfill_30d_summary.json"
+      },
+      "backfill_from_snapshots_summary.json": {
+        "files": 1,
+        "sample": "runtime/weather_edge_v1/market_data/backfill_from_snapshots_summary.json"
+      },
+      "cache": {
+        "files": 16771,
+        "sample": "runtime/weather_edge_v1/market_data/cache/jma_v5/jma_v5_Phoenix_2025-05-10_2026-04-29.json"
+      },
+      "clob_price_history": {
+        "files": 8600,
+        "sample": "runtime/weather_edge_v1/market_data/clob_price_history/2026-04-07/Miami/60093852577087533609.json"
+      },
+      "gamma_events": {
+        "files": 497,
+        "sample": "runtime/weather_edge_v1/market_data/gamma_events/2026-04-07/Boston.json"
+      },
+      "live_orderbook": {
+        "files": 2,
+        "sample": "runtime/weather_edge_v1/market_data/live_orderbook/2026-05-19/weather_edge_orderbooks_2026-05-19.jsonl.gz"
+      },
+      "logs": {
+        "files": 4,
+        "sample": "runtime/weather_edge_v1/market_data/logs/paper_snapshot.log"
+      },
+      "manifest.jsonl": {
+        "files": 1,
+        "sample": "runtime/weather_edge_v1/market_data/manifest.jsonl"
+      },
+      "orderbook_snapshots": {
+        "files": 1048,
+        "sample": "runtime/weather_edge_v1/market_data/orderbook_snapshots/2026-05-29/orderbook_snapshot_20260529_1400.jsonl.gz"
+      },
+      "paper_snapshots": {
+        "files": 1685,
+        "sample": "runtime/weather_edge_v1/market_data/paper_snapshots/snapshot_20260516_1300.json"
+      },
+      "paper_trades": {
+        "files": 1,
+        "sample": "runtime/weather_edge_v1/market_data/paper_trades/paper_orders.jsonl"
+      },
+      "research": {
+        "files": 37,
+        "sample": "runtime/weather_edge_v1/market_data/research/t24_snapshot_replay_top_losers.csv"
+      }
+    },
+    "join_candidates": [
+      {
+        "source": "fact_signal_candidates / fact_trades",
+        "join_key": "condition_id + side + event_date(target_date); distribution grain deduped to city/event_date/source/model/snapshot/bracket",
+        "safe_for_features": true,
+        "leakage_risk": "low when settlement fields are used only as labels",
+        "used": true
+      },
+      {
+        "source": "orderbook_snapshots/*.jsonl.gz",
+        "join_key": "token/condition_id + snapshot_ts_utc <= decision_snapshot_ts_utc",
+        "safe_for_features": true,
+        "leakage_risk": "medium if latest snapshot is used instead of time-aligned <= decision snapshot",
+        "used": false
+      },
+      {
+        "source": "cache/pm_history/*.json",
+        "join_key": "city + event_date + bracket",
+        "safe_for_features": false,
+        "leakage_risk": "final settlement; labels only",
+        "used": false
+      },
+      {
+        "source": "cache/iem/*.csv and cache/wu_obs/*.csv",
+        "join_key": "icao/city + observation timestamp",
+        "safe_for_features": false,
+        "leakage_risk": "weather observations can occur after decision/event; needs timestamp <= decision_snapshot_ts_utc materialized before use",
+        "used": false
+      },
+      {
+        "source": "raw forecast issue/cache files",
+        "join_key": "city + event_date + forecast_source + forecast_run_ts <= decision_snapshot_ts_utc",
+        "safe_for_features": false,
+        "leakage_risk": "not currently materialized in local fact tables; forecast run age needs pipeline support",
+        "used": false
+      }
+    ]
+  },
+  "split": {
+    "method": "event_date chronological 70/30 split",
+    "train_start": "2026-05-06",
+    "train_end": "2026-05-28",
+    "holdout_start": "2026-05-29",
+    "holdout_end": "2026-06-07",
+    "train_dates": 21,
+    "holdout_dates": 9
+  },
+  "thresholds_train_derived": {
+    "entropy_low_max": 0.7076763739132063,
+    "entropy_high_min": 0.8423549096219223,
+    "mode_prob_high_min": 0.5599337356525855,
+    "adj2_high_min": 0.9703901532745008,
+    "adj3_high_min": 1.0,
+    "hist_adj3_miss_low_max": 0.0,
+    "hist_adj3_miss_high_min": 0.062962962962963,
+    "disagreement_low_max": 1.0,
+    "disagreement_high_min": 2.0,
+    "model_tail_low_max": 0.0,
+    "market_tail_high_min": 0.0
+  },
+  "regime_eval": [
+    {
+      "split": "train",
+      "regime": "high_uncertainty_no_trade",
+      "n": 157,
+      "event_dates": 21,
+      "cities": 47,
+      "final_in_model_mode": {
+        "n": 157,
+        "dates": 21,
+        "mean": 0.3173110179744412,
+        "ci95": [
+          0.2224276391843287,
+          0.4186069895794575
+        ]
+      },
+      "final_in_model_adjacent2": {
+        "n": 157,
+        "dates": 21,
+        "mean": 0.8077267749204945,
+        "ci95": [
+          0.7344644875494057,
+          0.8791067347991829
+        ]
+      },
+      "final_in_model_adjacent3": {
+        "n": 157,
+        "dates": 21,
+        "mean": 0.948625590587112,
+        "ci95": [
+          0.9210115318057047,
+          0.9744897959183673
+        ]
+      },
+      "tail_miss": {
+        "n": 157,
+        "dates": 21,
+        "mean": 0.05137440941288796,
+        "ci95": [
+          0.025510204081632654,
+          0.07898846819429525
+        ]
+      }
+    },
+    {
+      "split": "train",
+      "regime": "low_uncertainty_adjacent3_allowed",
+      "n": 15,
+      "event_dates": 10,
+      "cities": 10,
+      "final_in_model_mode": {
+        "n": 15,
+        "dates": 10,
+        "mean": 0.45,
+        "ci95": [
+          0.2,
+          0.7
+        ]
+      },
+      "final_in_model_adjacent2": {
+        "n": 15,
+        "dates": 10,
+        "mean": 0.9166666666666666,
+        "ci95": [
+          0.8,
+          1.0
+        ]
+      },
+      "final_in_model_adjacent3": {
+        "n": 15,
+        "dates": 10,
+        "mean": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ]
+      },
+      "tail_miss": {
+        "n": 15,
+        "dates": 10,
+        "mean": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "split": "train",
+      "regime": "medium_uncertainty_adjacent2_only_if_cheap",
+      "n": 29,
+      "event_dates": 16,
+      "cities": 11,
+      "final_in_model_mode": {
+        "n": 29,
+        "dates": 16,
+        "mean": 0.28125,
+        "ci95": [
+          0.109375,
+          0.46875
+        ]
+      },
+      "final_in_model_adjacent2": {
+        "n": 29,
+        "dates": 16,
+        "mean": 0.984375,
+        "ci95": [
+          0.953125,
+          1.0
+        ]
+      },
+      "final_in_model_adjacent3": {
+        "n": 29,
+        "dates": 16,
+        "mean": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ]
+      },
+      "tail_miss": {
+        "n": 29,
+        "dates": 16,
+        "mean": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "split": "train",
+      "regime": "tail_overpriced_low_model_tail_risk",
+      "n": 66,
+      "event_dates": 20,
+      "cities": 27,
+      "final_in_model_mode": {
+        "n": 66,
+        "dates": 20,
+        "mean": 0.32113636363636355,
+        "ci95": [
+          0.2119621212121212,
+          0.441681818181818
+        ]
+      },
+      "final_in_model_adjacent2": {
+        "n": 66,
+        "dates": 20,
+        "mean": 0.8810101010101009,
+        "ci95": [
+          0.7972196969696971,
+          0.9537878787878787
+        ]
+      },
+      "final_in_model_adjacent3": {
+        "n": 66,
+        "dates": 20,
+        "mean": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ]
+      },
+      "tail_miss": {
+        "n": 66,
+        "dates": 20,
+        "mean": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "split": "holdout",
+      "regime": "high_uncertainty_no_trade",
+      "n": 53,
+      "event_dates": 9,
+      "cities": 30,
+      "final_in_model_mode": {
+        "n": 53,
+        "dates": 9,
+        "mean": 0.22948786106680844,
+        "ci95": [
+          0.04093567251461988,
+          0.45509037745879843
+        ]
+      },
+      "final_in_model_adjacent2": {
+        "n": 53,
+        "dates": 9,
+        "mean": 0.735778841041999,
+        "ci95": [
+          0.5016835016835017,
+          0.9393939393939394
+        ]
+      },
+      "final_in_model_adjacent3": {
+        "n": 53,
+        "dates": 9,
+        "mean": 0.9840510366826156,
+        "ci95": [
+          0.9606326422115897,
+          1.0
+        ]
+      },
+      "tail_miss": {
+        "n": 53,
+        "dates": 9,
+        "mean": 0.01594896331738437,
+        "ci95": [
+          0.0,
+          0.03936735778841027
+        ]
+      }
+    },
+    {
+      "split": "holdout",
+      "regime": "low_uncertainty_adjacent3_allowed",
+      "n": 9,
+      "event_dates": 4,
+      "cities": 6,
+      "final_in_model_mode": {
+        "n": 9,
+        "dates": 4,
+        "mean": 0.2708333333333333,
+        "ci95": [
+          0.0,
+          0.564583333333322
+        ]
+      },
+      "final_in_model_adjacent2": {
+        "n": 9,
+        "dates": 4,
+        "mean": 0.6666666666666666,
+        "ci95": [
+          0.25,
+          1.0
+        ]
+      },
+      "final_in_model_adjacent3": {
+        "n": 9,
+        "dates": 4,
+        "mean": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ]
+      },
+      "tail_miss": {
+        "n": 9,
+        "dates": 4,
+        "mean": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "split": "holdout",
+      "regime": "medium_uncertainty_adjacent2_only_if_cheap",
+      "n": 7,
+      "event_dates": 3,
+      "cities": 6,
+      "final_in_model_mode": {
+        "n": 7,
+        "dates": 3,
+        "mean": 0.2222222222222222,
+        "ci95": [
+          0.0,
+          0.6666666666666666
+        ]
+      },
+      "final_in_model_adjacent2": {
+        "n": 7,
+        "dates": 3,
+        "mean": 0.7777777777777777,
+        "ci95": [
+          0.6666666666666666,
+          1.0
+        ]
+      },
+      "final_in_model_adjacent3": {
+        "n": 7,
+        "dates": 3,
+        "mean": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ]
+      },
+      "tail_miss": {
+        "n": 7,
+        "dates": 3,
+        "mean": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "split": "holdout",
+      "regime": "tail_overpriced_low_model_tail_risk",
+      "n": 20,
+      "event_dates": 5,
+      "cities": 11,
+      "final_in_model_mode": {
+        "n": 20,
+        "dates": 5,
+        "mean": 0.18333333333333332,
+        "ci95": [
+          0.0,
+          0.45
+        ]
+      },
+      "final_in_model_adjacent2": {
+        "n": 20,
+        "dates": 5,
+        "mean": 0.7277777777777777,
+        "ci95": [
+          0.3555555555555555,
+          0.9777777777777779
+        ]
+      },
+      "final_in_model_adjacent3": {
+        "n": 20,
+        "dates": 5,
+        "mean": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ]
+      },
+      "tail_miss": {
+        "n": 20,
+        "dates": 5,
+        "mean": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    }
+  ],
+  "feature_signal_value": [
+    {
+      "split": "train",
+      "feature": "model_entropy",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.5104669887278583,
+      "spearman": 0.016820213919788798,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_entropy",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.6041158536585366,
+      "spearman": 0.1453345012108688,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_entropy",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.6527883880825057,
+      "spearman": 0.13473335077768556,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_entropy",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.3472116119174943,
+      "spearman": -0.13473335077768556,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_mode_probability",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.5661375661375662,
+      "spearman": 0.10628161073587095,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_mode_probability",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.5936737804878048,
+      "spearman": 0.13075854171018622,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_mode_probability",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.694996180290298,
+      "spearman": 0.17195350245652266,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_mode_probability",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.3050038197097021,
+      "spearman": -0.17195350245652266,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_adjacent2_mass",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.5179434092477571,
+      "spearman": 0.028865968970382985,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_adjacent2_mass",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.6935975609756098,
+      "spearman": 0.2705348144305084,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_adjacent2_mass",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.7486631016042781,
+      "spearman": 0.21951668087214044,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_adjacent2_mass",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.25133689839572193,
+      "spearman": -0.21951668087214044,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_adjacent3_mass",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.5791925465838509,
+      "spearman": 0.14365771249589807,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_adjacent3_mass",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.7038871951219512,
+      "spearman": 0.3212748215935391,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_adjacent3_mass",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.9035523300229182,
+      "spearman": 0.40171634291056885,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_adjacent3_mass",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.09644766997708175,
+      "spearman": -0.40171634291056885,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_tail_mass_outside_adjacent3",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.43461007591442374,
+      "spearman": -0.14652653053951356,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_tail_mass_outside_adjacent3",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.28528963414634145,
+      "spearman": -0.41792711313300307,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_tail_mass_outside_adjacent3",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.09186401833460657,
+      "spearman": -0.5018631645725656,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_tail_mass_outside_adjacent3",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.9081359816653934,
+      "spearman": 0.5018631645725656,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_market_entropy_gap",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.47918104439843573,
+      "spearman": -0.03345559032397553,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_market_entropy_gap",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.4896341463414634,
+      "spearman": -0.01446961359054038,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_market_entropy_gap",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.49847211611917497,
+      "spearman": -0.0013473335077768555,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_market_entropy_gap",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.501527883880825,
+      "spearman": 0.0013473335077768555,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_market_l1_gap",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.3203358638141247,
+      "spearman": -0.2887161993704407,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_market_l1_gap",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.17804878048780487,
+      "spearman": -0.44940917504737177,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_market_l1_gap",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.08594346829640948,
+      "spearman": -0.36512738060752786,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "model_market_l1_gap",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.9140565317035906,
+      "spearman": 0.36512738060752786,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "distribution_variance",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.4861973775017253,
+      "spearman": -0.022250252153864225,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "distribution_variance",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.43978658536585363,
+      "spearman": -0.08431574560996513,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "distribution_variance",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.3533231474407945,
+      "spearman": -0.12975076054549148,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "distribution_variance",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.6466768525592055,
+      "spearman": 0.12975076054549148,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "ecmwf_gfs_mode_distance",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": null,
+      "spearman": null,
+      "n": 0
+    },
+    {
+      "split": "train",
+      "feature": "ecmwf_gfs_mode_distance",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": null,
+      "spearman": null,
+      "n": 0
+    },
+    {
+      "split": "train",
+      "feature": "ecmwf_gfs_mode_distance",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": null,
+      "spearman": null,
+      "n": 0
+    },
+    {
+      "split": "train",
+      "feature": "ecmwf_gfs_mode_distance",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": null,
+      "spearman": null,
+      "n": 0
+    },
+    {
+      "split": "train",
+      "feature": "city_source_historical_adj3_miss_rate_filled",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.4975270301357258,
+      "spearman": -0.0046741918046958545,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "city_source_historical_adj3_miss_rate_filled",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.5255335365853658,
+      "spearman": 0.04192188278346079,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "city_source_historical_adj3_miss_rate_filled",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.5133689839572193,
+      "spearman": 0.01386631656674986,
+      "n": 201
+    },
+    {
+      "split": "train",
+      "feature": "city_source_historical_adj3_miss_rate_filled",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.48663101604278075,
+      "spearman": -0.01386631656674986,
+      "n": 201
+    },
+    {
+      "split": "holdout",
+      "feature": "model_entropy",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.499054820415879,
+      "spearman": -0.001543633918471144,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_entropy",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.660377358490566,
+      "spearman": 0.23449205298058867,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_entropy",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.5909090909090909,
+      "spearman": 0.06422839308458257,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_entropy",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.4090909090909091,
+      "spearman": -0.06422839308458257,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_mode_probability",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.5274102079395085,
+      "spearman": 0.04476538363566318,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_mode_probability",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.4988207547169811,
+      "spearman": -0.0017242062719160932,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_mode_probability",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.8888888888888888,
+      "spearman": 0.27475479263960323,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_mode_probability",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.1111111111111111,
+      "spearman": -0.27475479263960323,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_adjacent2_mass",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.504725897920605,
+      "spearman": 0.007738482555769119,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_adjacent2_mass",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.5660377358490566,
+      "spearman": 0.09680966968841709,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_adjacent2_mass",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.8434343434343434,
+      "spearman": 0.24327918656777936,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_adjacent2_mass",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.15656565656565657,
+      "spearman": -0.24327918656777936,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_adjacent3_mass",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.6545368620037807,
+      "spearman": 0.2822320625260802,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_adjacent3_mass",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.6332547169811321,
+      "spearman": 0.21787727944957144,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_adjacent3_mass",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.9242424242424242,
+      "spearman": 0.33518001598743036,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_adjacent3_mass",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.07575757575757576,
+      "spearman": -0.33518001598743036,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_tail_mass_outside_adjacent3",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.43289224952741023,
+      "spearman": -0.1659210650568855,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_tail_mass_outside_adjacent3",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.41745283018867924,
+      "spearman": -0.18272001652027506,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_tail_mass_outside_adjacent3",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.07575757575757576,
+      "spearman": -0.4537667848152822,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_tail_mass_outside_adjacent3",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.9242424242424242,
+      "spearman": 0.4537667848152822,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_market_entropy_gap",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.5293005671077504,
+      "spearman": 0.047852651472605465,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_market_entropy_gap",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.5719339622641509,
+      "spearman": 0.10517658258688169,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_market_entropy_gap",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.4494949494949495,
+      "spearman": -0.03568244060254588,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_market_entropy_gap",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.5505050505050505,
+      "spearman": 0.03568244060254588,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_market_l1_gap",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.4158790170132325,
+      "spearman": -0.1373834187439318,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_market_l1_gap",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.20047169811320756,
+      "spearman": -0.4379483930666877,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_market_l1_gap",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.13131313131313133,
+      "spearman": -0.26048181639858486,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "model_market_l1_gap",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.8686868686868687,
+      "spearman": 0.26048181639858486,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "distribution_variance",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.4815689981096408,
+      "spearman": -0.03011324152051044,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "distribution_variance",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.6279481132075472,
+      "spearman": 0.18715332269394896,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "distribution_variance",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.23232323232323232,
+      "spearman": -0.18919471663933823,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "distribution_variance",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.7676767676767676,
+      "spearman": 0.18919471663933823,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "ecmwf_gfs_mode_distance",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": null,
+      "spearman": null,
+      "n": 0
+    },
+    {
+      "split": "holdout",
+      "feature": "ecmwf_gfs_mode_distance",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": null,
+      "spearman": null,
+      "n": 0
+    },
+    {
+      "split": "holdout",
+      "feature": "ecmwf_gfs_mode_distance",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": null,
+      "spearman": null,
+      "n": 0
+    },
+    {
+      "split": "holdout",
+      "feature": "ecmwf_gfs_mode_distance",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": null,
+      "spearman": null,
+      "n": 0
+    },
+    {
+      "split": "holdout",
+      "feature": "city_source_historical_adj3_miss_rate_filled",
+      "label": "final_in_model_mode",
+      "auc_feature_high_predicts_label": 0.504725897920605,
+      "spearman": 0.009202907753636993,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "city_source_historical_adj3_miss_rate_filled",
+      "label": "final_in_model_adjacent2",
+      "auc_feature_high_predicts_label": 0.47759433962264153,
+      "spearman": -0.03906191882640633,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "city_source_historical_adj3_miss_rate_filled",
+      "label": "final_in_model_adjacent3",
+      "auc_feature_high_predicts_label": 0.4671717171717172,
+      "spearman": -0.027655318205214687,
+      "n": 69
+    },
+    {
+      "split": "holdout",
+      "feature": "city_source_historical_adj3_miss_rate_filled",
+      "label": "tail_miss",
+      "auc_feature_high_predicts_label": 0.5328282828282829,
+      "spearman": 0.027655318205214687,
+      "n": 69
+    }
+  ],
+  "feature_availability": {
+    "fact_available": [
+      "city",
+      "event_date",
+      "forecast_source",
+      "model_version",
+      "decision_hours_to_settle",
+      "model_p_yes",
+      "market_yes_price",
+      "final_yes",
+      "settlement_status",
+      "distribution-derived entropy/mode/adjacent/tail/variance",
+      "historical calibration error from past event_date only"
+    ],
+    "needs_pipeline": [
+      "forecast run age with forecast_run_ts_utc",
+      "timestamp-safe observed trend/weather stability",
+      "paired ECMWF/GFS disagreement at identical forecast issuance/checkpoint"
+    ]
+  },
+  "regime_definitions_for_range_rv": {
+    "low_uncertainty_adjacent3_allowed": "low model entropy + high mode probability + high adjacent3 mass + low historical adjacent3 miss + low cross-model disagreement",
+    "medium_uncertainty_adjacent2_only_if_cheap": "not low or high uncertainty, but adjacent2 model mass remains high; requires cheap market entry in planner",
+    "high_uncertainty_no_trade": "high entropy, high historical miss, or high cross-model mode disagreement",
+    "tail_overpriced_low_model_tail_risk": "model outside-adjacent3 tail mass low while market outside-adjacent3 tail mass high, excluding high uncertainty"
+  }
+}

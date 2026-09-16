@@ -1,0 +1,70 @@
+{
+  "schema_version": "city_mechanism_profiles_v2",
+  "purpose": "Descriptive multi-axis research metadata. This file contains no trading permissions, allowlists, or gates.",
+  "axis_schema": {
+    "geography": {
+      "fields": ["legacy_context", "latitude", "longitude", "hemisphere"],
+      "provenance_required": true
+    },
+    "terrain": {
+      "fields": ["classification", "elevation_m", "legacy_hint"],
+      "provenance_required": true
+    },
+    "coastal": {
+      "fields": ["classification", "coast_normal_bearing_deg", "orientation_status"],
+      "provenance_required": true
+    },
+    "source_topology": {
+      "fields": ["settlement_source_class", "primary_observation_source", "fallback_observation_sources"],
+      "provenance_required": true
+    },
+    "forecast_topology": {
+      "fields": ["assigned_model", "regional_model_availability"],
+      "provenance_required": true
+    }
+  },
+  "shared_provenance": {
+    "legacy_weather_context": "weather_data_feed/weather_context.py:CITY_WIND_CONTEXT",
+    "legacy_city_family": "weather_data_feed/city_family.py",
+    "source_topology": "weather_data_feed/source_profiles.json",
+    "forecast_topology": "not yet materialized in a shared static registry"
+  },
+  "city_overrides": {
+    "Amsterdam": {"legacy_context": "coastal_marine"},
+    "Atlanta": {"legacy_context": "inland_humid"},
+    "Austin": {"legacy_context": "inland_plain"},
+    "Beijing": {"legacy_context": "inland_plain"},
+    "BuenosAires": {"legacy_context": "coastal_marine"},
+    "Busan": {"legacy_context": "coastal_humid"},
+    "CapeTown": {"legacy_context": "coastal_marine"},
+    "Chengdu": {"legacy_context": "basin_inland"},
+    "Chongqing": {"legacy_context": "basin_inland"},
+    "Dallas": {"legacy_context": "inland_plain"},
+    "Denver": {"legacy_context": "high_plain"},
+    "Guangzhou": {"legacy_context": "coastal_humid"},
+    "Helsinki": {"legacy_context": "coastal_marine"},
+    "Houston": {"legacy_context": "coastal_humid"},
+    "Istanbul": {"legacy_context": "coastal_marine"},
+    "Jeddah": {"legacy_context": "coastal_desert"},
+    "Karachi": {"legacy_context": "coastal_desert"},
+    "LA": {"legacy_context": "coastal_marine"},
+    "London": {"legacy_context": "coastal_marine"},
+    "Lucknow": {"legacy_context": "inland_plain"},
+    "Madrid": {"legacy_context": "inland_plateau"},
+    "Manila": {"legacy_context": "coastal_humid"},
+    "Miami": {"legacy_context": "coastal_humid"},
+    "Munich": {"legacy_context": "inland_alpine_edge"},
+    "NYC": {"legacy_context": "coastal_marine"},
+    "SanFrancisco": {"legacy_context": "coastal_marine"},
+    "SaoPaulo": {"legacy_context": "inland_plateau"},
+    "Seattle": {"legacy_context": "coastal_marine"},
+    "Shanghai": {"legacy_context": "coastal_humid"},
+    "Singapore": {"legacy_context": "coastal_humid"},
+    "Taipei": {"legacy_context": "coastal_humid"},
+    "TelAviv": {"legacy_context": "coastal_desert"},
+    "Tokyo": {"legacy_context": "coastal_humid"},
+    "Warsaw": {"legacy_context": "inland_plain"},
+    "Wellington": {"legacy_context": "coastal_marine"},
+    "Wuhan": {"legacy_context": "inland_humid"}
+  }
+}

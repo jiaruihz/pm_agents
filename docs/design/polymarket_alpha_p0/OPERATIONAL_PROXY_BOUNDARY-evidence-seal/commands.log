@@ -1,0 +1,36 @@
+2026-08-27 pre-review focused regression:
+  .venv/bin/python -m pytest -q tests/polymarket_alpha/test_security_proxy_transport_op_r1.py tests/polymarket_alpha/test_operational_gamma_executor_op_02.py tests/polymarket_alpha/test_security_transport_p0_11.py tests/polymarket_alpha/test_operational_preflight_op_04_05.py
+  result: 96 passed
+
+2026-08-27 independent review:
+  focused read-only review; reviewer test result 38 passed
+  findings: 2 P1, 1 P2; all fixed
+
+2026-08-27 post-review focused regression:
+  same focused command
+  result before live framing discovery: 99 passed
+
+2026-08-27 explicit proxy canary attempt 1:
+  clean environment; fixed profile mac_local_market_proxy_v1
+  GET https://gamma-api.polymarket.com/events?closed=false&limit=4&offset=0
+  result: CONNECT/TLS reached Gamma; bounded parser rejected Transfer-Encoding: chunked; immutable failure receipt preserved
+
+2026-08-27 chunked framing regression:
+  same focused command with bounded chunked fixtures
+  result: 100 passed
+
+2026-08-27 explicit proxy canary attempt 2:
+  clean environment; fixed profile mac_local_market_proxy_v1
+  GET https://gamma-api.polymarket.com/events?closed=false&limit=4&offset=0
+  result: CONNECT 200; TLS gamma-api.polymarket.com; HTTP 200; 4 events; 21 nested distinct markets; 84,979 bytes
+
+2026-08-27 full Alpha regression:
+  .venv/bin/python -m pytest -q tests/polymarket_alpha
+  result: 473 passed
+
+Not run:
+  Alpha owner demand submission
+  production config/deploy/restart
+  current runtime/database write
+  CLOB order/signing/private-key operation
+

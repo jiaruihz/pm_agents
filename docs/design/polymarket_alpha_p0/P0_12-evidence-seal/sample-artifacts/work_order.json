@@ -1,0 +1,403 @@
+[
+  {
+    "acceptance": [
+      "P0-01_PASS"
+    ],
+    "attempt": 1,
+    "closes_acceptance": [],
+    "created_at_utc": "2026-08-27T12:00:00Z",
+    "depends_on": [],
+    "heartbeat_interval_seconds": 60,
+    "last_heartbeat_at_utc": null,
+    "lease_expires_at_utc": null,
+    "lease_id": "sealed-p0-01",
+    "lease_timeout_seconds": 900,
+    "max_attempts": 2,
+    "objective": "Complete and verify P0-01 offline implementation",
+    "owner": "codex-coordinated",
+    "parent_run_id": null,
+    "result_ref": null,
+    "risk": "read_only",
+    "role": "bounded_component_owner",
+    "scope": {
+      "network_access": false,
+      "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+    },
+    "status": "complete",
+    "verifiers": [],
+    "work_order_id": "P0-01",
+    "write_owners": [
+      "src/polymarket_alpha/contracts"
+    ]
+  },
+  {
+    "acceptance": [
+      "P0-02_PASS"
+    ],
+    "attempt": 1,
+    "closes_acceptance": [],
+    "created_at_utc": "2026-08-27T12:00:00Z",
+    "depends_on": [],
+    "heartbeat_interval_seconds": 60,
+    "last_heartbeat_at_utc": null,
+    "lease_expires_at_utc": null,
+    "lease_id": "sealed-p0-02",
+    "lease_timeout_seconds": 900,
+    "max_attempts": 2,
+    "objective": "Complete and verify P0-02 offline implementation",
+    "owner": "codex-coordinated",
+    "parent_run_id": null,
+    "result_ref": null,
+    "risk": "read_only",
+    "role": "bounded_component_owner",
+    "scope": {
+      "network_access": false,
+      "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+    },
+    "status": "complete",
+    "verifiers": [],
+    "work_order_id": "P0-02",
+    "write_owners": [
+      "src/polymarket_alpha/storage"
+    ]
+  },
+  {
+    "acceptance": [
+      "P0-03_PASS"
+    ],
+    "attempt": 1,
+    "closes_acceptance": [],
+    "created_at_utc": "2026-08-27T12:00:00Z",
+    "depends_on": [],
+    "heartbeat_interval_seconds": 60,
+    "last_heartbeat_at_utc": null,
+    "lease_expires_at_utc": null,
+    "lease_id": "sealed-p0-03",
+    "lease_timeout_seconds": 900,
+    "max_attempts": 2,
+    "objective": "Complete and verify P0-03 offline implementation",
+    "owner": "codex-coordinated",
+    "parent_run_id": null,
+    "result_ref": null,
+    "risk": "read_only",
+    "role": "bounded_component_owner",
+    "scope": {
+      "network_access": false,
+      "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+    },
+    "status": "complete",
+    "verifiers": [],
+    "work_order_id": "P0-03",
+    "write_owners": [
+      "src/polymarket_alpha/adapters+census"
+    ]
+  },
+  {
+    "acceptance": [
+      "P0-04_PASS"
+    ],
+    "attempt": 1,
+    "closes_acceptance": [],
+    "created_at_utc": "2026-08-27T12:00:00Z",
+    "depends_on": [],
+    "heartbeat_interval_seconds": 60,
+    "last_heartbeat_at_utc": null,
+    "lease_expires_at_utc": null,
+    "lease_id": "sealed-p0-04",
+    "lease_timeout_seconds": 900,
+    "max_attempts": 2,
+    "objective": "Complete and verify P0-04 offline implementation",
+    "owner": "codex-coordinated",
+    "parent_run_id": null,
+    "result_ref": null,
+    "risk": "read_only",
+    "role": "bounded_component_owner",
+    "scope": {
+      "network_access": false,
+      "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+    },
+    "status": "complete",
+    "verifiers": [],
+    "work_order_id": "P0-04",
+    "write_owners": [
+      "src/polymarket_alpha/change"
+    ]
+  },
+  {
+    "acceptance": [
+      "P0-05_PASS"
+    ],
+    "attempt": 1,
+    "closes_acceptance": [],
+    "created_at_utc": "2026-08-27T12:00:00Z",
+    "depends_on": [],
+    "heartbeat_interval_seconds": 60,
+    "last_heartbeat_at_utc": null,
+    "lease_expires_at_utc": null,
+    "lease_id": "sealed-p0-05",
+    "lease_timeout_seconds": 900,
+    "max_attempts": 2,
+    "objective": "Complete and verify P0-05 offline implementation",
+    "owner": "codex-coordinated",
+    "parent_run_id": null,
+    "result_ref": null,
+    "risk": "read_only",
+    "role": "bounded_component_owner",
+    "scope": {
+      "network_access": false,
+      "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+    },
+    "status": "complete",
+    "verifiers": [],
+    "work_order_id": "P0-05",
+    "write_owners": [
+      "src/polymarket_alpha/books"
+    ]
+  },
+  {
+    "acceptance": [
+      "P0-06_PASS"
+    ],
+    "attempt": 1,
+    "closes_acceptance": [],
+    "created_at_utc": "2026-08-27T12:00:00Z",
+    "depends_on": [],
+    "heartbeat_interval_seconds": 60,
+    "last_heartbeat_at_utc": null,
+    "lease_expires_at_utc": null,
+    "lease_id": "sealed-p0-06",
+    "lease_timeout_seconds": 900,
+    "max_attempts": 2,
+    "objective": "Complete and verify P0-06 offline implementation",
+    "owner": "codex-coordinated",
+    "parent_run_id": null,
+    "result_ref": null,
+    "risk": "read_only",
+    "role": "bounded_component_owner",
+    "scope": {
+      "network_access": false,
+      "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+    },
+    "status": "complete",
+    "verifiers": [],
+    "work_order_id": "P0-06",
+    "write_owners": [
+      "src/polymarket_alpha/recall"
+    ]
+  },
+  {
+    "acceptance": [
+      "P0-07_PASS"
+    ],
+    "attempt": 1,
+    "closes_acceptance": [],
+    "created_at_utc": "2026-08-27T12:00:00Z",
+    "depends_on": [],
+    "heartbeat_interval_seconds": 60,
+    "last_heartbeat_at_utc": null,
+    "lease_expires_at_utc": null,
+    "lease_id": "sealed-p0-07",
+    "lease_timeout_seconds": 900,
+    "max_attempts": 2,
+    "objective": "Complete and verify P0-07 offline implementation",
+    "owner": "codex-coordinated",
+    "parent_run_id": null,
+    "result_ref": null,
+    "risk": "read_only",
+    "role": "bounded_component_owner",
+    "scope": {
+      "network_access": false,
+      "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+    },
+    "status": "complete",
+    "verifiers": [],
+    "work_order_id": "P0-07",
+    "write_owners": [
+      "src/polymarket_alpha/rules"
+    ]
+  },
+  {
+    "acceptance": [
+      "P0-08_PASS"
+    ],
+    "attempt": 1,
+    "closes_acceptance": [],
+    "created_at_utc": "2026-08-27T12:00:00Z",
+    "depends_on": [],
+    "heartbeat_interval_seconds": 60,
+    "last_heartbeat_at_utc": null,
+    "lease_expires_at_utc": null,
+    "lease_id": "sealed-p0-08",
+    "lease_timeout_seconds": 900,
+    "max_attempts": 2,
+    "objective": "Complete and verify P0-08 offline implementation",
+    "owner": "codex-coordinated",
+    "parent_run_id": null,
+    "result_ref": null,
+    "risk": "read_only",
+    "role": "bounded_component_owner",
+    "scope": {
+      "network_access": false,
+      "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+    },
+    "status": "complete",
+    "verifiers": [],
+    "work_order_id": "P0-08",
+    "write_owners": [
+      "src/polymarket_alpha/research"
+    ]
+  },
+  {
+    "acceptance": [
+      "P0-09_PASS"
+    ],
+    "attempt": 1,
+    "closes_acceptance": [],
+    "created_at_utc": "2026-08-27T12:00:00Z",
+    "depends_on": [],
+    "heartbeat_interval_seconds": 60,
+    "last_heartbeat_at_utc": null,
+    "lease_expires_at_utc": null,
+    "lease_id": "sealed-p0-09",
+    "lease_timeout_seconds": 900,
+    "max_attempts": 2,
+    "objective": "Complete and verify P0-09 offline implementation",
+    "owner": "codex-coordinated",
+    "parent_run_id": null,
+    "result_ref": null,
+    "risk": "read_only",
+    "role": "bounded_component_owner",
+    "scope": {
+      "network_access": false,
+      "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+    },
+    "status": "complete",
+    "verifiers": [],
+    "work_order_id": "P0-09",
+    "write_owners": [
+      "src/polymarket_alpha/protocol+decision"
+    ]
+  },
+  {
+    "acceptance": [
+      "P0-10_PASS"
+    ],
+    "attempt": 1,
+    "closes_acceptance": [],
+    "created_at_utc": "2026-08-27T12:00:00Z",
+    "depends_on": [],
+    "heartbeat_interval_seconds": 60,
+    "last_heartbeat_at_utc": null,
+    "lease_expires_at_utc": null,
+    "lease_id": "sealed-p0-10",
+    "lease_timeout_seconds": 900,
+    "max_attempts": 2,
+    "objective": "Complete and verify P0-10 offline implementation",
+    "owner": "codex-coordinated",
+    "parent_run_id": null,
+    "result_ref": null,
+    "risk": "read_only",
+    "role": "bounded_component_owner",
+    "scope": {
+      "network_access": false,
+      "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+    },
+    "status": "complete",
+    "verifiers": [],
+    "work_order_id": "P0-10",
+    "write_owners": [
+      "src/polymarket_alpha/governance"
+    ]
+  },
+  {
+    "acceptance": [
+      "P0-11_PASS"
+    ],
+    "attempt": 1,
+    "closes_acceptance": [],
+    "created_at_utc": "2026-08-27T12:00:00Z",
+    "depends_on": [],
+    "heartbeat_interval_seconds": 60,
+    "last_heartbeat_at_utc": null,
+    "lease_expires_at_utc": null,
+    "lease_id": "sealed-p0-11",
+    "lease_timeout_seconds": 900,
+    "max_attempts": 2,
+    "objective": "Complete and verify P0-11 offline implementation",
+    "owner": "codex-coordinated",
+    "parent_run_id": null,
+    "result_ref": null,
+    "risk": "read_only",
+    "role": "bounded_component_owner",
+    "scope": {
+      "network_access": false,
+      "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+    },
+    "status": "complete",
+    "verifiers": [],
+    "work_order_id": "P0-11",
+    "write_owners": [
+      "src/polymarket_alpha/security"
+    ]
+  },
+  {
+    "acceptance": [
+      "A01",
+      "A02",
+      "A03",
+      "A04",
+      "A05",
+      "A06",
+      "A07",
+      "A08",
+      "A09",
+      "A10",
+      "A11",
+      "A12",
+      "A13",
+      "A14",
+      "A15",
+      "A16",
+      "A17",
+      "A18"
+    ],
+    "attempt": 1,
+    "closes_acceptance": [],
+    "created_at_utc": "2026-08-27T12:00:00Z",
+    "depends_on": [
+      "P0-01",
+      "P0-02",
+      "P0-03",
+      "P0-04",
+      "P0-05",
+      "P0-06",
+      "P0-07",
+      "P0-08",
+      "P0-09",
+      "P0-10",
+      "P0-11"
+    ],
+    "heartbeat_interval_seconds": 60,
+    "last_heartbeat_at_utc": null,
+    "lease_expires_at_utc": null,
+    "lease_id": "sealed-p0-12",
+    "lease_timeout_seconds": 900,
+    "max_attempts": 2,
+    "objective": "Certify the complete offline fixture implementation and evidence",
+    "owner": "codex-coordinator",
+    "parent_run_id": null,
+    "result_ref": null,
+    "risk": "read_only",
+    "role": "integration_coordinator",
+    "scope": {
+      "network_access": false,
+      "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY"
+    },
+    "status": "complete",
+    "verifiers": [],
+    "work_order_id": "P0-12",
+    "write_owners": [
+      "docs/design/polymarket_alpha_p0/P0_12-evidence-seal"
+    ]
+  }
+]

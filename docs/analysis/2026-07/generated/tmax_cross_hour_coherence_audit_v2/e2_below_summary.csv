@@ -1,0 +1,5 @@
+source,slice,rows,cities,dates,below_rows,below_rate,current,d1,d2,tail,other,missing
+bucket_from_settlement,train_pre_2026_06_21,10792,36,33,0,0.0,4245,1485,954,409,611,3088
+bucket_from_settlement,forward_2026_06_21_plus,3068,36,13,0,0.0,1082,412,273,119,154,1028
+bucket_from_atlas_final,train_pre_2026_06_21,10792,36,33,0,0.0,4245,1485,954,409,611,3088
+bucket_from_atlas_final,forward_2026_06_21_plus,3068,36,13,0,0.0,1082,412,273,119,154,1028

@@ -1,0 +1,1031 @@
+{
+  "sample": {
+    "n": 1577,
+    "cities": 49,
+    "date_min": "2026-05-06",
+    "date_max": "2026-06-01",
+    "yes_rate": 0.2618896639188332,
+    "mean_model_p_yes": 0.2124093214965124,
+    "mean_market_price": 0.30172828154724163
+  },
+  "time_split": {
+    "n_train": 1261,
+    "n_test": 316,
+    "best_ensemble_weight_on_train": 0.35000000000000003,
+    "fixed_ensemble_weight": 0.3,
+    "brier": {
+      "raw_model": 0.22261339477848102,
+      "market_baseline": 0.17153703639240506,
+      "isotonic_model": 0.20077511673647372,
+      "platt_model": 0.2021659990298324,
+      "ensemble_best_w": 0.17114949023378165,
+      "isotonic_on_50_50": 0.17471553440515825,
+      "ensemble_fixed_w": 0.17000061628322785
+    },
+    "delta_vs_market": {
+      "raw_model": 0.051076358386075965,
+      "market_baseline": 0.0,
+      "isotonic_model": 0.029238080344068662,
+      "platt_model": 0.030628962637427343,
+      "ensemble_best_w": -0.0003875461586234086,
+      "isotonic_on_50_50": 0.0031784980127531892,
+      "ensemble_fixed_w": -0.0015364201091772056
+    },
+    "delta_vs_raw_model": {
+      "raw_model": 0.0,
+      "market_baseline": -0.051076358386075965,
+      "isotonic_model": -0.021838278042007303,
+      "platt_model": -0.020447395748648622,
+      "ensemble_best_w": -0.051463904544699374,
+      "isotonic_on_50_50": -0.047897860373322776,
+      "ensemble_fixed_w": -0.05261277849525317
+    },
+    "regime": "time_split",
+    "train_frac": 0.8,
+    "train_date_range": [
+      "2026-05-06",
+      "2026-05-27"
+    ],
+    "test_date_range": [
+      "2026-05-27",
+      "2026-06-01"
+    ],
+    "cutoff_date": "2026-05-27",
+    "reliability_bins": {
+      "raw_model": [
+        {
+          "bin": "[0.00,0.10)",
+          "n": 90,
+          "mean_pred": 0.038651111111111115,
+          "mean_actual": 0.3
+        },
+        {
+          "bin": "[0.10,0.20)",
+          "n": 86,
+          "mean_pred": 0.1526546511627907,
+          "mean_actual": 0.23255813953488372
+        },
+        {
+          "bin": "[0.20,0.30)",
+          "n": 65,
+          "mean_pred": 0.2469846153846154,
+          "mean_actual": 0.3230769230769231
+        },
+        {
+          "bin": "[0.30,0.40)",
+          "n": 41,
+          "mean_pred": 0.3476390243902439,
+          "mean_actual": 0.17073170731707318
+        },
+        {
+          "bin": "[0.40,0.50)",
+          "n": 20,
+          "mean_pred": 0.44477,
+          "mean_actual": 0.3
+        },
+        {
+          "bin": "[0.50,0.60)",
+          "n": 6,
+          "mean_pred": 0.541,
+          "mean_actual": 0.3333333333333333
+        },
+        {
+          "bin": "[0.60,0.70)",
+          "n": 2,
+          "mean_pred": 0.6657500000000001,
+          "mean_actual": 0.0
+        },
+        {
+          "bin": "[0.70,0.80)",
+          "n": 3,
+          "mean_pred": 0.7681666666666667,
+          "mean_actual": 0.3333333333333333
+        },
+        {
+          "bin": "[0.80,0.90)",
+          "n": 2,
+          "mean_pred": 0.86145,
+          "mean_actual": 1.0
+        },
+        {
+          "bin": "[0.90,1.00]",
+          "n": 1,
+          "mean_pred": 0.9207,
+          "mean_actual": 1.0
+        }
+      ],
+      "market_baseline": [
+        {
+          "bin": "[0.00,0.10)",
+          "n": 60,
+          "mean_pred": 0.03836666666666667,
+          "mean_actual": 0.03333333333333333
+        },
+        {
+          "bin": "[0.10,0.20)",
+          "n": 63,
+          "mean_pred": 0.1467460317460318,
+          "mean_actual": 0.12698412698412698
+        },
+        {
+          "bin": "[0.20,0.30)",
+          "n": 68,
+          "mean_pred": 0.25110294117647064,
+          "mean_actual": 0.23529411764705882
+        },
+        {
+          "bin": "[0.30,0.40)",
+          "n": 55,
+          "mean_pred": 0.3458181818181818,
+          "mean_actual": 0.45454545454545453
+        },
+        {
+          "bin": "[0.40,0.50)",
+          "n": 17,
+          "mean_pred": 0.4473529411764706,
+          "mean_actual": 0.5882352941176471
+        },
+        {
+          "bin": "[0.50,0.60)",
+          "n": 16,
+          "mean_pred": 0.5462499999999999,
+          "mean_actual": 0.5
+        },
+        {
+          "bin": "[0.60,0.70)",
+          "n": 19,
+          "mean_pred": 0.6573684210526317,
+          "mean_actual": 0.3684210526315789
+        },
+        {
+          "bin": "[0.70,0.80)",
+          "n": 12,
+          "mean_pred": 0.7270833333333333,
+          "mean_actual": 0.4166666666666667
+        },
+        {
+          "bin": "[0.80,0.90)",
+          "n": 2,
+          "mean_pred": 0.8225,
+          "mean_actual": 1.0
+        },
+        {
+          "bin": "[0.90,1.00]",
+          "n": 4,
+          "mean_pred": 0.9650000000000001,
+          "mean_actual": 1.0
+        }
+      ]
+    }
+  },
+  "leave_one_city_out": {
+    "regime": "leave_one_city_out",
+    "cities_evaluated": 24,
+    "min_test_n": 30,
+    "avg_brier_across_cities": {
+      "raw_model": 0.20833321622234213,
+      "market_baseline": 0.1794423794946559,
+      "isotonic_model": 0.18976338006272853,
+      "platt_model": 0.18973444681835194,
+      "ensemble_best_w": 0.1725568299277056,
+      "isotonic_on_50_50": 0.1754112311738102,
+      "ensemble_fixed_w": 0.17240697740764452
+    },
+    "avg_delta_vs_market": {
+      "raw_model": 0.02889083672768622,
+      "market_baseline": 0.0,
+      "isotonic_model": 0.010321000568072614,
+      "platt_model": 0.01029206732369603,
+      "ensemble_best_w": -0.006885549566950311,
+      "isotonic_on_50_50": -0.004031148320845723,
+      "ensemble_fixed_w": -0.007035402087011394
+    },
+    "avg_delta_vs_raw_model": {
+      "raw_model": 0.0,
+      "market_baseline": -0.02889083672768622,
+      "isotonic_model": -0.018569836159613606,
+      "platt_model": -0.01859876940399019,
+      "ensemble_best_w": -0.03577638629463653,
+      "isotonic_on_50_50": -0.03292198504853194,
+      "ensemble_fixed_w": -0.035926238814697614
+    },
+    "per_city": [
+      {
+        "n_train": 1535,
+        "n_test": 42,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.18058518333333334,
+          "market_baseline": 0.17517433333333335,
+          "isotonic_model": 0.16623665753613942,
+          "platt_model": 0.1632249206191187,
+          "ensemble_best_w": 0.15789026983333335,
+          "isotonic_on_50_50": 0.15875432544306056,
+          "ensemble_fixed_w": 0.15789026983333335
+        },
+        "delta_vs_market": {
+          "raw_model": 0.005410849999999995,
+          "market_baseline": 0.0,
+          "isotonic_model": -0.008937675797193928,
+          "platt_model": -0.011949412714214652,
+          "ensemble_best_w": -0.017284063500000002,
+          "isotonic_on_50_50": -0.016420007890272786,
+          "ensemble_fixed_w": -0.017284063500000002
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.005410849999999995,
+          "isotonic_model": -0.014348525797193923,
+          "platt_model": -0.017360262714214647,
+          "ensemble_best_w": -0.022694913499999997,
+          "isotonic_on_50_50": -0.02183085789027278,
+          "ensemble_fixed_w": -0.022694913499999997
+        },
+        "held_out_city": "Ankara"
+      },
+      {
+        "n_train": 1545,
+        "n_test": 32,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.26241312968749997,
+          "market_baseline": 0.1638802890625,
+          "isotonic_model": 0.21487821189209597,
+          "platt_model": 0.20918038848657877,
+          "ensemble_best_w": 0.16183530203125002,
+          "isotonic_on_50_50": 0.18551939688291919,
+          "ensemble_fixed_w": 0.16183530203125002
+        },
+        "delta_vs_market": {
+          "raw_model": 0.09853284062499998,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.050997922829595976,
+          "platt_model": 0.04530009942407878,
+          "ensemble_best_w": -0.002044987031249973,
+          "isotonic_on_50_50": 0.021639107820419196,
+          "ensemble_fixed_w": -0.002044987031249973
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.09853284062499998,
+          "isotonic_model": -0.047534917795404,
+          "platt_model": -0.053232741200921196,
+          "ensemble_best_w": -0.10057782765624995,
+          "isotonic_on_50_50": -0.07689373280458078,
+          "ensemble_fixed_w": -0.10057782765624995
+        },
+        "held_out_city": "Austin"
+      },
+      {
+        "n_train": 1519,
+        "n_test": 58,
+        "best_ensemble_weight_on_train": 0.35000000000000003,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.2143127222413793,
+          "market_baseline": 0.12044127586206896,
+          "isotonic_model": 0.1882120981208995,
+          "platt_model": 0.1884956643407009,
+          "ensemble_best_w": 0.1390338282073276,
+          "isotonic_on_50_50": 0.15215973311912318,
+          "ensemble_fixed_w": 0.13543736772586207
+        },
+        "delta_vs_market": {
+          "raw_model": 0.09387144637931033,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.06777082225883055,
+          "platt_model": 0.06805438847863193,
+          "ensemble_best_w": 0.01859255234525864,
+          "isotonic_on_50_50": 0.03171845725705422,
+          "ensemble_fixed_w": 0.01499609186379311
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.09387144637931033,
+          "isotonic_model": -0.026100624120479782,
+          "platt_model": -0.025817057900678397,
+          "ensemble_best_w": -0.07527889403405169,
+          "isotonic_on_50_50": -0.062152989122256114,
+          "ensemble_fixed_w": -0.07887535451551722
+        },
+        "held_out_city": "Beijing"
+      },
+      {
+        "n_train": 1546,
+        "n_test": 31,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.2339856570967742,
+          "market_baseline": 0.22123756451612908,
+          "isotonic_model": 0.23231748420702353,
+          "platt_model": 0.23085037831657726,
+          "ensemble_best_w": 0.2173845950419355,
+          "isotonic_on_50_50": 0.20913157069683033,
+          "ensemble_fixed_w": 0.2173845950419355
+        },
+        "delta_vs_market": {
+          "raw_model": 0.012748092580645132,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.011079919690894446,
+          "platt_model": 0.009612813800448178,
+          "ensemble_best_w": -0.003852969474193585,
+          "isotonic_on_50_50": -0.01210599381929875,
+          "ensemble_fixed_w": -0.003852969474193585
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.012748092580645132,
+          "isotonic_model": -0.0016681728897506853,
+          "platt_model": -0.003135278780196954,
+          "ensemble_best_w": -0.016601062054838717,
+          "isotonic_on_50_50": -0.02485408639994388,
+          "ensemble_fixed_w": -0.016601062054838717
+        },
+        "held_out_city": "CapeTown"
+      },
+      {
+        "n_train": 1541,
+        "n_test": 36,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.08025418333333334,
+          "market_baseline": 0.1303283402777778,
+          "isotonic_model": 0.10027948847593766,
+          "platt_model": 0.11297446681102967,
+          "ensemble_best_w": 0.10143380498611111,
+          "isotonic_on_50_50": 0.08801801892073717,
+          "ensemble_fixed_w": 0.10143380498611111
+        },
+        "delta_vs_market": {
+          "raw_model": -0.05007415694444445,
+          "market_baseline": 0.0,
+          "isotonic_model": -0.030048851801840123,
+          "platt_model": -0.017353873466748118,
+          "ensemble_best_w": -0.028894535291666676,
+          "isotonic_on_50_50": -0.04231032135704062,
+          "ensemble_fixed_w": -0.028894535291666676
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": 0.05007415694444445,
+          "isotonic_model": 0.020025305142604324,
+          "platt_model": 0.03272028347769633,
+          "ensemble_best_w": 0.021179621652777772,
+          "isotonic_on_50_50": 0.007763835587403831,
+          "ensemble_fixed_w": 0.021179621652777772
+        },
+        "held_out_city": "Chengdu"
+      },
+      {
+        "n_train": 1540,
+        "n_test": 37,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.20819068567567567,
+          "market_baseline": 0.1856710608108108,
+          "isotonic_model": 0.18216224393106387,
+          "platt_model": 0.1743225468182188,
+          "ensemble_best_w": 0.18255750267027027,
+          "isotonic_on_50_50": 0.1785272085277136,
+          "ensemble_fixed_w": 0.18255750267027027
+        },
+        "delta_vs_market": {
+          "raw_model": 0.022519624864864862,
+          "market_baseline": 0.0,
+          "isotonic_model": -0.00350881687974694,
+          "platt_model": -0.011348513992592013,
+          "ensemble_best_w": -0.00311355814054054,
+          "isotonic_on_50_50": -0.007143852283097218,
+          "ensemble_fixed_w": -0.00311355814054054
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.022519624864864862,
+          "isotonic_model": -0.026028441744611802,
+          "platt_model": -0.033868138857456875,
+          "ensemble_best_w": -0.025633183005405402,
+          "isotonic_on_50_50": -0.02966347714796208,
+          "ensemble_fixed_w": -0.025633183005405402
+        },
+        "held_out_city": "Helsinki"
+      },
+      {
+        "n_train": 1534,
+        "n_test": 43,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.17246226813953489,
+          "market_baseline": 0.1732598430232558,
+          "isotonic_model": 0.14915258804813952,
+          "platt_model": 0.1481402338900465,
+          "ensemble_best_w": 0.15828351053953488,
+          "isotonic_on_50_50": 0.16373189577410452,
+          "ensemble_fixed_w": 0.15828351053953488
+        },
+        "delta_vs_market": {
+          "raw_model": -0.0007975748837209251,
+          "market_baseline": 0.0,
+          "isotonic_model": -0.024107254975116288,
+          "platt_model": -0.02511960913320932,
+          "ensemble_best_w": -0.014976332483720933,
+          "isotonic_on_50_50": -0.009527947249151292,
+          "ensemble_fixed_w": -0.014976332483720933
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": 0.0007975748837209251,
+          "isotonic_model": -0.023309680091395363,
+          "platt_model": -0.024322034249488395,
+          "ensemble_best_w": -0.014178757600000008,
+          "isotonic_on_50_50": -0.008730372365430367,
+          "ensemble_fixed_w": -0.014178757600000008
+        },
+        "held_out_city": "Istanbul"
+      },
+      {
+        "n_train": 1541,
+        "n_test": 36,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.21258650194444442,
+          "market_baseline": 0.21608578472222223,
+          "isotonic_model": 0.17725438033848537,
+          "platt_model": 0.18116118848428517,
+          "ensemble_best_w": 0.19711982643888884,
+          "isotonic_on_50_50": 0.19819435565312296,
+          "ensemble_fixed_w": 0.19711982643888887
+        },
+        "delta_vs_market": {
+          "raw_model": -0.003499282777777807,
+          "market_baseline": 0.0,
+          "isotonic_model": -0.03883140438373686,
+          "platt_model": -0.03492459623793706,
+          "ensemble_best_w": -0.01896595828333339,
+          "isotonic_on_50_50": -0.01789142906909927,
+          "ensemble_fixed_w": -0.018965958283333362
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": 0.003499282777777807,
+          "isotonic_model": -0.035332121605959055,
+          "platt_model": -0.031425313460159254,
+          "ensemble_best_w": -0.015466675505555583,
+          "isotonic_on_50_50": -0.014392146291321462,
+          "ensemble_fixed_w": -0.015466675505555555
+        },
+        "held_out_city": "Jeddah"
+      },
+      {
+        "n_train": 1528,
+        "n_test": 49,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.2607018836734694,
+          "market_baseline": 0.24743214285714288,
+          "isotonic_model": 0.22898214512382192,
+          "platt_model": 0.2160002599792797,
+          "ensemble_best_w": 0.23088456953061226,
+          "isotonic_on_50_50": 0.22577696867183558,
+          "ensemble_fixed_w": 0.23088456953061226
+        },
+        "delta_vs_market": {
+          "raw_model": 0.013269740816326536,
+          "market_baseline": 0.0,
+          "isotonic_model": -0.018449997733320955,
+          "platt_model": -0.031431882877863165,
+          "ensemble_best_w": -0.016547573326530618,
+          "isotonic_on_50_50": -0.021655174185307297,
+          "ensemble_fixed_w": -0.016547573326530618
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.013269740816326536,
+          "isotonic_model": -0.03171973854964749,
+          "platt_model": -0.0447016236941897,
+          "ensemble_best_w": -0.029817314142857154,
+          "isotonic_on_50_50": -0.03492491500163383,
+          "ensemble_fixed_w": -0.029817314142857154
+        },
+        "held_out_city": "Karachi"
+      },
+      {
+        "n_train": 1533,
+        "n_test": 44,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.2266879368181818,
+          "market_baseline": 0.16542793749999998,
+          "isotonic_model": 0.1922218754744844,
+          "platt_model": 0.1902821948169441,
+          "ensemble_best_w": 0.15928273880227276,
+          "isotonic_on_50_50": 0.1614995843318607,
+          "ensemble_fixed_w": 0.15928273880227276
+        },
+        "delta_vs_market": {
+          "raw_model": 0.061259999318181824,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.026793937974484427,
+          "platt_model": 0.02485425731694413,
+          "ensemble_best_w": -0.006145198697727228,
+          "isotonic_on_50_50": -0.003928353168139276,
+          "ensemble_fixed_w": -0.006145198697727228
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.061259999318181824,
+          "isotonic_model": -0.034466061343697396,
+          "platt_model": -0.036405742001237695,
+          "ensemble_best_w": -0.06740519801590905,
+          "isotonic_on_50_50": -0.0651883524863211,
+          "ensemble_fixed_w": -0.06740519801590905
+        },
+        "held_out_city": "LA"
+      },
+      {
+        "n_train": 1509,
+        "n_test": 68,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.23213380264705882,
+          "market_baseline": 0.1759554338235294,
+          "isotonic_model": 0.192295011029041,
+          "platt_model": 0.18961111672334718,
+          "ensemble_best_w": 0.17421175372352943,
+          "isotonic_on_50_50": 0.18094040824268176,
+          "ensemble_fixed_w": 0.17421175372352943
+        },
+        "delta_vs_market": {
+          "raw_model": 0.05617836882352942,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.016339577205511602,
+          "platt_model": 0.013655682899817778,
+          "ensemble_best_w": -0.001743680099999978,
+          "isotonic_on_50_50": 0.004984974419152355,
+          "ensemble_fixed_w": -0.001743680099999978
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.05617836882352942,
+          "isotonic_model": -0.039838791618017816,
+          "platt_model": -0.04252268592371164,
+          "ensemble_best_w": -0.057922048923529396,
+          "isotonic_on_50_50": -0.05119339440437706,
+          "ensemble_fixed_w": -0.057922048923529396
+        },
+        "held_out_city": "London"
+      },
+      {
+        "n_train": 1547,
+        "n_test": 30,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.27797089533333336,
+          "market_baseline": 0.17606438333333332,
+          "isotonic_model": 0.25406432087692915,
+          "platt_model": 0.25296036344807116,
+          "ensemble_best_w": 0.17109311341333333,
+          "isotonic_on_50_50": 0.19219797544728154,
+          "ensemble_fixed_w": 0.1710931134133333
+        },
+        "delta_vs_market": {
+          "raw_model": 0.10190651200000003,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.07799993754359583,
+          "platt_model": 0.07689598011473783,
+          "ensemble_best_w": -0.004971269919999993,
+          "isotonic_on_50_50": 0.016133592113948214,
+          "ensemble_fixed_w": -0.004971269920000021
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.10190651200000003,
+          "isotonic_model": -0.023906574456404206,
+          "platt_model": -0.0250105318852622,
+          "ensemble_best_w": -0.10687778192000003,
+          "isotonic_on_50_50": -0.08577291988605182,
+          "ensemble_fixed_w": -0.10687778192000005
+        },
+        "held_out_city": "Lucknow"
+      },
+      {
+        "n_train": 1534,
+        "n_test": 43,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.19318134441860463,
+          "market_baseline": 0.21842864534883716,
+          "isotonic_model": 0.20284311746167571,
+          "platt_model": 0.20362661747387403,
+          "ensemble_best_w": 0.20280411356744185,
+          "isotonic_on_50_50": 0.20127592177392356,
+          "ensemble_fixed_w": 0.20280411356744185
+        },
+        "delta_vs_market": {
+          "raw_model": -0.02524730093023253,
+          "market_baseline": 0.0,
+          "isotonic_model": -0.015585527887161443,
+          "platt_model": -0.014802027874963125,
+          "ensemble_best_w": -0.015624531781395307,
+          "isotonic_on_50_50": -0.017152723574913598,
+          "ensemble_fixed_w": -0.015624531781395307
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": 0.02524730093023253,
+          "isotonic_model": 0.009661773043071087,
+          "platt_model": 0.010445273055269405,
+          "ensemble_best_w": 0.009622769148837224,
+          "isotonic_on_50_50": 0.008094577355318933,
+          "ensemble_fixed_w": 0.009622769148837224
+        },
+        "held_out_city": "Madrid"
+      },
+      {
+        "n_train": 1522,
+        "n_test": 55,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.25331320363636367,
+          "market_baseline": 0.23253550000000006,
+          "isotonic_model": 0.22674266999384135,
+          "platt_model": 0.22544820278974695,
+          "ensemble_best_w": 0.21779915800000002,
+          "isotonic_on_50_50": 0.21528426944141668,
+          "ensemble_fixed_w": 0.21779915800000002
+        },
+        "delta_vs_market": {
+          "raw_model": 0.02077770363636361,
+          "market_baseline": 0.0,
+          "isotonic_model": -0.005792830006158711,
+          "platt_model": -0.007087297210253113,
+          "ensemble_best_w": -0.014736342000000041,
+          "isotonic_on_50_50": -0.01725123055858338,
+          "ensemble_fixed_w": -0.014736342000000041
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.02077770363636361,
+          "isotonic_model": -0.02657053364252232,
+          "platt_model": -0.027865000846616722,
+          "ensemble_best_w": -0.03551404563636365,
+          "isotonic_on_50_50": -0.03802893419494699,
+          "ensemble_fixed_w": -0.03551404563636365
+        },
+        "held_out_city": "Miami"
+      },
+      {
+        "n_train": 1547,
+        "n_test": 30,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.33843429199999997,
+          "market_baseline": 0.2184764166666667,
+          "isotonic_model": 0.265561157207792,
+          "platt_model": 0.266057225005887,
+          "ensemble_best_w": 0.23978666184666667,
+          "isotonic_on_50_50": 0.2638152937110764,
+          "ensemble_fixed_w": 0.23978666184666667
+        },
+        "delta_vs_market": {
+          "raw_model": 0.11995787533333327,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.0470847405411253,
+          "platt_model": 0.04758080833922032,
+          "ensemble_best_w": 0.021310245179999965,
+          "isotonic_on_50_50": 0.045338877044409726,
+          "ensemble_fixed_w": 0.021310245179999965
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.11995787533333327,
+          "isotonic_model": -0.07287313479220797,
+          "platt_model": -0.07237706699411295,
+          "ensemble_best_w": -0.0986476301533333,
+          "isotonic_on_50_50": -0.07461899828892354,
+          "ensemble_fixed_w": -0.0986476301533333
+        },
+        "held_out_city": "Milan"
+      },
+      {
+        "n_train": 1515,
+        "n_test": 62,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.1696932372580645,
+          "market_baseline": 0.18678130241935484,
+          "isotonic_model": 0.16032646546869067,
+          "platt_model": 0.1649391511574008,
+          "ensemble_best_w": 0.1640167025548387,
+          "isotonic_on_50_50": 0.1562895977163905,
+          "ensemble_fixed_w": 0.1640167025548387
+        },
+        "delta_vs_market": {
+          "raw_model": -0.017088065161290328,
+          "market_baseline": 0.0,
+          "isotonic_model": -0.026454836950664168,
+          "platt_model": -0.021842151261954046,
+          "ensemble_best_w": -0.02276459986451615,
+          "isotonic_on_50_50": -0.030491704702964334,
+          "ensemble_fixed_w": -0.02276459986451615
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": 0.017088065161290328,
+          "isotonic_model": -0.00936677178937384,
+          "platt_model": -0.004754086100663718,
+          "ensemble_best_w": -0.005676534703225822,
+          "isotonic_on_50_50": -0.013403639541674006,
+          "ensemble_fixed_w": -0.005676534703225822
+        },
+        "held_out_city": "NYC"
+      },
+      {
+        "n_train": 1525,
+        "n_test": 52,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.22929369769230767,
+          "market_baseline": 0.19320117307692306,
+          "isotonic_model": 0.22016120036949155,
+          "platt_model": 0.21961792375825415,
+          "ensemble_best_w": 0.18000193238846152,
+          "isotonic_on_50_50": 0.1799682667736996,
+          "ensemble_fixed_w": 0.18000193238846154
+        },
+        "delta_vs_market": {
+          "raw_model": 0.03609252461538462,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.026960027292568495,
+          "platt_model": 0.02641675068133109,
+          "ensemble_best_w": -0.013199240688461539,
+          "isotonic_on_50_50": -0.013232906303223463,
+          "ensemble_fixed_w": -0.013199240688461511
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.03609252461538462,
+          "isotonic_model": -0.009132497322816124,
+          "platt_model": -0.009675773934053528,
+          "ensemble_best_w": -0.04929176530384616,
+          "isotonic_on_50_50": -0.04932543091860808,
+          "ensemble_fixed_w": -0.04929176530384613
+        },
+        "held_out_city": "Paris"
+      },
+      {
+        "n_train": 1516,
+        "n_test": 61,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.2065905736065574,
+          "market_baseline": 0.15147771721311476,
+          "isotonic_model": 0.18408097888794675,
+          "platt_model": 0.18489400617016957,
+          "ensemble_best_w": 0.1604477485508197,
+          "isotonic_on_50_50": 0.16564703739838835,
+          "ensemble_fixed_w": 0.1604477485508197
+        },
+        "delta_vs_market": {
+          "raw_model": 0.05511285639344263,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.03260326167483199,
+          "platt_model": 0.03341628895705481,
+          "ensemble_best_w": 0.008970031337704937,
+          "isotonic_on_50_50": 0.014169320185273587,
+          "ensemble_fixed_w": 0.008970031337704937
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.05511285639344263,
+          "isotonic_model": -0.022509594718610637,
+          "platt_model": -0.021696567436387815,
+          "ensemble_best_w": -0.04614282505573769,
+          "isotonic_on_50_50": -0.04094353620816904,
+          "ensemble_fixed_w": -0.04614282505573769
+        },
+        "held_out_city": "Seoul"
+      },
+      {
+        "n_train": 1526,
+        "n_test": 51,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.1456391250980392,
+          "market_baseline": 0.15451140686274512,
+          "isotonic_model": 0.14234158735902816,
+          "platt_model": 0.14359714255635972,
+          "ensemble_best_w": 0.14382302273921568,
+          "isotonic_on_50_50": 0.1447843461048203,
+          "ensemble_fixed_w": 0.14382302273921568
+        },
+        "delta_vs_market": {
+          "raw_model": -0.00887228176470592,
+          "market_baseline": 0.0,
+          "isotonic_model": -0.012169819503716955,
+          "platt_model": -0.010914264306385396,
+          "ensemble_best_w": -0.010688384123529432,
+          "isotonic_on_50_50": -0.009727060757924816,
+          "ensemble_fixed_w": -0.010688384123529432
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": 0.00887228176470592,
+          "isotonic_model": -0.003297537739011036,
+          "platt_model": -0.002041982541679477,
+          "ensemble_best_w": -0.0018161023588235126,
+          "isotonic_on_50_50": -0.0008547789932188965,
+          "ensemble_fixed_w": -0.0018161023588235126
+        },
+        "held_out_city": "Shanghai"
+      },
+      {
+        "n_train": 1545,
+        "n_test": 32,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.1474191065625,
+          "market_baseline": 0.13371646874999998,
+          "isotonic_model": 0.14212721219950686,
+          "platt_model": 0.14629360006781464,
+          "ensemble_best_w": 0.13008178737187498,
+          "isotonic_on_50_50": 0.1310283655549788,
+          "ensemble_fixed_w": 0.13008178737187498
+        },
+        "delta_vs_market": {
+          "raw_model": 0.01370263781250003,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.008410743449506874,
+          "platt_model": 0.012577131317814655,
+          "ensemble_best_w": -0.0036346813781250042,
+          "isotonic_on_50_50": -0.002688103195021191,
+          "ensemble_fixed_w": -0.0036346813781250042
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.01370263781250003,
+          "isotonic_model": -0.005291894362993155,
+          "platt_model": -0.0011255064946853743,
+          "ensemble_best_w": -0.017337319190625033,
+          "isotonic_on_50_50": -0.01639074100752122,
+          "ensemble_fixed_w": -0.017337319190625033
+        },
+        "held_out_city": "Taipei"
+      },
+      {
+        "n_train": 1547,
+        "n_test": 30,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.18632931933333333,
+          "market_baseline": 0.1636893583333333,
+          "isotonic_model": 0.20071969131946296,
+          "platt_model": 0.20168116490933397,
+          "ensemble_best_w": 0.16236660062333333,
+          "isotonic_on_50_50": 0.16202111521214,
+          "ensemble_fixed_w": 0.16236660062333333
+        },
+        "delta_vs_market": {
+          "raw_model": 0.022639961000000014,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.03703033298612965,
+          "platt_model": 0.03799180657600065,
+          "ensemble_best_w": -0.0013227577099999832,
+          "isotonic_on_50_50": -0.001668243121193319,
+          "ensemble_fixed_w": -0.0013227577099999832
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.022639961000000014,
+          "isotonic_model": 0.014390371986129635,
+          "platt_model": 0.015351845576000639,
+          "ensemble_best_w": -0.023962718709999997,
+          "isotonic_on_50_50": -0.024308204121193333,
+          "ensemble_fixed_w": -0.023962718709999997
+        },
+        "held_out_city": "TelAviv"
+      },
+      {
+        "n_train": 1518,
+        "n_test": 59,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.17997214101694917,
+          "market_baseline": 0.1394624745762712,
+          "isotonic_model": 0.17014380936533466,
+          "platt_model": 0.17520528456309453,
+          "ensemble_best_w": 0.14017569135254238,
+          "isotonic_on_50_50": 0.14763937816822914,
+          "ensemble_fixed_w": 0.14017569135254238
+        },
+        "delta_vs_market": {
+          "raw_model": 0.040509666440677966,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.030681334789063458,
+          "platt_model": 0.03574280998682333,
+          "ensemble_best_w": 0.000713216776271175,
+          "isotonic_on_50_50": 0.00817690359195794,
+          "ensemble_fixed_w": 0.000713216776271175
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.040509666440677966,
+          "isotonic_model": -0.009828331651614508,
+          "platt_model": -0.004766856453854634,
+          "ensemble_best_w": -0.03979644966440679,
+          "isotonic_on_50_50": -0.032332762848720026,
+          "ensemble_fixed_w": -0.03979644966440679
+        },
+        "held_out_city": "Tokyo"
+      },
+      {
+        "n_train": 1522,
+        "n_test": 55,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.201676608,
+          "market_baseline": 0.21769578181818186,
+          "isotonic_model": 0.20269570868709394,
+          "platt_model": 0.20033042033670787,
+          "ensemble_best_w": 0.19808442853818178,
+          "isotonic_on_50_50": 0.19338396080620202,
+          "ensemble_fixed_w": 0.19808442853818178
+        },
+        "delta_vs_market": {
+          "raw_model": -0.016019173818181853,
+          "market_baseline": 0.0,
+          "isotonic_model": -0.015000073131087921,
+          "platt_model": -0.017365361481473995,
+          "ensemble_best_w": -0.019611353280000077,
+          "isotonic_on_50_50": -0.024311821011979845,
+          "ensemble_fixed_w": -0.019611353280000077
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": 0.016019173818181853,
+          "isotonic_model": 0.0010191006870939323,
+          "platt_model": -0.0013461876632921421,
+          "ensemble_best_w": -0.0035921794618182235,
+          "isotonic_on_50_50": -0.008292647193797992,
+          "ensemble_fixed_w": -0.0035921794618182235
+        },
+        "held_out_city": "Warsaw"
+      },
+      {
+        "n_train": 1539,
+        "n_test": 38,
+        "best_ensemble_weight_on_train": 0.30000000000000004,
+        "fixed_ensemble_weight": 0.3,
+        "brier": {
+          "raw_model": 0.1861696907894737,
+          "market_baseline": 0.1456824736842105,
+          "isotonic_model": 0.15852101813155875,
+          "platt_model": 0.16473226211760594,
+          "ensemble_best_w": 0.1509652555131579,
+          "isotonic_on_50_50": 0.15428055379890773,
+          "ensemble_fixed_w": 0.1509652555131579
+        },
+        "delta_vs_market": {
+          "raw_model": 0.04048721710526321,
+          "market_baseline": 0.0,
+          "isotonic_model": 0.012838544447348249,
+          "platt_model": 0.019049788433395443,
+          "ensemble_best_w": 0.005282781828947397,
+          "isotonic_on_50_50": 0.008598080114697232,
+          "ensemble_fixed_w": 0.005282781828947397
+        },
+        "delta_vs_raw_model": {
+          "raw_model": 0.0,
+          "market_baseline": -0.04048721710526321,
+          "isotonic_model": -0.027648672657914958,
+          "platt_model": -0.021437428671867764,
+          "ensemble_best_w": -0.03520443527631581,
+          "isotonic_on_50_50": -0.031889136990565975,
+          "ensemble_fixed_w": -0.03520443527631581
+        },
+        "held_out_city": "Wuhan"
+      }
+    ]
+  }
+}

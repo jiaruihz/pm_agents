@@ -1,0 +1,12 @@
+{
+  "schema_version": "alpha_p0_v1.0",
+  "contract_schema_sha256": "25dc4cb3a82430b95cd557e5f632e3c2c48c7aaaa7d663ed8d94885b84edeed3",
+  "canonical_datetime": "2026-08-26T04:05:06.12Z",
+  "canonical_decimal": "1.23",
+  "compatibility": {
+    "alpha_p0_v1.0": "READ_WRITE",
+    "alpha_p0_v1.1": "REJECT_UNRELEASED_MINOR",
+    "alpha_p0_v2.0": "REJECT_UNKNOWN_MAJOR",
+    "v1": "REJECT_MALFORMED"
+  }
+}

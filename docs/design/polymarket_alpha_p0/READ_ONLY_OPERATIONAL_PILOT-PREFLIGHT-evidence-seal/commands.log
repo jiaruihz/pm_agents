@@ -1,0 +1,5 @@
+.venv/bin/python -m pytest -q tests/polymarket_alpha/test_operational_fixtures_op_01.py tests/polymarket_alpha/test_operational_preflight_op_04_05.py tests/polymarket_alpha/test_security_transport_p0_11.py --junitxml=docs/design/polymarket_alpha_p0/READ_ONLY_OPERATIONAL_PILOT-PREFLIGHT-evidence-seal/test-results/focused.xml
+.venv/bin/python -m pytest -q tests/polymarket_alpha --junitxml=docs/design/polymarket_alpha_p0/READ_ONLY_OPERATIONAL_PILOT-PREFLIGHT-evidence-seal/test-results/alpha-full.xml
+.venv/bin/python -m pytest -q tests/research_tests/test_gamma_normalize_models.py tests/research_tests/polymarket/test_clob_orderbook_sorting.py tests/pmm_tests/test_weather_market_books.py tests/research_tests/test_weather_agent_harness_orchestration.py --junitxml=docs/design/polymarket_alpha_p0/READ_ONLY_OPERATIONAL_PILOT-PREFLIGHT-evidence-seal/test-results/regressions.xml
+.venv/bin/python -c "from src.polymarket_alpha.security import audit_source_tree; r=audit_source_tree('src/polymarket_alpha'); print(r.passed, len(r.violations))"
+(cd docs/design/polymarket_alpha_p0/READ_ONLY_OPERATIONAL_PILOT-PREFLIGHT-evidence-seal && shasum -a 256 -c hashes.sha256)

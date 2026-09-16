@@ -1,0 +1,3 @@
+root=src/polymarket_alpha
+passed=true
+violations=0

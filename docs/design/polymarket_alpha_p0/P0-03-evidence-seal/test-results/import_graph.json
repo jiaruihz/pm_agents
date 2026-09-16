@@ -1,0 +1,13 @@
+{
+  "files": {
+    "src/polymarket_alpha/adapters/__init__.py": "5b15dc0e6f8c7f71e8231656072c1ce6f9cd4e69dc85768cdf7f370785cbd5f6",
+    "src/polymarket_alpha/adapters/gamma_identity.py": "236723bac09a58c0f37a60d0efb6746a936c76b73161ea0e4a478c130f959625",
+    "src/polymarket_alpha/adapters/gamma_normalize.py": "898ae4fd55078f4a3a10359cdd77b136367148360980f6e8458a6ca6b0d4db26",
+    "src/polymarket_alpha/adapters/gamma_pages.py": "f7418bc964f487679d36220ed9b211ebb3c76fbc191d7b9942d75910e5a199e9",
+    "src/polymarket_alpha/adapters/gamma_raw.py": "7a48c0b8f67130e9849f2cc639fa5186def60696581098b0178ad9bde2879835",
+    "src/polymarket_alpha/census/__init__.py": "5a697d0526516baca0c496397c6e3394ddc2a17c386288f3603498451a665f89",
+    "src/polymarket_alpha/census/catalog.py": "7d767d132a98ed26af6af64df409ad265d0a0ec46534bbc995c835d343600fa7"
+  },
+  "passed": true,
+  "violations": []
+}

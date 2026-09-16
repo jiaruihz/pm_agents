@@ -1,0 +1,76 @@
+{
+  "gate": "P0-03-GAMMA_CATALOG",
+  "seal_revision": "rework_v2",
+  "stage": "P0_OFFLINE_IMPLEMENTATION_ONLY",
+  "run_id": "p0-03-offline-20260826-rework2",
+  "git_head_at_seal": "28fc87f546a1282547e650455dd8e1bbb3d9d054",
+  "rework_basis": "docs/design/polymarket_alpha_p0/P0_03_CODEX_INDEPENDENT_REVIEW.md (REWORK_REQUIRED)",
+  "dependency_commits": {
+    "p0_07_rule_gates": "bb91fe01 feat: add polymarket alpha rule gates",
+    "codex_p0_03_review": "44e665b2 docs: review glm p0-03 gamma catalog"
+  },
+  "worktree_note": "P0-03 owned sources are untracked additions on the owner's dirty worktree; clean-base reproduction is NOT claimed. Per-file source hashes are recorded in test-results/import_graph.json.",
+  "generated_at_utc": "2026-08-26T14:35:00Z",
+  "adapter_source": "gamma_catalog_adapter",
+  "adapter_source_version": "p0_03_v2",
+  "artifacts": {
+    "owned_source": [
+      "src/polymarket_alpha/adapters/__init__.py",
+      "src/polymarket_alpha/adapters/gamma_pages.py",
+      "src/polymarket_alpha/adapters/gamma_identity.py",
+      "src/polymarket_alpha/adapters/gamma_raw.py",
+      "src/polymarket_alpha/adapters/gamma_normalize.py",
+      "src/polymarket_alpha/census/__init__.py",
+      "src/polymarket_alpha/census/catalog.py"
+    ],
+    "owned_tests": [
+      "tests/polymarket_alpha/fixtures/gamma_payloads.py",
+      "tests/polymarket_alpha/test_gamma_catalog_p0_03.py"
+    ],
+    "evidence": [
+      "sample-artifacts/catalog_ingest_result.json",
+      "sample-artifacts/replay_idempotency.json",
+      "sample-artifacts/cross_run_retry.json",
+      "sample-artifacts/multi_event_order_independence.json",
+      "sample-artifacts/rule_change_revisions.json",
+      "sample-artifacts/db_manifest.json",
+      "test-results/import_graph.json"
+    ]
+  },
+  "tests": {
+    "p0_03_module": {"tests": 50, "passed": 50, "failed": 0, "junit": "test-results/test_results_p0_03.xml"},
+    "polymarket_alpha_suite_incl_p0_07_and_p0_11_subset": {"tests": 159, "passed": 159, "failed": 0, "junit": "test-results/test_results_full.xml"},
+    "targeted_legacy_gamma_regression": {"tests": 8, "passed": 8, "failed": 0},
+    "test_node_note": "exact node lists are in the two JUnit XML files inside this seal"
+  },
+  "bf_status": {
+    "BF-P003-01_condition_uniqueness": "ADAPTER_SIDE_CLOSED (required reader hook, constructor fails without it) + P0-02 delta D-1 requested",
+    "BF-P003-02_multi_event_joins": "ADAPTER_SIDE_CLOSED (full sorted event set on extensions.gamma_event_ids, deterministic primary, event-array order canonically stabilized) + P0-02 delta D-2 requested for join projection",
+    "BF-P003-03_verified_identity_bypass": "CLOSED (at least one non-blank expectation required; mismatches return error receipts)",
+    "BF-P003-04_cross_run_artifact_conflict": "CLOSED (record ids include run-scoped fields; logical sha keys; all saves inside receipt boundaries)",
+    "BF-P003-05_raw_alias_projection": "ADAPTER_SIDE_CLOSED (model-level hash validation, alias value objects, unpersisted by design) + P0-02 delta D-3/D-4 requested",
+    "BF-P003-06_unbounded_pagination": "CLOSED (finite DEFAULT_MAX_PAGES fallback, negative-offset rejection, receipted pagination window on CapturedPage)",
+    "BF-P003-07_seal_self_consistency": "CLOSED (manifest written before hashes and covered by them; file count stated and verifiable; dirty-worktree + dependency commits recorded instead of clean-base claim; generator clock-pinned)"
+  },
+  "non_blocking_hardening": {
+    "contradictory_lifecycle": "CLOSED (LIFECYCLE_CONTRADICTORY)",
+    "model_level_sha_validation": "CLOSED",
+    "verbatim_wording": "CLOSED (canonicalized parsed JSON)",
+    "deterministic_generator": "CLOSED (clock-pinned; generated_at_utc is the only time-varying field and lives inside the hashed manifest)"
+  },
+  "self_review": {
+    "convention": "AGENTS.md/CLAUDE.md section 7 (pre-delivery subagent review)",
+    "record": "self-review-record.md",
+    "findings": "R-01..R-13; reviewer verdict was 'not ready'; all resolved or formally deferred to P0-02 delta"
+  },
+  "open_decisions": [
+    "P0-02 delta D-1..D-5 implementation (p0-02-delta-request.md) - owner: coordinator/P0-02",
+    "SUPERSEDED_P0_POLICY=DEFERRED_UNREACHABLE recorded; reopening only in read-only pilot/P1"
+  ],
+  "capability_audit": {"profile": "OFFLINE_IMPLEMENTATION_ONLY", "passed": true, "report": "test-results/import_graph.json"},
+  "network_used": false,
+  "runtime_db_touched": false,
+  "order_signing_key_touched": false,
+  "live_smoke_used": false,
+  "disposition_requested": "COMPLETE_WITH_LIMITATIONS"
+}

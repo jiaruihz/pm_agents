@@ -1,0 +1,67 @@
+{
+  "schema_version": "weather_mm_w1_inventory_prereg_v1",
+  "hypothesis": "A hard-deadline passive exit or proven same-condition complement-and-merge policy can improve capital-adjusted outcomes for actual Core Carry inventory without worsening tail risk.",
+  "universe": {
+    "trade_class": "live_real",
+    "venue": "polymarket_clob",
+    "strategy_instance": "current_yes_core_carry_tiny_live_v2",
+    "side": "BUY_YES",
+    "episode_grain": "condition_id aggregated across actual fills",
+    "decision_time": "last actual fill timestamp for the condition",
+    "signal_denominator_policy": "retain every actual position; missing execution or topology evidence remains an explicit evidence gap"
+  },
+  "arms": {
+    "immediate_taker_exit": "first full-quantity YES bid ladder within 30 minutes after decision",
+    "passive_then_fallback": "post SELL one tick inside the ask, wait at most 60 minutes, grant diagnostic fill only after full depth crosses the quote, otherwise sell on first full bid ladder within 30 minutes after deadline",
+    "complement_then_merge": "buy the exact same-condition NO token on the first full ask ladder within 30 minutes, then merge the complete set; no topology inference is allowed",
+    "hold_to_settlement": "hold the frozen actual YES inventory to canonical settlement",
+    "no_action": "current production behavior; under terminal settlement valuation it is intentionally identical to hold_to_settlement"
+  },
+  "execution": {
+    "quantity": "actual aggregated filled shares",
+    "initial_book_max_lag_minutes": 30,
+    "passive_ttl_minutes": 60,
+    "fallback_book_max_lag_minutes": 30,
+    "passive_quote": "max(best_bid + tick, best_ask - tick), strictly above best_bid",
+    "passive_fill_evidence": "public full-ladder cross/depth proxy; diagnostic, never actual fill",
+    "weather_taker_fee_rate": "0.05",
+    "weather_taker_fee_exponent": "1",
+    "maker_fee": "0",
+    "counterfactual_incentives": "0 unless an immutable realized payout identity exists",
+    "merge_operation_cost_usd": "0",
+    "incremental_operating_cost_usd": "0"
+  },
+  "economics": {
+    "terminal_valuation_basis": "canonical settlement for hold/no-action; executable cash close for exit/merge arms",
+    "annual_financing_rate": "0.10",
+    "capital_time_unit": "USD-hour from decision to terminal action",
+    "primary": "paired economic profit per share versus no_action",
+    "secondary": [
+      "accounting PnL",
+      "capital-time",
+      "target-date expected shortfall",
+      "decision-time worst-case payoff"
+    ],
+    "mere_incremental_economic_profit_per_share_usd": "0.005",
+    "expected_shortfall_tail_fraction": "0.20"
+  },
+  "inference": {
+    "block": "target_date",
+    "bootstrap_repetitions": 5000,
+    "seed": 20260830,
+    "sequential_update_every_new_blocks": 10,
+    "first_look_floor": {
+      "decisions": 100,
+      "target_dates": 30,
+      "actual_exit_or_merge_episodes": 20
+    },
+    "pass": "paired lower confidence bound exceeds MERE and tail/capacity gates pass",
+    "futility": "paired upper confidence bound is below MERE",
+    "stop_loss": "measurement or loss budget exhausted"
+  },
+  "authorization": {
+    "zero_notional_only": true,
+    "live_orders": false,
+    "split_merge_redeem": false
+  }
+}

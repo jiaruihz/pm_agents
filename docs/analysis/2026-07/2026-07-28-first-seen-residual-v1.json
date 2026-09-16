@@ -1,0 +1,91 @@
+{
+  "event_kind_slices": [
+    {
+      "event_kind": "observation",
+      "market_brier": 0.05548916416757996,
+      "model_brier": 0.09102398257363804,
+      "rows": 10037,
+      "target_dates": 2
+    }
+  ],
+  "evidence_funnel": {
+    "archive_known_available_events": 4934,
+    "collector_exact_events": 0,
+    "fresh_post_event_book_expressions": 19958,
+    "scored_and_settled_expressions": 19388,
+    "settled_expressions": 20074
+  },
+  "policies": [
+    {
+      "average_entry": 0.38177960829493085,
+      "cost_per_share": 3342.13590595,
+      "events": 1346,
+      "expressions_per_day": 4340.0,
+      "fee_adjusted_roi": 0.023297704294842916,
+      "fees": 28.28890595,
+      "pnl_per_share": 77.86409405000003,
+      "selected_expressions": 8680,
+      "target_dates": 2,
+      "threshold": 0.0,
+      "win_rate": 0.39400921658986177
+    },
+    {
+      "average_entry": 0.2790847424684159,
+      "cost_per_share": 1461.1736324499998,
+      "events": 1339,
+      "expressions_per_day": 2572.5,
+      "fee_adjusted_roi": 0.05052538994028574,
+      "fees": 25.28263245,
+      "pnl_per_share": 73.82636755,
+      "selected_expressions": 5145,
+      "target_dates": 2,
+      "threshold": 0.02,
+      "win_rate": 0.2983479105928086
+    },
+    {
+      "average_entry": 0.2802775319567355,
+      "cost_per_share": 1162.39845735,
+      "events": 1317,
+      "expressions_per_day": 2034.0,
+      "fee_adjusted_roi": 0.05901723476680764,
+      "fees": 22.22945735,
+      "pnl_per_share": 68.60154264999998,
+      "selected_expressions": 4068,
+      "target_dates": 2,
+      "threshold": 0.05,
+      "win_rate": 0.3026057030481809
+    }
+  ],
+  "pre_post_update": {
+    "market_brier_after": 0.05630647472712435,
+    "market_brier_before": 0.058830561129246145,
+    "mean_abs_market_move": 0.016058757523207182,
+    "mean_abs_model_move": 0.0072342038151586244,
+    "model_brier_after": 0.09196347855774356,
+    "model_brier_before": 0.09197864671749037,
+    "rows": 9803,
+    "target_dates": 2
+  },
+  "proper_scores": {
+    "brier_delta_model_minus_market": 0.035534818406058086,
+    "events": 1357,
+    "logloss_delta_model_minus_market": 0.14327499448126862,
+    "market_brier": 0.05548916416757996,
+    "market_logloss": 0.17655747093897645,
+    "model_brier": 0.09102398257363804,
+    "model_logloss": 0.31983246542024507,
+    "rows": 10037,
+    "target_dates": 2
+  },
+  "signal_funnel": {
+    "built_checkpoints": 1357,
+    "information_events": 4934,
+    "mapped_candidate_expressions": 20074,
+    "material_events_with_checkpoint": 3200,
+    "positive_mid_residual_expressions": 9737,
+    "scored_candidate_expressions": 19388
+  },
+  "significance": "NA: fewer than the required independent target dates",
+  "status": "inconclusive",
+  "target": "Estimate P(exact bracket | PIT event checkpoint) and test it against same-row market probability; this replay uses the existing paper-snapshot model as the initial model baseline."
+}

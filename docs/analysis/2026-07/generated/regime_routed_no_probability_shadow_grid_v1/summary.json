@@ -1,0 +1,24 @@
+{
+  "coverage": {
+    "evidence_layers": [
+      "frozen_live_like_route_price",
+      "historical_best_ask_diagnostic"
+    ],
+    "probability_columns": [
+      "p_no_wf_logit_market_route",
+      "p_no_wf_logit_mechanism_weather",
+      "p_no_wf_logit_mechanism_weather_citybias",
+      "p_no_wf_logit_mechanism_plus_heuristic_score"
+    ],
+    "rows": 448
+  },
+  "generated_at_utc": "2026-07-01T16:38:32+00:00",
+  "input": "docs/analysis/2026-07/generated/regime_routed_no_calibrated_score_v2/scored_rows.csv",
+  "outputs": {
+    "daily": "docs/analysis/2026-07/generated/regime_routed_no_probability_shadow_grid_v1/shadow_grid_daily.csv",
+    "grid": "docs/analysis/2026-07/generated/regime_routed_no_probability_shadow_grid_v1/shadow_grid_summary.csv",
+    "markdown": "docs/analysis/2026-07/2026-07-02-regime-routed-no-probability-shadow-grid-v1.md",
+    "summary": "docs/analysis/2026-07/generated/regime_routed_no_probability_shadow_grid_v1/summary.json"
+  },
+  "verdict": "shadow_only_more_data_needed"
+}

@@ -1,0 +1,97 @@
+{
+  "description": "Sealed determinism anchor for the fresh wallet snapshot request: provider input fingerprints (public = direction-redacted view, private = full view incl. side/position/notional/size/token ids) and deterministic RecallHit record ids. Regenerate deliberately when provider version or canonicalization changes.",
+  "provider_version": "wallet-p0-06d-v1",
+  "config": {},
+  "request": {
+    "run_id": "wallet-recall-run-1",
+    "clock": {
+      "as_of": "2026-08-26T07:00:00Z"
+    },
+    "source": {
+      "source_id": "specialist_wallet_store",
+      "snapshot_id": "snapshot-2026-08-26t0655z",
+      "snapshot_sha256": "abababababababababababababababababababababababababababababababab",
+      "captured_at": "2026-08-26T06:55:00Z"
+    },
+    "pagination": {
+      "pages_expected": 2,
+      "pages_received": 2,
+      "truncated": false,
+      "window_start": "2026-08-24T00:00:00Z",
+      "window_end": "2026-08-26T07:00:00Z"
+    },
+    "facts": [
+      {
+        "fact_id": "fact-alpha-1",
+        "address": "0x1111111111111111111111111111111111111111",
+        "token_id": "tok-alpha-leg-a",
+        "observed_at": "2026-08-26T06:00:00Z",
+        "side": "BUY",
+        "position_direction": "LONG",
+        "notional_usdc": "150.5",
+        "size": "10"
+      },
+      {
+        "fact_id": "fact-alpha-2",
+        "address": "0x2222222222222222222222222222222222222222",
+        "token_id": "tok-alpha-leg-b",
+        "observed_at": "2026-08-26T05:00:00Z",
+        "side": "SELL",
+        "position_direction": "SHORT",
+        "notional_usdc": "80",
+        "size": "5"
+      },
+      {
+        "fact_id": "fact-beta-1",
+        "address": "0x3333333333333333333333333333333333333333",
+        "token_id": "tok-beta-leg-a",
+        "observed_at": "2026-08-26T06:30:00Z",
+        "side": "BUY",
+        "position_direction": "LONG",
+        "notional_usdc": "42.25",
+        "size": "3"
+      }
+    ],
+    "aliases": [
+      {
+        "address": "0x1111111111111111111111111111111111111111",
+        "entity_id": "ent-alpha",
+        "provenance": "curated analyst mapping",
+        "confidence": "0.9"
+      },
+      {
+        "address": "0x2222222222222222222222222222222222222222",
+        "entity_id": "ent-alpha",
+        "provenance": "exchange clustering review",
+        "confidence": "0.85"
+      }
+    ],
+    "token_markets": [
+      {
+        "token_id": "tok-alpha-leg-a",
+        "market_id": "market-alpha"
+      },
+      {
+        "token_id": "tok-alpha-leg-b",
+        "market_id": "market-alpha"
+      },
+      {
+        "token_id": "tok-beta-leg-a",
+        "market_id": "market-beta"
+      }
+    ]
+  },
+  "expected": {
+    "public_input_sha256": "2555ab9ac2ae201acc883eb9047f85de99332d38e167a01ef7c30146d5064435",
+    "private_input_sha256": "974f0b26ec77b4e4e4ea6a916356b4795fcec647b4accba698239de1a81eda29",
+    "current_market_ids": [
+      "market-alpha",
+      "market-beta"
+    ],
+    "historical_market_ids": [],
+    "hit_record_ids": [
+      "recall_hit:bddc391b36310ed0774ff6f1b62170ab46cc53a4456bffb79c2f3887719d445b",
+      "recall_hit:ac0ec6a773010a2320d27027db286897745463089f8d87e818ee5ebb4e6921c7"
+    ]
+  }
+}

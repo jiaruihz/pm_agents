@@ -1,0 +1,110 @@
+{
+  "archive_gate_checks": {
+    "at_least_10_transport_days": true,
+    "at_least_3_normal_days": false,
+    "at_least_3_reconnect_or_gap_days": true,
+    "source_t0_book_valid_ge_90pct": false,
+    "unknown_primary_reason_zero": true
+  },
+  "by_city": {
+    "Amsterdam": {
+      "events": 87,
+      "primary_status_counts": {
+        "ARCHIVE_MISSING": 2,
+        "OPEN_GAP": 5,
+        "STALE_BOOK": 70,
+        "VALID_BUT_ONE_SIDED": 8,
+        "VALID_TWO_SIDED_DEPTH": 2
+      },
+      "stale_age_seconds": {
+        "max": 1536.26564096,
+        "p50": 853.58968704,
+        "p90": 1469.68818688,
+        "p95": 1531.006616832
+      }
+    },
+    "Busan": {
+      "events": 385,
+      "primary_status_counts": {
+        "ARCHIVE_MISSING": 3,
+        "NO_BASELINE": 43,
+        "OPEN_GAP": 17,
+        "STALE_BOOK": 270,
+        "VALID_BUT_INSUFFICIENT_DEPTH": 4,
+        "VALID_BUT_ONE_SIDED": 8,
+        "VALID_TWO_SIDED_DEPTH": 40
+      },
+      "stale_age_seconds": {
+        "max": 3219.319312128,
+        "p50": 2368.583574272,
+        "p90": 2926.968688128,
+        "p95": 3025.889274112
+      }
+    },
+    "Helsinki": {
+      "events": 59,
+      "primary_status_counts": {
+        "ARCHIVE_MISSING": 1,
+        "NO_BASELINE": 1,
+        "OPEN_GAP": 5,
+        "STALE_BOOK": 48,
+        "VALID_BUT_ONE_SIDED": 2,
+        "VALID_TWO_SIDED_DEPTH": 2
+      },
+      "stale_age_seconds": {
+        "max": 1346.73417088,
+        "p50": 1012.226712064,
+        "p90": 1178.870046208,
+        "p95": 1196.053814016
+      }
+    },
+    "Seoul": {
+      "events": 268,
+      "primary_status_counts": {
+        "ARCHIVE_MISSING": 268
+      },
+      "stale_age_seconds": {
+        "max": null,
+        "p50": null,
+        "p90": null,
+        "p95": null
+      }
+    },
+    "Tokyo": {
+      "events": 42,
+      "primary_status_counts": {
+        "ARCHIVE_MISSING": 4,
+        "OPEN_GAP": 7,
+        "STALE_BOOK": 31
+      },
+      "stale_age_seconds": {
+        "max": 1608.413910016,
+        "p50": 852.949723136,
+        "p90": 1156.059827968,
+        "p95": 1213.861011968
+      }
+    }
+  },
+  "collector_change_authorized": false,
+  "disposition": "RETURN_TO_STAGE2_COLLECTOR_CLOCK_DIAGNOSIS_WITHOUT_CHANGING_COLLECTOR",
+  "headline": "archive-wide source-t0 coverage loss is dominated by selective non-subscription and stale capture windows, not by one-sided/depth feasibility",
+  "primary_status_counts": {
+    "ARCHIVE_MISSING": 278,
+    "NO_BASELINE": 44,
+    "OPEN_GAP": 34,
+    "STALE_BOOK": 419,
+    "VALID_BUT_INSUFFICIENT_DEPTH": 4,
+    "VALID_BUT_ONE_SIDED": 18,
+    "VALID_TWO_SIDED_DEPTH": 44
+  },
+  "root_cause_mapping": {
+    "ARCHIVE_MISSING": "exact event token never appears in any frozen subscription epoch; dominant for Seoul",
+    "NO_BASELINE": "token was subscribed but no verified full-book baseline existed by source_t0",
+    "OPEN_GAP": "a parity/clock/reconstruction blocker remained open at source_t0",
+    "STALE_BOOK": "token was subscribed and reconstructable earlier, but last WS frame exceeded the frozen 120s age policy at source_t0",
+    "VALID_BUT_INSUFFICIENT_DEPTH": "reconstruction valid and two-sided; 5-share sweep not feasible",
+    "VALID_BUT_ONE_SIDED": "reconstruction valid; economic side availability missing",
+    "VALID_TWO_SIDED_DEPTH": "reconstruction and 5-share two-sided feasibility both valid"
+  },
+  "source_t0_event_count": 841
+}

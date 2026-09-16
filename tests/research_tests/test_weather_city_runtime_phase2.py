@@ -1,0 +1,1035 @@
+from dataclasses import replace
+import json
+from pathlib import Path
+import sqlite3
+import sys
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from src.strategies.weather_city_probability_shadow.core import OUTPUT_SCHEMA_VERSION
+from weather_city_runtime import (
+    CanonicalCandidateBridge,
+    LegacyDecisionBundle,
+    ModelOutput,
+    SignalCandidate,
+    TemporaryCanonicalBridge,
+    TradeIntent,
+    legacy_bundle_from_evaluation,
+    legacy_trade_intent_from_paper_intent,
+)
+from scripts.ops.materialize_weather_city_runtime_canonical_v1 import (
+    main as canonical_materialize_main,
+)
+import scripts.ops.materialize_weather_city_runtime_canonical_v1 as canonical_materializer
+import weather_city_runtime.canonical_bridge as canonical_bridge_module
+from scripts.analysis.market_structure_edge.report_city_intraday_canonical_v1 import (
+    build_report as build_canonical_report,
+)
+from scripts.analysis.market_structure_edge.bridge_city_intraday_decisions_v1 import (
+    main as bridge_main,
+)
+from scripts.analysis.market_structure_edge.materialize_city_decision_dual_run_v1 import (
+    _enrich_market_outcome,
+    _token_outcomes,
+)
+
+
+def _evaluation(**overrides):
+    row = {
+        "schema_version": OUTPUT_SCHEMA_VERSION,
+        "record_kind": "evaluation",
+        "evaluation_id": "legacy-eval-1",
+        "city": "Helsinki",
+        "target_date": "2026-08-01",
+        "decision_ts_utc": "2026-08-01T05:42:00Z",
+        "source_obs_ts_utc": "2026-08-01T05:40:00Z",
+        "current_bracket": 18,
+        "market_side": "NO",
+        "market_probability": 0.4,
+        "market_entry_price": 0.42,
+        "model_probability": 0.7,
+        "model_id": "helsinki-v1",
+        "feature_coverage": 1.0,
+        "missing_features": [],
+        "features": {"remaining_heat": 0.25},
+        "market": {
+            "condition_id": "condition-18",
+            "market_id": "market-18",
+            "token_id": "token-no-18",
+            "outcome": "no",
+            "book_snapshot_id": "book-18",
+        },
+        "lineage": {
+            "source": "fmi",
+            "source_first_seen_at_utc": "2026-08-01T05:41:00Z",
+            "source_payload_hash": "source-payload",
+            "book_snapshot_id": "book-18",
+            "model_artifact_sha256": "artifact-18",
+            "profile_id": "helsinki_remaining_heat_v1",
+            "source_input_ref": {"physical_path": "source.jsonl", "physical_line": 1},
+        },
+        "evaluation_status": "scored",
+        "not_scorable_reason": None,
+        "effective_cost_per_share": 0.43,
+        "edge_after_fee": 0.27,
+        "edge_threshold": 0.05,
+        "would_enter": True,
+    }
+    row.update(overrides)
+    return row
+
+
+def test_legacy_adapter_emits_versioned_model_candidate_and_stable_identity() -> None:
+    first = legacy_bundle_from_evaluation(_evaluation())
+    second = legacy_bundle_from_evaluation(_evaluation())
+
+    assert first.model_output == second.model_output
+    assert first.signal_candidate == second.signal_candidate
+    assert first.signal_candidate.selected is False
+    assert first.signal_candidate.condition_id == "condition-18"
+    assert first.signal_candidate.execution_book_snapshot_id == "book-18"
+    assert first.signal_candidate.candidate_id
+    assert first.model_output.metadata["feature_coverage"] == 1.0
+    assert first.model_output.metadata["missing_features"] == []
+    assert first.signal_candidate.metadata["feature_coverage"] == 1.0
+    assert "pnl" not in json.dumps(first.signal_candidate.to_dict()).lower()
+
+
+def test_legacy_checkpoint_reference_is_feature_state_not_model_profile() -> None:
+    first = legacy_bundle_from_evaluation(_evaluation())
+    second = legacy_bundle_from_evaluation(_evaluation(
+        model_id="another-model-alias",
+        lineage={
+            **_evaluation()["lineage"],
+            "profile_id": "another-profile-alias",
+        },
+    ))
+
+    assert first.state_checkpoint == second.state_checkpoint
+    stable_ref = f"legacy:{first.model_output.feature_set_id}"
+    assert first.state_checkpoint["feature_store_frame_id"] == stable_ref
+    assert first.state_checkpoint["source_profile_id"] == stable_ref
+
+
+def test_legacy_market_outcome_recovery_requires_exact_raw_token_match(
+    tmp_path: Path,
+) -> None:
+    book_dir = tmp_path / "books"
+    book_dir.mkdir()
+    (book_dir / "books.jsonl").write_text(
+        json.dumps({"token_id": "token-no-18", "outcome": "no"}) + "\n"
+    )
+    row = _evaluation(market={
+        "condition_id": "condition-18",
+        "token_id": "token-no-18",
+    })
+    enriched, recovered = _enrich_market_outcome(
+        row, _token_outcomes([book_dir])
+    )
+    assert recovered is True
+    assert enriched["market"]["outcome"] == "NO"
+    assert enriched["market"]["outcome_lineage"] == (
+        "recovered_from_token_matched_book_journal"
+    )
+
+    untouched, recovered = _enrich_market_outcome(
+        _evaluation(market={"token_id": "unknown"}),
+        _token_outcomes([book_dir]),
+    )
+    assert recovered is False
+    assert "outcome" not in untouched["market"]
+
+
+def test_unselected_and_one_sided_rows_remain_candidate_denominator() -> None:
+    unselected = legacy_bundle_from_evaluation(_evaluation(would_enter=False))
+    one_sided = legacy_bundle_from_evaluation(
+        _evaluation(
+            market_probability=None,
+            model_probability=None,
+            market_entry_price=None,
+            effective_cost_per_share=None,
+            evaluation_status="not_scorable",
+            not_scorable_reason="one_sided_market_probability_interval",
+            would_enter=False,
+        )
+    )
+
+    assert unselected.signal_candidate.candidate_status == "scored"
+    assert unselected.signal_candidate.selected is False
+    assert one_sided.signal_candidate.candidate_status == "blocked"
+    assert (
+        one_sided.signal_candidate.blocker_reason
+        == "one_sided_market_probability_interval"
+    )
+    assert one_sided.signal_candidate.selected is False
+
+
+def test_execution_profiles_share_candidate_but_produce_distinct_intents() -> None:
+    paper = {**_evaluation(), "record_kind": "paper_intent", "position_key": "position-1"}
+    maker = legacy_trade_intent_from_paper_intent(
+        paper, execution_profile="maker-a"
+    )
+    taker = legacy_trade_intent_from_paper_intent(
+        paper, execution_profile="taker-b"
+    )
+
+    assert maker.candidate_id == taker.candidate_id
+    assert maker.intent_id != taker.intent_id
+    assert maker.requested_size == taker.requested_size == 0.0
+    assert maker.mode == taker.mode == "zero_notional"
+
+
+def test_trade_intent_contract_refuses_plugin_granted_live_mode() -> None:
+    values = legacy_trade_intent_from_paper_intent(
+        {**_evaluation(), "record_kind": "paper_intent", "position_key": "position-1"}
+    ).to_dict()
+    values.pop("intent_id")
+    values["mode"] = "live"
+    with pytest.raises(ValueError, match="cannot grant live"):
+        TradeIntent.create(**values)
+
+
+def test_temporary_bridge_is_incremental_and_reconciles_exactly(tmp_path: Path) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    bridge = TemporaryCanonicalBridge(tmp_path / "canonical.db")
+
+    first = bridge.append([bundle])
+    second = bridge.append([bundle])
+
+    assert first["inserted_candidates"] == 1
+    assert first["candidate_delta"] == 0
+    assert second["inserted_candidates"] == 0
+    assert second["existing_candidates"] == 1
+    assert second["candidate_delta"] == 0
+    conn = sqlite3.connect(tmp_path / "canonical.db")
+    try:
+        row = conn.execute(
+            "SELECT candidate_id, candidate_status, policy_selected, target_id, "
+            "token_id, feature_book_snapshot_id, execution_book_snapshot_id, policy_id "
+            "FROM fact_signal_candidates"
+        ).fetchone()
+        private_tables = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND (lower(name) LIKE '%helsinki%' OR lower(name) LIKE '%tokyo%')"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert row == (
+        bundle.signal_candidate.candidate_id,
+        "scored",
+        0,
+        bundle.signal_candidate.target_id,
+        "token-no-18",
+        "book-18",
+        "book-18",
+        "legacy_edge_threshold",
+    )
+    assert private_tables == []
+
+
+def test_bridge_materializes_model_outputs_append_only_and_idempotently(
+    tmp_path: Path,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    db_path = tmp_path / "model-output.db"
+    bridge = TemporaryCanonicalBridge(db_path)
+
+    first = bridge.append([bundle])
+    second = bridge.append([bundle])
+
+    assert first["inserted_model_outputs"] == 1
+    assert second["existing_model_outputs"] == 1
+    assert first["transaction_duration_seconds"] >= 0
+    assert first["wal_before_bytes"] >= 0
+    assert first["wal_after_bytes"] >= 0
+    conn = sqlite3.connect(db_path)
+    try:
+        stored = conn.execute(
+            "SELECT output_id, checkpoint_id, p_model, schema_version "
+            "FROM weather_model_outputs"
+        ).fetchone()
+        assert stored == (
+            bundle.model_output.output_id,
+            bundle.model_output.checkpoint_id,
+            bundle.model_output.p_model,
+            bundle.model_output.schema_version,
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            conn.execute("UPDATE weather_model_outputs SET city = 'Tokyo'")
+    finally:
+        conn.close()
+
+
+def test_bridge_appends_non_live_trade_intents_without_execution_projection(
+    tmp_path: Path,
+) -> None:
+    evaluation = _evaluation()
+    bundle = legacy_bundle_from_evaluation(evaluation)
+    intent = legacy_trade_intent_from_paper_intent(
+        {**evaluation, "record_kind": "paper_intent", "position_key": "position-1"}
+    )
+    db_path = tmp_path / "intent.db"
+    bridge = TemporaryCanonicalBridge(db_path)
+    bridge.append([bundle])
+
+    first = bridge.append_trade_intents([intent])
+    second = bridge.append_trade_intents([intent])
+
+    assert first["inserted_trade_intents"] == 1
+    assert second["existing_trade_intents"] == 1
+    conn = sqlite3.connect(db_path)
+    try:
+        assert conn.execute("SELECT count(*) FROM weather_trade_intents").fetchone()[0] == 1
+        assert {
+            table: conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            for table in ("plans", "orders", "fills")
+        } == {"plans": 0, "orders": 0, "fills": 0}
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            conn.execute("DELETE FROM weather_trade_intents")
+    finally:
+        conn.close()
+
+    conflicting = replace(intent, metadata={"changed": True})
+    with pytest.raises(ValueError, match="conflicting canonical weather_trade_intents"):
+        bridge.append_trade_intents([conflicting])
+
+
+def test_trade_intent_requires_existing_canonical_candidate(tmp_path: Path) -> None:
+    evaluation = _evaluation()
+    intent = legacy_trade_intent_from_paper_intent(
+        {**evaluation, "record_kind": "paper_intent", "position_key": "position-1"}
+    )
+    bridge = TemporaryCanonicalBridge(tmp_path / "no-candidate.db")
+    with pytest.raises(ValueError, match="requires canonical SignalCandidate"):
+        bridge.append_trade_intents([intent])
+
+
+def test_bridge_accepts_legacy_vnext_and_mixed_without_duplicate_facts(
+    tmp_path: Path,
+) -> None:
+    legacy = legacy_bundle_from_evaluation(_evaluation())
+    vnext = LegacyDecisionBundle(
+        information_event=dict(legacy.information_event),
+        state_checkpoint=dict(legacy.state_checkpoint),
+        model_output=ModelOutput.from_dict(legacy.model_output.to_dict()),
+        signal_candidate=SignalCandidate.from_dict(
+            legacy.signal_candidate.to_dict()
+        ),
+    )
+    bridge = TemporaryCanonicalBridge(tmp_path / "mixed.db")
+
+    result = bridge.append([legacy, vnext])
+
+    assert result["raw_candidate_rows"] == 2
+    assert result["raw_unique_candidates"] == 1
+    assert result["input_duplicate_candidates"] == 1
+    assert result["canonical_candidates"] == 1
+    assert result["candidate_delta"] == 0
+
+
+def test_bridge_coalesces_legacy_event_delivery_headers_without_hiding_identity_conflicts(
+    tmp_path: Path,
+) -> None:
+    later = legacy_bundle_from_evaluation(_evaluation())
+    earlier_event = {
+        **later.information_event,
+        "detected_at_utc": "2026-08-01T05:40:30Z",
+        "first_seen_at_utc": "2026-08-01T05:40:30Z",
+        "available_at_utc": "2026-08-01T05:40:30Z",
+        "raw_source_path": "observations/2026-08-01/observations.jsonl",
+    }
+    earlier = LegacyDecisionBundle(
+        information_event=earlier_event,
+        state_checkpoint=later.state_checkpoint,
+        model_output=later.model_output,
+        signal_candidate=later.signal_candidate,
+    )
+    bridge = TemporaryCanonicalBridge(tmp_path / "coalesced.db")
+
+    result = bridge.append([later, earlier])
+
+    assert result["input_duplicate_events"] == 1
+    assert result["input_coalesced_event_ids"] == 1
+    assert result["input_coalesced_event_deliveries"] == 1
+    conn = sqlite3.connect(tmp_path / "coalesced.db")
+    try:
+        stored = conn.execute(
+            "SELECT first_seen_at_utc, raw_source_path "
+            "FROM weather_information_events"
+        ).fetchone()
+    finally:
+        conn.close()
+    assert stored == (
+        "2026-08-01T05:40:30Z",
+        "observations/2026-08-01/observations.jsonl",
+    )
+
+    old_checkpoint = {
+        **later.state_checkpoint,
+        "feature_store_frame_id": "legacy:old-model-alias",
+        "source_profile_id": "old-profile-alias",
+    }
+    historical = LegacyDecisionBundle(
+        information_event=later.information_event,
+        state_checkpoint=old_checkpoint,
+        model_output=later.model_output,
+        signal_candidate=later.signal_candidate,
+    )
+    normalized_result = TemporaryCanonicalBridge(
+        tmp_path / "normalized-checkpoint.db"
+    ).append([later, historical])
+    assert normalized_result["input_duplicate_checkpoints"] == 1
+    assert (
+        normalized_result["input_normalized_legacy_checkpoint_deliveries"] == 1
+    )
+
+    conflicting_event = {**later.information_event, "city": "Tokyo"}
+    conflicting = LegacyDecisionBundle(
+        information_event=conflicting_event,
+        state_checkpoint=later.state_checkpoint,
+        model_output=later.model_output,
+        signal_candidate=later.signal_candidate,
+    )
+    with pytest.raises(ValueError, match="conflicting immutable information_event_id"):
+        TemporaryCanonicalBridge(tmp_path / "conflict.db").append(
+            [later, conflicting]
+        )
+
+
+def test_bridge_rejects_production_canonical_path() -> None:
+    with pytest.raises(ValueError, match="research/temp DB"):
+        TemporaryCanonicalBridge(
+            Path(__file__).resolve().parents[2] / "runtime" / "weather.db"
+        )
+
+
+def test_canonical_bridge_requires_same_physical_db_and_is_idempotent(
+    tmp_path: Path,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    physical = tmp_path / "physical.db"
+    TemporaryCanonicalBridge(physical).append([])
+    compatible = tmp_path / "compatible.db"
+    compatible.symlink_to(physical)
+
+    bridge = CanonicalCandidateBridge(
+        compatible, expected_db_path=physical
+    )
+    first = bridge.append([bundle])
+    second = bridge.append([bundle])
+
+    assert first["inserted_candidates"] == 1
+    assert second["inserted_candidates"] == 0
+    assert second["existing_candidates"] == 1
+    split = tmp_path / "split.db"
+    TemporaryCanonicalBridge(split).append([])
+    with pytest.raises(ValueError, match="identity mismatch"):
+        CanonicalCandidateBridge(split, expected_db_path=physical)
+
+
+def test_canonical_bridge_rolls_back_event_and_checkpoint_on_candidate_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    physical = tmp_path / "atomic-candidate.db"
+
+    def _fail_candidates(*_args, **_kwargs):
+        raise RuntimeError("injected candidate failure")
+
+    monkeypatch.setattr(
+        canonical_bridge_module, "materialize_candidate_rows", _fail_candidates
+    )
+    with pytest.raises(RuntimeError, match="injected candidate failure"):
+        TemporaryCanonicalBridge(physical).append([bundle])
+
+    conn = sqlite3.connect(physical)
+    try:
+        assert conn.execute("SELECT count(*) FROM weather_information_events").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM weather_state_checkpoints").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM weather_model_outputs").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM fact_signal_candidates").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_canonical_bridge_rolls_back_candidates_on_settlement_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    physical = tmp_path / "atomic-settlement.db"
+
+    def _fail_settlements(*_args, **_kwargs):
+        raise RuntimeError("injected settlement failure")
+
+    monkeypatch.setattr(
+        canonical_bridge_module, "attach_settlements", _fail_settlements
+    )
+    with pytest.raises(RuntimeError, match="injected settlement failure"):
+        TemporaryCanonicalBridge(physical).append(
+            [bundle], attach_candidate_settlements=True
+        )
+
+    conn = sqlite3.connect(physical)
+    try:
+        assert conn.execute("SELECT count(*) FROM weather_information_events").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM weather_state_checkpoints").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM weather_model_outputs").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM fact_signal_candidates").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_canonical_bridge_bounds_and_drains_settlement_label_backlog(
+    tmp_path: Path,
+) -> None:
+    first = legacy_bundle_from_evaluation(_evaluation())
+    second = legacy_bundle_from_evaluation(
+        _evaluation(
+            current_bracket=19,
+            market={
+                **_evaluation()["market"],
+                "condition_id": "condition-19",
+                "market_id": "market-19",
+                "token_id": "token-no-19",
+            },
+        )
+    )
+    physical = tmp_path / "bounded-settlements.db"
+    bridge = TemporaryCanonicalBridge(physical)
+    bridge.append([])
+    conn = sqlite3.connect(physical)
+    conn.executemany(
+        """
+        INSERT INTO settlement_outcomes (
+          settlement_outcome_id, source_system, city, target_date, bracket,
+          condition_id, final_price, settlement_status
+        ) VALUES (?, 'polymarket_api', 'Helsinki', '2026-08-01', ?, ?, 1.0, 'settled')
+        """,
+        [
+            ("settlement-18", "18", "condition-18"),
+            ("settlement-19", "19", "condition-19"),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    first_pass = bridge.append(
+        [first, second],
+        attach_candidate_settlements=True,
+        max_candidate_settlement_updates=1,
+    )
+    assert first_pass["settlements_attached"] == 1
+    assert first_pass["settlement_update_limit_reached"] == 1
+    second_pass = bridge.append(
+        [],
+        attach_candidate_settlements=True,
+        max_candidate_settlement_updates=1,
+    )
+    assert second_pass["settlements_attached"] == 1
+    conn = sqlite3.connect(physical)
+    try:
+        assert conn.execute(
+            "SELECT count(*) FROM fact_signal_candidates WHERE final_yes = 1.0"
+        ).fetchone()[0] == 2
+    finally:
+        conn.close()
+
+
+def test_canonical_bridge_attaches_exact_condition_settlement_without_outcome(
+    tmp_path: Path,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    physical = tmp_path / "exact-condition-settlement.db"
+    bridge = TemporaryCanonicalBridge(physical)
+    bridge.append([])
+    conn = sqlite3.connect(physical)
+    conn.execute(
+        """
+        INSERT INTO settlements (
+          settlement_id, target_date, condition_id, market_id, bracket,
+          token_id, final_price, settlement_status
+        ) VALUES (
+          'exact-settlement-18', '2026-08-01', 'condition-18', 'market-18',
+          '18', 'token-no-18', 0.0, 'settled'
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    result = bridge.append(
+        [bundle],
+        attach_candidate_settlements=True,
+        max_candidate_settlement_updates=1,
+    )
+
+    assert result["settlements_attached"] == 1
+    conn = sqlite3.connect(physical)
+    try:
+        assert conn.execute(
+            "SELECT settlement_status, final_yes FROM fact_signal_candidates"
+        ).fetchone() == ("settled", 0.0)
+    finally:
+        conn.close()
+
+
+def test_canonical_bridge_keeps_conflicting_outcomes_unresolved(
+    tmp_path: Path,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    physical = tmp_path / "conflicting-settlement-outcomes.db"
+    bridge = TemporaryCanonicalBridge(physical)
+    bridge.append([])
+    conn = sqlite3.connect(physical)
+    conn.executemany(
+        """
+        INSERT INTO settlement_outcomes (
+          settlement_outcome_id, source_system, city, target_date, bracket,
+          condition_id, final_price, settlement_status, created_at_utc
+        ) VALUES (?, ?, 'Helsinki', '2026-08-01',
+                  '18', 'condition-18', ?, 'settled', ?)
+        """,
+        [
+            ("settlement-zero", "polymarket_api", 0.0, "2026-08-02T00:00:00Z"),
+            ("settlement-one", "pm_history", 1.0, "2026-08-02T00:00:01Z"),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    result = bridge.append(
+        [bundle],
+        attach_candidate_settlements=True,
+        max_candidate_settlement_updates=1,
+    )
+
+    assert result["settlements_attached"] == 0
+    conn = sqlite3.connect(physical)
+    try:
+        assert conn.execute(
+            "SELECT settlement_status, final_yes FROM fact_signal_candidates"
+        ).fetchone() == (None, None)
+    finally:
+        conn.close()
+
+
+def test_canonical_shadow_materializer_and_report_do_not_fabricate_execution(
+    tmp_path: Path,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    journal = tmp_path / "decision_bundles.jsonl"
+    _write_jsonl(
+        journal,
+        [{
+            "information_event": bundle.information_event,
+            "state_checkpoint": bundle.state_checkpoint,
+            "model_output": bundle.model_output.to_dict(),
+            "signal_candidate": bundle.signal_candidate.to_dict(),
+        }],
+    )
+    physical = tmp_path / "canonical.db"
+    TemporaryCanonicalBridge(physical).append([])
+    settlement_conn = sqlite3.connect(physical)
+    settlement_conn.execute(
+        """
+        INSERT INTO settlement_outcomes (
+          settlement_outcome_id, source_system, city, target_date, bracket,
+          condition_id, final_price, settlement_status
+        ) VALUES (
+          'settlement-18', 'polymarket_api', 'Helsinki', '2026-08-01',
+          '18', 'condition-18', 1.0, 'settled'
+        )
+        """
+    )
+    settlement_conn.commit()
+    settlement_conn.close()
+    before = sqlite3.connect(physical)
+    try:
+        execution_before = {
+            table: before.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in ("plans", "orders", "fills")
+        }
+    finally:
+        before.close()
+    dry_report = tmp_path / "dry.json"
+    assert canonical_materialize_main([
+        "--bundles", str(journal), "--report", str(dry_report)
+    ]) == 0
+    assert json.loads(dry_report.read_text())["mode"] == "isolated_dry_run"
+
+    apply_report = tmp_path / "apply.json"
+    assert canonical_materialize_main([
+        "--bundles", str(journal),
+        "--db", str(physical),
+        "--expected-db", str(physical),
+        "--apply",
+        "--report", str(apply_report),
+    ]) == 0
+    applied = json.loads(apply_report.read_text())
+    assert applied["canonical_reconciliation"]["inserted_candidates"] == 1
+    assert applied["settlements_attached"] == 1
+    assert applied["settlement_update_limit"] == 5000
+    assert applied["settlement_update_limit_reached"] == 0
+    assert applied["input_target_date_counts"] == {"2026-08-01": 1}
+    assert applied["input_target_date_min"] == "2026-08-01"
+    assert applied["input_target_date_max"] == "2026-08-01"
+    assert applied["input_snapshot"][0]["path"] == str(journal.resolve())
+    assert len(applied["input_unique_candidate_id_hash"]) == 64
+    assert applied["execution_projection"] == {
+        "plan": "not_created_shadow",
+        "order": "not_created_shadow",
+        "fill": "not_created_shadow",
+        "pnl": "not_computed_without_fill",
+        "settlement_label": "canonical_condition_join_only",
+    }
+    report = build_canonical_report(
+        physical, candidate_ids=[bundle.signal_candidate.candidate_id]
+    )
+    assert report["signal_funnel"]["raw_candidates"] == 1
+    assert report["city_rows"][0]["city"] == "Helsinki"
+    assert report["evidence_funnel"]["order"] == "not_available_shadow"
+    after = sqlite3.connect(physical)
+    try:
+        execution_after = {
+            table: after.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in ("plans", "orders", "fills")
+        }
+        final_yes = after.execute(
+            "SELECT final_yes FROM fact_signal_candidates WHERE candidate_id = ?",
+            (bundle.signal_candidate.candidate_id,),
+        ).fetchone()[0]
+    finally:
+        after.close()
+    assert execution_after == execution_before
+    assert final_yes == 1.0
+
+    idempotent_report = tmp_path / "idempotent.json"
+    assert canonical_materialize_main([
+        "--bundles", str(journal),
+        "--db", str(physical),
+        "--expected-db", str(physical),
+        "--apply",
+        "--report", str(idempotent_report),
+    ]) == 0
+    idempotent = json.loads(idempotent_report.read_text())
+    assert idempotent["canonical_reconciliation"]["inserted_candidates"] == 0
+    assert idempotent["settlements_attached"] == 0
+
+
+def test_canonical_materializer_rejects_a_journal_that_changes_mid_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    row = {
+        "information_event": bundle.information_event,
+        "state_checkpoint": bundle.state_checkpoint,
+        "model_output": bundle.model_output.to_dict(),
+        "signal_candidate": bundle.signal_candidate.to_dict(),
+    }
+    journal = tmp_path / "decision_bundles.jsonl"
+    _write_jsonl(journal, [row])
+    original = canonical_materializer.load_bundles
+
+    def _mutating_load(paths):
+        bundles = original(paths)
+        with journal.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
+        return bundles
+
+    monkeypatch.setattr(canonical_materializer, "load_bundles", _mutating_load)
+    with pytest.raises(RuntimeError, match="journal changed while reading"):
+        canonical_materializer.main(["--bundles", str(journal)])
+
+
+def test_canonical_materializer_cursor_is_bounded_append_only_and_idempotent(
+    tmp_path: Path,
+) -> None:
+    def _row(index: int) -> dict:
+        decision_second = index + 1
+        evaluation = _evaluation(
+            evaluation_id=f"legacy-eval-{index}",
+            decision_ts_utc=f"2026-08-01T05:42:{decision_second:02d}Z",
+            source_obs_ts_utc=f"2026-08-01T05:40:{decision_second:02d}Z",
+            lineage={
+                **_evaluation()["lineage"],
+                "source_payload_hash": f"source-payload-{index}",
+                "source_input_ref": {
+                    "physical_path": "source.jsonl",
+                    "physical_line": index,
+                },
+            },
+        )
+        bundle = legacy_bundle_from_evaluation(evaluation)
+        return {
+            "information_event": bundle.information_event,
+            "state_checkpoint": bundle.state_checkpoint,
+            "model_output": bundle.model_output.to_dict(),
+            "signal_candidate": bundle.signal_candidate.to_dict(),
+        }
+
+    journal = tmp_path / "decision_bundles.jsonl"
+    _write_jsonl(journal, [_row(1), _row(2), _row(3)])
+    state = tmp_path / "cursor.json"
+    physical = tmp_path / "cursor-canonical.db"
+    TemporaryCanonicalBridge(physical).append([])
+
+    with pytest.raises(ValueError, match="exceeds --max-new-bytes"):
+        canonical_materializer._load_cursor_batch(
+            journal,
+            tmp_path / "too-small-cursor.json",
+            max_rows=1,
+            max_bytes=1,
+        )
+
+    def _apply(report_name: str) -> dict:
+        report = tmp_path / report_name
+        assert canonical_materializer.main([
+            "--bundles", str(journal),
+            "--db", str(physical),
+            "--expected-db", str(physical),
+            "--state", str(state),
+            "--max-new-rows", "2",
+            "--max-new-bytes", "1048576",
+            "--apply",
+            "--report", str(report),
+        ]) == 0
+        return json.loads(report.read_text())
+
+    first = _apply("cursor-first.json")
+    assert first["input_bundle_rows"] == 2
+    assert first["canonical_reconciliation"]["inserted_candidates"] == 2
+    assert first["cursor"]["after"]["remaining_bytes_at_snapshot"] > 0
+
+    second = _apply("cursor-second.json")
+    assert second["input_bundle_rows"] == 1
+    assert second["canonical_reconciliation"]["inserted_candidates"] == 1
+    assert second["cursor"]["after"]["remaining_bytes_at_snapshot"] == 0
+
+    with journal.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(_row(4), sort_keys=True) + "\n")
+    third = _apply("cursor-third.json")
+    assert third["input_bundle_rows"] == 1
+    assert third["canonical_reconciliation"]["inserted_candidates"] == 1
+
+    no_op = _apply("cursor-no-op.json")
+    assert no_op["input_bundle_rows"] == 0
+    assert no_op["canonical_reconciliation"]["inserted_candidates"] == 0
+    assert no_op["cursor"]["after"]["remaining_bytes_at_snapshot"] == 0
+
+    conn = sqlite3.connect(physical)
+    try:
+        assert conn.execute("SELECT count(*) FROM fact_signal_candidates").fetchone()[0] == 4
+    finally:
+        conn.close()
+    cursor = json.loads(state.read_text())
+    assert cursor["schema_version"] == "weather_jsonl_cursor_epoch_v1"
+    assert len(cursor["cursor_epoch_id"]) == 64
+    assert cursor["predecessor_epoch_id"] is None
+    assert cursor["recovery_owner"] == "canonical_refresh"
+    assert cursor["stuck_slo_seconds"] == 900
+    assert cursor["processed_rows"] == 4
+    assert cursor["offset_bytes"] == journal.stat().st_size
+
+    legacy_state = tmp_path / "legacy-cursor.json"
+    legacy_payload = {
+        key: value
+        for key, value in cursor.items()
+        if key
+        not in {
+            "cursor_epoch_id",
+            "predecessor_epoch_id",
+            "recovery_receipt_path",
+            "recovery_receipt_sha256",
+            "epoch_started_at_utc",
+            "recovery_owner",
+            "stuck_slo_seconds",
+            "migrated_from_schema_version",
+        }
+    }
+    legacy_payload["schema_version"] = "wcir_canonical_materializer_cursor_v1"
+    legacy_state.write_text(json.dumps(legacy_payload), encoding="utf-8")
+    _, snapshot, _, legacy_after = canonical_materializer._load_cursor_batch(
+        journal,
+        legacy_state,
+        max_rows=1,
+        max_bytes=1024,
+    )
+    migrated = canonical_materializer._cursor_state_payload(
+        journal, legacy_after, snapshot
+    )
+    canonical_materializer._write_cursor_state(legacy_state, migrated)
+    assert json.loads(legacy_state.read_text())["migrated_from_schema_version"] == (
+        "wcir_canonical_materializer_cursor_v1"
+    )
+
+    with journal.open("r+b") as handle:
+        handle.seek(cursor["offset_bytes"] - 10)
+        original = handle.read(1)
+        handle.seek(cursor["offset_bytes"] - 10)
+        handle.write(b"x" if original != b"x" else b"y")
+    with pytest.raises(ValueError, match="journal prefix changed"):
+        _apply("cursor-mutated.json")
+
+
+def test_bridge_rejects_cross_object_lineage_mismatch(tmp_path: Path) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    broken = LegacyDecisionBundle(
+        information_event=bundle.information_event,
+        state_checkpoint=bundle.state_checkpoint,
+        model_output=bundle.model_output,
+        signal_candidate=replace(bundle.signal_candidate, city="Tokyo"),
+    )
+    with pytest.raises(ValueError, match="city mismatch"):
+        TemporaryCanonicalBridge(tmp_path / "broken.db").append([broken])
+    assert not (tmp_path / "broken.db").exists()
+
+
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
+    path.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+
+def test_bridge_cli_handles_legacy_vnext_and_mixed_journals(tmp_path: Path) -> None:
+    evaluation = _evaluation()
+    paper = {**evaluation, "record_kind": "paper_intent", "position_key": "position-1"}
+    legacy_eval_path = tmp_path / "evaluations.jsonl"
+    legacy_intent_path = tmp_path / "paper_intents.jsonl"
+    _write_jsonl(legacy_eval_path, [evaluation])
+    _write_jsonl(legacy_intent_path, [paper])
+
+    bundle = legacy_bundle_from_evaluation(evaluation)
+    intent = legacy_trade_intent_from_paper_intent(paper)
+    vnext_bundle_path = tmp_path / "vnext_bundles.jsonl"
+    vnext_intent_path = tmp_path / "vnext_intents.jsonl"
+    _write_jsonl(
+        vnext_bundle_path,
+        [{
+            "information_event": bundle.information_event,
+            "state_checkpoint": bundle.state_checkpoint,
+            "model_output": bundle.model_output.to_dict(),
+            "signal_candidate": replace(
+                bundle.signal_candidate, selected=True
+            ).to_dict(),
+        }],
+    )
+    _write_jsonl(vnext_intent_path, [intent.to_dict()])
+
+    cases = {
+        "legacy": [
+            "--legacy-evaluations", str(legacy_eval_path),
+            "--legacy-paper-intents", str(legacy_intent_path),
+        ],
+        "vnext": [
+            "--vnext-bundles", str(vnext_bundle_path),
+            "--vnext-intents", str(vnext_intent_path),
+        ],
+        "mixed": [
+            "--legacy-evaluations", str(legacy_eval_path),
+            "--vnext-bundles", str(vnext_bundle_path),
+        ],
+    }
+    for name, arguments in cases.items():
+        output = tmp_path / name
+        assert bridge_main([*arguments, "--output-dir", str(output)]) == 0
+        summary = json.loads((output / "bridge_summary.json").read_text())
+        assert summary["outputs"]["signal_candidates"] == 1
+        if name in {"legacy", "vnext"}:
+            assert summary["outputs"]["selected"] == 1
+        assert summary["canonical_reconciliation"]["candidate_delta"] == 0
+        assert summary["signal_funnel"]["raw_candidates"] == 1
+        assert summary["evidence_funnel"]["fill"] == "not_available_phase2"
+        assert len((output / "signal_candidates.jsonl").read_text().splitlines()) == 1
+    assert json.loads(
+        (tmp_path / "mixed" / "bridge_summary.json").read_text()
+    )["input_modes"] == ["legacy", "vnext"]
+
+    repeated = tmp_path / "legacy_repeated"
+    assert bridge_main(
+        [*cases["legacy"], "--output-dir", str(repeated)]
+    ) == 0
+    for filename in (
+        "model_outputs.jsonl",
+        "signal_candidates.jsonl",
+        "trade_intents.jsonl",
+        "trade_intent_blockers.jsonl",
+    ):
+        assert (tmp_path / "legacy" / filename).read_bytes() == (
+            repeated / filename
+        ).read_bytes()
+    first_summary = json.loads((tmp_path / "legacy" / "bridge_summary.json").read_text())
+    repeated_summary = json.loads((repeated / "bridge_summary.json").read_text())
+    for summary in (first_summary, repeated_summary):
+        summary["canonical_reconciliation"].pop("transaction_duration_seconds")
+        summary.pop("summary_hash")
+    assert first_summary == repeated_summary
+
+
+def test_three_city_phase0_payloads_keep_coverage_without_fake_amsterdam_candidate() -> None:
+    fixture_root = ROOT / "tests" / "fixtures" / "weather_city_intraday_phase0"
+    blocked = []
+    for city, filename, source in (
+        ("Helsinki", "helsinki_one_sided_book.json", "fmi"),
+        ("Tokyo", "tokyo_one_sided_book.json", "jma_amedas"),
+    ):
+        fixture = json.loads((fixture_root / filename).read_text())
+        market = fixture["records"]
+        row = _evaluation(
+            city=city,
+            target_date=market["target_date"],
+            current_bracket=market["reference_market_value"],
+            decision_ts_utc=market["book_fetched_at_utc"],
+            source_obs_ts_utc=market["book_fetched_at_utc"],
+            market_side=str(market["outcome"]).upper(),
+            market_probability=None,
+            market_entry_price=None,
+            model_probability=None,
+            market={**market, "book_snapshot_id": f"fixture-{city.lower()}"},
+            lineage={
+                "source": source,
+                "source_first_seen_at_utc": market["book_fetched_at_utc"],
+                "book_snapshot_id": f"fixture-{city.lower()}",
+                "model_artifact_sha256": f"artifact-{city.lower()}",
+                "profile_id": f"fixture-{city.lower()}",
+            },
+            evaluation_status="not_scorable",
+            not_scorable_reason="one_sided_market_probability_interval",
+            effective_cost_per_share=None,
+            would_enter=False,
+        )
+        blocked.append(legacy_bundle_from_evaluation(row).signal_candidate)
+    assert [candidate.city for candidate in blocked] == ["Helsinki", "Tokyo"]
+    assert all(candidate.candidate_status == "blocked" for candidate in blocked)
+
+    amsterdam = json.loads(
+        (fixture_root / "amsterdam_interval_initial.json").read_text()
+    )["records"]
+    output = ModelOutput.create(
+        checkpoint_id="amsterdam-checkpoint",
+        trigger_event_id=amsterdam["information_event_id"],
+        city="Amsterdam",
+        target_date=amsterdam["target_date"],
+        decision_ts_utc=amsterdam["available_at_utc"],
+        target_id="knmi_interval_remaining_heat",
+        target_kind="physical_path",
+        p_model=None,
+        model_id="not_available",
+        model_artifact_id="not_available",
+        feature_set_id="interval-contract-only",
+        input_refs=({"fixture": "amsterdam_interval_initial.json"},),
+        scorable_status="not_scorable",
+        blocker_reason="no_deployed_amsterdam_model_output",
+        market_feature_role="none",
+        market_feature_clock="none",
+    )
+    invalid_candidate = blocked[0].to_dict()
+    invalid_candidate["target_kind"] = output.target_kind
+    with pytest.raises(ValueError, match="market_expression"):
+        SignalCandidate.from_dict(invalid_candidate)

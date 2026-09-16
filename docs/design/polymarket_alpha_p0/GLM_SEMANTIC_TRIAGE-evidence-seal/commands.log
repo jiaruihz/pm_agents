@@ -1,0 +1,9 @@
+.venv/bin/pytest -q tests/polymarket_alpha/test_glm_semantic_triage.py tests/polymarket_alpha/test_security_wave0.py
+
+.venv/bin/python scripts/ops/polymarket_alpha_glm_semantic_triage.py --markets-json /private/tmp/polymarket-alpha-pilot/live50-iNMR73/selected_markets_50.json --market-id 3867798 --market-id 3886788 --market-id 676804 --output-root /private/tmp/polymarket-alpha-glm-triage-final-ijpXJk/artifacts --repository /private/tmp/polymarket-alpha-glm-triage-final-ijpXJk/alpha.db --run-id glm-triage-pilot-20260828-final
+
+env PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha
+
+sqlite3 -batch /private/tmp/polymarket-alpha-glm-triage-final-ijpXJk/alpha.db "SELECT contract_type, COUNT(*) FROM alpha_contract_record GROUP BY contract_type ORDER BY contract_type;"
+
+rg -n '3867798|3886788|676804|bestBid|bestAsk|outcomePrices|lastTradePrice|polymarket\.com|gamma-api|clob' projection.json prompt.txt

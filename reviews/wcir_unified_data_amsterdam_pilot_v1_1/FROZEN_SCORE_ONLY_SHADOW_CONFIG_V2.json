@@ -1,0 +1,42 @@
+{
+  "action_output": "SCORE_ONLY_NO_BUY_SELL_NO_TRADEINTENT",
+  "append_only_prediction_journal": "artifact-store://wcir_amsterdam_score_only_shadow/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/predictions.jsonl",
+  "arms": {
+    "B2_REFERENCE": "B2_latest_fast_rounded",
+    "M1_CHALLENGER": "ams_next_print_m1_ordinal_logit",
+    "M2_CHALLENGER": "ams_next_print_m2_monotonic_additive"
+  },
+  "feature_builder": "amsterdam_feature_builder_v2",
+  "fills_expected": false,
+  "forward_epoch_id": "wcir_amsterdam_score_only_v2_bb04a8acbeafd66b",
+  "frozen_scorer": "amsterdam_frozen_scorer_v2",
+  "hot_tuning": false,
+  "material_change_creates_new_epoch": true,
+  "notional_limit": 0,
+  "orders_allowed": false,
+  "schema_version": "wcir_amsterdam_frozen_score_only_shadow_v2",
+  "score_all_eligible_events": true,
+  "shadow_row_required_fields": [
+    "B2_PMF",
+    "M1_PMF",
+    "M2_PMF",
+    "abstain_reasons",
+    "data_failure_reasons",
+    "decision_book",
+    "decision_vintage_id",
+    "event_id",
+    "feature_vector",
+    "feature_vector_hash",
+    "fills",
+    "forward_epoch_id",
+    "full_path_lineage",
+    "future_markouts",
+    "future_next_print_label",
+    "layer_b_prediction",
+    "market_identity",
+    "notional",
+    "orders",
+    "raw_source_lineage",
+    "submit_proxy_book"
+  ]
+}

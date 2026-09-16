@@ -1,10 +1,15 @@
 .venv
+.venv-*/
 .env
+.env.*
+!.env.example
+.codex
 .idea
 .ipynb_checkpoints
 .mypy_cache
 .vscode
 __pycache__
+*.py[cod]
 .pytest_cache
 htmlcov
 dist
@@ -27,3 +32,109 @@ archive.zip
 .cache
 .DS_Store
 local_db*
+local_news_cache/
+research.db
+research.db-*
+node_modules/
+frontend/**/node_modules/
+frontend/**/tsconfig.tsbuildinfo
+frontend/**/runtime/
+output/
+/artifacts/
+/tmp/
+archive/books/
+src/strategies/pmm/backtest/scenarios/
+src/strategies/pmm/backtest/results/
+src/strategies/pmm/backtest/results_compare/
+src/strategies/pmm/backtest/results_fill_models/
+src/strategies/pmm/backtest/results_*/
+src/strategies/pmm/backtest/scenarios_*/
+src/strategies/pmm/backtest/.artifacts/
+# Keep metadata only; do not commit replay/plot artifacts.
+src/strategies/pmm/backtest/**/plots/
+local_market_collection/market_snapshot_*.json
+
+# Runtime local artifacts
+/runtime
+!src/strategies/weather_edge_v1/runtime/
+!src/strategies/weather_edge_v1/runtime/execution_journal.py
+runtime/*.pid
+runtime/*.db
+runtime/*.db.*
+runtime/*.json
+runtime/logs/*.log
+runtime/db/*.db
+runtime/db/*.db.*
+runtime/events/
+runtime/profile_audits/
+runtime/openai_2026_product_analysis/
+runtime/cqk_raw_full/
+runtime/cqk_raw_smoke/
+runtime/rerun_viking_rule_detail/
+runtime/rerun_viking_rule_detail_v2/
+runtime/smoke_market_analysis/
+runtime/smoke_market_intel/
+runtime/smoke_profile_audit/
+runtime/smoke_rule_audit/
+runtime/smoke_rule_audit_valid/
+runtime/verify_complete_report_v1/
+runtime/verify_complete_report_v2/
+runtime/verify_explained_status/
+runtime/verify_market_analysis_cn/
+*.db-shm
+*.db-wal
+
+# Generated analysis artifacts; keep Markdown conclusions in git.
+docs/analysis/**/*.json
+docs/analysis/**/*.jsonl
+!docs/analysis/templates/research-record.json
+# Raw HTTP/API caches are replay inputs, not reviewable repository content.
+# Keep them local until the owning run is promoted to the JRS artifact store.
+docs/analysis/**/generated/**/cache/
+!docs/analysis/2026-07/generated/intraday_decision_casebook_v1/*.json
+!docs/analysis/2026-07/generated/intraday_decision_casebook_v1/*.jsonl
+# Reproducible analysis CSVs under generated/ are bulky (~270MB); scripts
+# regenerate them and reports cite the numbers. Keep them out of git.
+docs/analysis/**/generated/**/*.csv
+docs/analysis/**/generated/**/*.csv.gz
+docs/analysis/**/generated/**/*.json.gz
+docs/analysis/**/generated/**/*.joblib
+docs/analysis/**/generated/**/*.pkl
+docs/analysis/**/generated/**/*.pickle
+docs/analysis/**/generated/**/*.parquet
+docs/analysis/**/generated/**/*.feather
+docs/analysis/**/generated/**/*.npy
+docs/analysis/**/generated/**/*.npz
+docs/analysis/**/generated/**/*.png
+
+# Feature-factory shards share one contract.  Keep their CSV/JSON artifacts,
+# but consolidate revision facts in the stable factory report instead of
+# accumulating one near-identical Markdown file per date shard.
+docs/analysis/**/generated/intraday_weather_regime_atlas_v1/feature_factory_*.md
+docs/analysis/**/generated/intraday_weather_regime_atlas_v1/feature_factory_*/*.md
+
+# Local compatibility links into the external research stores.  These are
+# absolute, host-specific symlinks; commit the adjacent README/manifest locator
+# instead of the links themselves.
+docs/analysis/2026-06/generated/theta_no_iem_ext_patch_actual_v1
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/analysis
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/daily_activity
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/event_metadata.jsonl.gz
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/event_metadata_by_slug
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/weather_activity.jsonl.gz
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/weather_closed_positions.jsonl.gz
+docs/analysis/2026-07/generated/wallet_43cb_full_history_v1/weather_open_positions.jsonl.gz
+
+# Local agent state
+.claude/
+
+# Review packets are local assembly/evidence workspaces. Existing tracked
+# legacy evidence remains tracked, but new packets belong in the external
+# content-addressed research artifact root. Keep only the boundary README.
+/reviews/**
+!/reviews/README.md
+
+# Strategy runtime platform is SOURCE, not runtime artifacts (override runtime/ rule)
+!src/strategies/runtime/
+!src/strategies/runtime/**
+src/strategies/runtime/**/__pycache__/

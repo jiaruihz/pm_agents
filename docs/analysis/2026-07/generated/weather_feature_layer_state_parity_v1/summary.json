@@ -1,0 +1,75 @@
+{
+  "common_rows": 23,
+  "compared_fields": [
+    "city_family",
+    "composite_regime",
+    "current_native",
+    "current_temp_c",
+    "day_regime",
+    "decision_hour_local",
+    "decision_snapshot_ts_utc",
+    "decline_native",
+    "dewpoint_depression_f",
+    "dwpf_now",
+    "forecast_gap_to_running_native",
+    "forecast_max_f",
+    "forecast_max_native",
+    "forecast_peak_delta_hours_local",
+    "forecast_peak_hour_local",
+    "forecast_peak_hour_spread",
+    "forecast_source",
+    "intraday_state",
+    "minutes_since_running_max",
+    "moisture_cloud_regime",
+    "obs_age_min",
+    "obs_source",
+    "relative_humidity_pct",
+    "running_max_c",
+    "running_max_obs_utc",
+    "running_max_state",
+    "running_native",
+    "running_value",
+    "sky_cover_code",
+    "solar_window",
+    "temp_trend_1h_f",
+    "temp_trend_3h_f",
+    "timezone",
+    "tmpf_now",
+    "unit",
+    "wind_regime",
+    "wind_speed_kt"
+  ],
+  "feature_audit_counts": {
+    "included": 35,
+    "skipped": 47
+  },
+  "feature_only_rows": 12,
+  "feature_rows": 35,
+  "feature_state_rows_path": "docs/analysis/2026-07/generated/weather_feature_layer_state_parity_v1/feature_state_rows.csv",
+  "field_comparisons": 851,
+  "field_diff_path": "docs/analysis/2026-07/generated/weather_feature_layer_state_parity_v1/field_diff.csv",
+  "legacy_audit_counts": {
+    "cannot_map_current_d1_d2": 10,
+    "missing_local_ladder_ask": 2,
+    "observation_missing_or_not_ok": 47
+  },
+  "legacy_only_rows": 0,
+  "legacy_tmax_rows": 23,
+  "legacy_tmax_state_rows_path": "docs/analysis/2026-07/generated/weather_feature_layer_state_parity_v1/legacy_tmax_state_rows.csv",
+  "mismatch_by_field": {
+    "decision_hour_local": 23
+  },
+  "mismatch_examples_path": "docs/analysis/2026-07/generated/weather_feature_layer_state_parity_v1/mismatch_examples.csv",
+  "notes": [
+    "Shared-field parity only; tmax ladder, ask/bid, distribution, selector, and executor fields are intentionally excluded.",
+    "The sample is archive reconstruction from N100 recovery artifacts and does not change any live runner behavior."
+  ],
+  "observation_cache_generated_at_utc": "2026-07-01T15:56:11.923928+00:00",
+  "observation_cache_path": "runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/observations/latest.json",
+  "snapshot_path": "runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/paper_snapshots/snapshot_20260701_1556.json",
+  "snapshot_ts_utc": "2026-07-01T07:56:37Z",
+  "status_counts": {
+    "match": 828,
+    "numeric_mismatch": 23
+  }
+}

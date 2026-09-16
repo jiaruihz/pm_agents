@@ -1,219 +1,104 @@
-<!-- PROJECT SHIELDS -->
-[![Contributors][contributors-shield]][contributors-url]
-[![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
-[![MIT License][license-shield]][license-url]
+# PM Agents
+
+面向 Polymarket 的研究与执行仓库。当前活跃主线是天气温度策略；旧
+PMM/ARB 框架保留为 dormant 资产，不代表当前生产架构。
+
+Agent 和开发者先读 [AGENTS.md](AGENTS.md)。全仓文件归属见
+[项目结构合同](docs/PROJECT_STRUCTURE.md)，研究如何形成长期知识见
+[Research knowledge system](docs/RESEARCH_KNOWLEDGE_SYSTEM.md)。
+
+## 快速入口
+
+| 目标 | 入口 |
+|---|---|
+| 任务与 skill 路由、安全边界 | [AGENTS.md](AGENTS.md) |
+| Weather 文档权威性与当前路由 | [docs/WEATHER_DOCS_INDEX.md](docs/WEATHER_DOCS_INDEX.md) |
+| Weather 生产接手 | [docs/WEATHER_STRATEGY_ENTRYPOINT.md](docs/WEATHER_STRATEGY_ENTRYPOINT.md) |
+| Weather 字段/血缘合同 | [docs/WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md) |
+| Weather 分析口径 | [docs/WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md) |
+| 运维 | [docs/OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md) |
+
+## 目录主轴
+
+```text
+src/                         canonical reusable Python source
+weather_*/                   registered legacy root packages; no new root package
+scripts/ops/                 stable operational entrypoints
+scripts/analysis/<family>/   reusable offline runners, not city/date copies
+configs/                     canonical versioned configuration
+skills/                      task routing and bounded method entrypoints
+docs/                        contracts, living knowledge, registries, snapshots
+tests/                       verification
+frontend/                    dashboard application
+runtime/                     mutable local/production-compatible state; ignored
+reviews/                     local review-packet assembly; ignored for new files
+```
+
+Large rows, models, plots, raw captures, and evidence bundles belong in the
+artifact root declared by the production contract. Git keeps source, compact
+metadata, contracts, current conclusions, and deliberately selected golden
+evidence.
+
+## Current production truth
+
+The current weather production host is Mac. N100 is a historical/recovery
+boundary, not present-state truth. `src/strategies/runtime/production.yaml`
+declares desired state; processes, loaded SHA, JRS access, raw runtime, and
+exchange evidence must be verified dynamically:
+
+```bash
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
+.venv/bin/python scripts/ops/weather_production_ctl.py health
+.venv/bin/python scripts/ops/weather_production_ctl.py plan
+```
+
+The repository checkout does not prove which checkout a live process loaded.
+Do not infer live/shadow state from README or old reports.
+
+`scripts/weather_dashboard/run_stack.sh` without flags is status-only. A full
+canonical rebuild is explicit, long-running, and requires authorization:
+
+```bash
+scripts/weather_dashboard/run_stack.sh --status
+scripts/weather_dashboard/run_stack.sh --rebuild
+```
+
+## Repository and research gates
+
+```bash
+.venv/bin/python scripts/ops/check_project_structure.py --strict
+.venv/bin/python scripts/ops/check_weather_docs.py
+.venv/bin/python scripts/ops/research_record_ctl.py validate RECORD.json
+```
+
+The project checker prevents new unclassified roots, tracked runtime/review
+artifacts, skill-catalog drift, and stale context entrypoints. The research
+record freezes one hypothesis, denominator, evidence identity, output route,
+and living-doc handoff without creating another prompt charter.
+
+## Other strategies
+
+`src/strategies/` contains retained PMM, ARB, rule-lawyer, and other work. Treat
+inactive directions as dormant/superseded-for-now; preserve them unless a
+separate migration proves callers, evidence, and compatibility.
+
+## Tests
+
+Create the development environment from the dev manifest, run focused tests
+for a change, then the relevant suite:
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/pre-commit run
+.venv/bin/python scripts/ops/verify_repo.py --profile maintained
+```
+
+The repository still contains legacy/research formatting debt, so CI runs
+Black and secret/merge checks on changed files rather than silently rewriting
+the checkout. See [CONTRIBUTING.md](CONTRIBUTING.md) for the maintained CI
+suite boundary and research-test routing.
+
+## License
 
-
-<!-- PROJECT LOGO -->
-<br />
-<div align="center">
-  <a href="https://github.com/polymarket/agents">
-    <img src="docs/images/cli.png" alt="Logo" width="466" height="262">
-  </a>
-
-<h3 align="center">Polymarket Agents</h3>
-
-  <p align="center">
-    Trade autonomously on Polymarket using AI Agents
-    <br />
-    <a href="https://github.com/polymarket/agents"><strong>Explore the docs »</strong></a>
-    <br />
-    <br />
-    <a href="https://github.com/polymarket/agents">View Demo</a>
-    ·
-    <a href="https://github.com/polymarket/agents/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
-    ·
-    <a href="https://github.com/polymarket/agents/issues/new?labels=enhancement&template=feature-request---.md">Request Feature</a>
-  </p>
-</div>
-
-
-<!-- CONTENT -->
-# Polymarket Agents
-
-Polymarket Agents is a developer framework and set of utilities for building AI agents for Polymarket.
-
-This code is free and publicly available under MIT License open source license ([terms of service](#terms-of-service))!
-
-## Features
-
-- Integration with Polymarket API
-- AI agent utilities for prediction markets
-- Local and remote RAG (Retrieval-Augmented Generation) support
-- Data sourcing from betting services, news providers, and web search
-- Comphrehensive LLM tools for prompt engineering
-
-# Getting started
-
-This repo is inteded for use with Python 3.9
-
-1. Clone the repository
-
-   ```
-   git clone https://github.com/{username}/polymarket-agents.git
-   cd polymarket-agents
-   ```
-
-2. Create the virtual environment
-
-   ```
-   virtualenv --python=python3.9 .venv
-   ```
-
-3. Activate the virtual environment
-
-   - On Windows:
-
-   ```
-   .venv\Scripts\activate
-   ```
-
-   - On macOS and Linux:
-
-   ```
-   source .venv/bin/activate
-   ```
-
-4. Install the required dependencies:
-
-   ```
-   pip install -r requirements.txt
-   ```
-
-5. Set up your environment variables:
-
-   - Create a `.env` file in the project root directory
-
-   ```
-   cp .env.example .env
-   ```
-
-   - Add the following environment variables:
-
-   ```
-   POLYGON_WALLET_PRIVATE_KEY=""
-   OPENAI_API_KEY=""
-   ```
-
-6. Load your wallet with USDC.
-
-7. Try the command line interface...
-
-   ```
-   python scripts/python/cli.py
-   ```
-
-   Or just go trade! 
-
-   ```
-   python agents/application/trade.py
-   ```
-
-8. Note: If running the command outside of docker, please set the following env var:
-
-   ```
-   export PYTHONPATH="."
-   ```
-
-   If running with docker is preferred, we provide the following scripts:
-
-   ```
-   ./scripts/bash/build-docker.sh
-   ./scripts/bash/run-docker-dev.sh
-   ```
-
-## Architecture
-
-The Polymarket Agents architecture features modular components that can be maintained and extended by individual community members.
-
-### APIs
-
-Polymarket Agents connectors standardize data sources and order types.
-
-- `Chroma.py`: chroma DB for vectorizing news sources and other API data. Developers are able to add their own vector database implementations.
-
-- `Gamma.py`: defines `GammaMarketClient` class, which interfaces with the Polymarket Gamma API to fetch and parse market and event metadata. Methods to retrieve current and tradable markets, as well as defined information on specific markets and events.
-
-- `Polymarket.py`: defines a Polymarket class that interacts with the Polymarket API to retrieve and manage market and event data, and to execute orders on the Polymarket DEX. It includes methods for API key initialization, market and event data retrieval, and trade execution. The file also provides utility functions for building and signing orders, as well as examples for testing API interactions.
-
-- `Objects.py`: data models using Pydantic; representations for trades, markets, events, and related entities.
-
-### Scripts
-
-Files for managing your local environment, server set-up to run the application remotely, and cli for end-user commands.
-
-`cli.py` is the primary user interface for the repo. Users can run various commands to interact with the Polymarket API, retrieve relevant news articles, query local data, send data/prompts to LLMs, and execute trades in Polymarkets.
-
-Commands should follow this format:
-
-`python scripts/python/cli.py command_name [attribute value] [attribute value]`
-
-Example:
-
-`get-all-markets`
-Retrieve and display a list of markets from Polymarket, sorted by volume.
-
-   ```
-   python scripts/python/cli.py get-all-markets --limit <LIMIT> --sort-by <SORT_BY>
-   ```
-
-- limit: The number of markets to retrieve (default: 5).
-- sort_by: The sorting criterion, either volume (default) or another valid attribute.
-
-# Contributing
-
-If you would like to contribute to this project, please follow these steps:
-
-1. Fork the repository.
-2. Create a new branch.
-3. Make your changes.
-4. Submit a pull request.
-
-Please run pre-commit hooks before making contributions. To initialize them:
-
-   ```
-   pre-commit install
-   ```
-
-# Related Repos
-
-- [py-clob-client](https://github.com/Polymarket/py-clob-client): Python client for the Polymarket CLOB
-- [python-order-utils](https://github.com/Polymarket/python-order-utils): Python utilities to generate and sign orders from Polymarket's CLOB
-- [Polymarket CLOB client](https://github.com/Polymarket/clob-client): Typescript client for Polymarket CLOB
-- [Langchain](https://github.com/langchain-ai/langchain): Utility for building context-aware reasoning applications
-- [Chroma](https://docs.trychroma.com/getting-started): Chroma is an AI-native open-source vector database
-
-# Prediction markets reading
-
-- Prediction Markets: Bottlenecks and the Next Major Unlocks, Mikey 0x: https://mirror.xyz/1kx.eth/jnQhA56Kx9p3RODKiGzqzHGGEODpbskivUUNdd7hwh0
-- The promise and challenges of crypto + AI applications, Vitalik Buterin: https://vitalik.eth.limo/general/2024/01/30/cryptoai.html
-- Superforecasting: How to Upgrade Your Company's Judgement, Schoemaker and Tetlock: https://hbr.org/2016/05/superforecasting-how-to-upgrade-your-companys-judgment
-
-# License
-
-This project is licensed under the MIT License. See the [LICENSE](https://github.com/Polymarket/agents/blob/main/LICENSE.md) file for details.
-
-# Contact
-
-For any questions or inquiries, please contact liam@polymarket.com or reach out at www.greenestreet.xyz
-
-Enjoy using the CLI application! If you encounter any issues, feel free to open an issue on the repository.
-
-# Terms of Service
-
-[Terms of Service](https://polymarket.com/tos) prohibit US persons and persons from certain other jurisdictions from trading on Polymarket (via UI & API and including agents developed by persons in restricted jurisdictions), although data and information is viewable globally.
-
-
-<!-- LINKS -->
-[contributors-shield]: https://img.shields.io/github/contributors/polymarket/agents?style=for-the-badge
-[contributors-url]: https://github.com/polymarket/agents/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/polymarket/agents?style=for-the-badge
-[forks-url]: https://github.com/polymarket/agents/network/members
-[stars-shield]: https://img.shields.io/github/stars/polymarket/agents?style=for-the-badge
-[stars-url]: https://github.com/polymarket/agents/stargazers
-[issues-shield]: https://img.shields.io/github/issues/polymarket/agents?style=for-the-badge
-[issues-url]: https://github.com/polymarket/agents/issues
-[license-shield]: https://img.shields.io/github/license/polymarket/agents?style=for-the-badge
-[license-url]: https://github.com/polymarket/agents/blob/master/LICENSE.md
+MIT ([LICENSE.md](LICENSE.md)).

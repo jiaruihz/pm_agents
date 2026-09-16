@@ -1,0 +1,29 @@
+{
+  "blocking_issues": [],
+  "completion_status": "OFFLINE_PREFLIGHT_COMPLETE",
+  "disposition_requested": "PREPARED_NOT_AUTHORIZED",
+  "gate": "READ_ONLY_OPERATIONAL_PILOT_PREFLIGHT",
+  "generated_at": "2026-08-27T12:00:00Z",
+  "network_io_performed": false,
+  "owner_demand_submitted": false,
+  "production_capture_expansion": "NOT_AUTHORIZED",
+  "production_state_mutated": false,
+  "read_only_operational_pilot": "NOT_APPROVED",
+  "source_commit": "ef82da8844562c63eacc5d16a73b17fe5b98abbb",
+  "tests": {
+    "alpha_full": 403,
+    "errors": 0,
+    "failures": 0,
+    "focused": 64,
+    "regressions": 30,
+    "source_audit_violations": 0
+  },
+  "work_packages": {
+    "OP-01": "OFFLINE_COMPLETE",
+    "OP-02": "NOT_RUN_REQUIRES_AUTHORIZATION",
+    "OP-03": "CONTRACT_ONLY_NOT_OBSERVED",
+    "OP-04": "OFFLINE_POLICY_COMPLETE_NETWORK_NOT_RUN",
+    "OP-05": "OFFLINE_BUDGET_COMPLETE_STORAGE_NOT_OBSERVED",
+    "OP-06": "NOT_RUN_REQUIRES_AUTHORIZATION"
+  }
+}

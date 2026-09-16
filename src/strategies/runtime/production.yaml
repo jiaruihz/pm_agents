@@ -1,0 +1,1100 @@
+version: weather_production_v1
+host_role: mac_current_production
+operational_repo_root: /Users/deepsleep/projects/pm_agents
+platform_control_db_path: /Users/deepsleep/projects/pm_agents/runtime/platform/generations/production-20260907/platform_control.db
+production_release_root: /Users/deepsleep/.local/share/pm_agents/releases
+# Immutable release identities. Runtime entries reference these IDs instead of
+# repeating mutable checkout paths. A release SHA update is an explicit deploy.
+production_releases:
+  - release_id: core_carry_labels_and_reports
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_labels_and_reports/a05c3bda64b0724cc56b0e363f642ceb45815774
+    expected_repo_sha: a05c3bda64b0724cc56b0e363f642ceb45815774
+    runtime_bindings: [operational_venv]
+  - release_id: core_carry_independent_forward
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_independent_forward/ca2d532c3a4c04d7865f3c753238ef8f04b38174
+    expected_repo_sha: ca2d532c3a4c04d7865f3c753238ef8f04b38174
+    runtime_bindings: [operational_venv]
+  - release_id: weather_entry_gate
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_entry_gate/9a000c95d1cd409adbf3ff425b322e3622c2f95a
+    expected_repo_sha: 9a000c95d1cd409adbf3ff425b322e3622c2f95a
+    runtime_bindings: [operational_venv]
+  - release_id: platform_control_plane
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/platform_control_plane/6dde6c4e359fe0d852f1c225d6fd13aa22d09a7b
+    expected_repo_sha: 6dde6c4e359fe0d852f1c225d6fd13aa22d09a7b
+    runtime_bindings: [operational_venv, operational_env]
+  - release_id: canonical_refresh
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/canonical_refresh/a2f0e6c218fd0505d62d9e14255b362cd5753f0a
+    expected_repo_sha: a2f0e6c218fd0505d62d9e14255b362cd5753f0a
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: control_plane
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/6ac3384d1807dd11e863aeb6556142ee36f28b92
+    expected_repo_sha: 6ac3384d1807dd11e863aeb6556142ee36f28b92
+    runtime_bindings: [operational_venv, operational_env]
+  - release_id: fast_source_runtime
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_source_runtime/242f7d9924ef82ab0fc8195b958d73e68b3c3fcf
+    expected_repo_sha: 242f7d9924ef82ab0fc8195b958d73e68b3c3fcf
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: cross_no_v2_metar
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/cross_no_v2_metar/6561553bb9b2da7ee14ea4c8350b1b95b6328b4e
+    expected_repo_sha: 6561553bb9b2da7ee14ea4c8350b1b95b6328b4e
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: data_feed
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/data_feed/6a0018959c844589cf2c6df93ba11982db8bff1c
+    expected_repo_sha: 6a0018959c844589cf2c6df93ba11982db8bff1c
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: forecast_collector
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/forecast_collector/24586b186853b626c4fb34dcb82ab6a596ae67ec
+    expected_repo_sha: 24586b186853b626c4fb34dcb82ab6a596ae67ec
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: market_books
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_books/89c9a5241dbc6a10aacbf0544a7a0ad9b36674a4
+    expected_repo_sha: 89c9a5241dbc6a10aacbf0544a7a0ad9b36674a4
+    runtime_bindings: [operational_venv]
+  - release_id: amsterdam_wcir_shadow
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/amsterdam_wcir_shadow/769e06309e30bb798ba867d79dd547d975cb11e6
+    expected_repo_sha: 769e06309e30bb798ba867d79dd547d975cb11e6
+    runtime_bindings: [operational_venv]
+  - release_id: wcir_next_print_frozen
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir_next_print_frozen/03f7b796c2b889f5947f4801b8b4e830e77fe5b8
+    expected_repo_sha: 03f7b796c2b889f5947f4801b8b4e830e77fe5b8
+    runtime_bindings: [operational_venv]
+  - release_id: dispute_repricing
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/dispute_repricing/d7dcdc53f6bb27fd9731485ef0f779442056629c
+    expected_repo_sha: d7dcdc53f6bb27fd9731485ef0f779442056629c
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: forecast_capture
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/forecast_capture/a260a1f9e6a0c67a38757e6d92b780c0a87b117f
+    expected_repo_sha: a260a1f9e6a0c67a38757e6d92b780c0a87b117f
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: wcir
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/wcir/64c5805dc8253c928a6dedfbe71c50f2d8e641c4
+    expected_repo_sha: 64c5805dc8253c928a6dedfbe71c50f2d8e641c4
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: city_runtime
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/city_runtime/48e009d84a33ef9b5ea70407ef690b2be67f41d3
+    expected_repo_sha: 48e009d84a33ef9b5ea70407ef690b2be67f41d3
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: city_probability_runtime
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/city_probability_runtime/d8f6d3822e4afd655c1c224e0f5a52daa8ddcf81
+    expected_repo_sha: d8f6d3822e4afd655c1c224e0f5a52daa8ddcf81
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: fast_observation
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/fast_observation/331f309ebeea14fd6b61727584a8cf19b40dc6a0
+    expected_repo_sha: 331f309ebeea14fd6b61727584a8cf19b40dc6a0
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: tmin_cross_prev_no_shadow
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_cross_prev_no_shadow/ffc1bb72e360bbd203c8ba0750014af40bac5718
+    expected_repo_sha: ffc1bb72e360bbd203c8ba0750014af40bac5718
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: tmin_no_further_cooling
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_no_further_cooling/74f55ace83424dbd94037506e74bbaba9a68c070
+    expected_repo_sha: 74f55ace83424dbd94037506e74bbaba9a68c070
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: tmin_no_further_cooling_tiny_live
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_no_further_cooling_tiny_live/db0b36058b4d5d68e774e070679a16336e79d5ad
+    expected_repo_sha: db0b36058b4d5d68e774e070679a16336e79d5ad
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: tmin_v2_2_probability_shadow
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/tmin_v2_2_probability_shadow/cff79f0f6d580af7e70fd350cd239fa68f159ba6
+    expected_repo_sha: cff79f0f6d580af7e70fd350cd239fa68f159ba6
+  - release_id: strategy_runtime
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/strategy_runtime/ee624d966e40ea745f24d0e1ad2f8a9902ba9ea0
+    expected_repo_sha: ee624d966e40ea745f24d0e1ad2f8a9902ba9ea0
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: helsinki_ladder
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/helsinki_ladder/f64728197135caf78b11491395bf23220b3fc872
+    expected_repo_sha: f64728197135caf78b11491395bf23220b3fc872
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: core_carry_runtime
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_runtime/5b7e6ced2b2ed8ec4ed38feb9bd9301e63823709
+    expected_repo_sha: 5b7e6ced2b2ed8ec4ed38feb9bd9301e63823709
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: core_carry_live_runtime
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_live_runtime/b65282a633e9e5eb0d6f74284d2542c7cadb6d0f
+    expected_repo_sha: b65282a633e9e5eb0d6f74284d2542c7cadb6d0f
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: core_carry_budget_runtime
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_budget_runtime/d0e6121b39d367594fb2179956c210857c1d8eb7
+    expected_repo_sha: d0e6121b39d367594fb2179956c210857c1d8eb7
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
+  - release_id: core_carry_event_shadow
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_event_shadow/1e1fd3cabeca86005226c45969ad214085f6922c
+    expected_repo_sha: 1e1fd3cabeca86005226c45969ad214085f6922c
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: core_carry_market_state_shadow
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/core_carry_market_state_shadow/af8754262c92c4b9a5e1ed66088b4c25c453588c
+    expected_repo_sha: af8754262c92c4b9a5e1ed66088b4c25c453588c
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: scheduled_informed_maker
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/scheduled_informed_maker/7c2bee320486645f763a1275c52e6690a3c68231
+    expected_repo_sha: 7c2bee320486645f763a1275c52e6690a3c68231
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: weather_first_selective_maker_v2_1
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_first_selective_maker_v2_1/9b01bcc5ef8fd4ab204510697355f21e05476deb
+    expected_repo_sha: 9b01bcc5ef8fd4ab204510697355f21e05476deb
+    runtime_bindings: [operational_venv]
+  - release_id: weather_mm_w3_event_fenced_paired_bid
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/weather_mm_w3_event_fenced_paired_bid/0eaa2568959011e0aa4e928768879e2d90ade352
+    expected_repo_sha: 0eaa2568959011e0aa4e928768879e2d90ade352
+    runtime_bindings: [operational_venv]
+  - release_id: knmi
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c
+    expected_repo_sha: ef64a2d0b14230d21e3544161dbf95a097eeca9c
+    runtime_bindings: [operational_venv, canonical_db, operational_env]
+    runtime_binding_sources:
+      operational_env: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/588d33fcf89a19bc68a765129444bd2d59500c21/.env.knmi
+  - release_id: market_tail
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/market_tail/08c5315ac1f16bd4c0c6b42d3259f5e3390a359a
+    expected_repo_sha: 08c5315ac1f16bd4c0c6b42d3259f5e3390a359a
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: europe_d1_distance2_shadow
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_shadow/03bec0e084c51ec43e41ae977eaf1225a1b5e68e
+    expected_repo_sha: 03bec0e084c51ec43e41ae977eaf1225a1b5e68e
+    runtime_bindings: [operational_venv]
+  - release_id: europe_d1_model_filter_shadow
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_model_filter_shadow/641e82ab7bd21681661a3c3b6de0f30fa10af596
+    expected_repo_sha: 641e82ab7bd21681661a3c3b6de0f30fa10af596
+  - release_id: europe_d1_distance2_lineage_adapter
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/europe_d1_distance2_lineage_adapter/de9de4f4134dee772ed8847a3a69682c55eddd20
+    expected_repo_sha: de9de4f4134dee772ed8847a3a69682c55eddd20
+    runtime_bindings: [operational_venv]
+  - release_id: proposal_reward
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/proposal_reward/d0236cf22a280c86c4168e9d97076897080c58dc
+    expected_repo_sha: d0236cf22a280c86c4168e9d97076897080c58dc
+    runtime_bindings: [operational_venv, canonical_db]
+  - release_id: paired_bid_mm
+    checkout_root: /Users/deepsleep/.local/share/pm_agents/releases/paired_bid_mm/a977ad07dc348a7b45b86f1c0050b8afcede1db5
+    expected_repo_sha: a977ad07dc348a7b45b86f1c0050b8afcede1db5
+    runtime_bindings: [operational_venv, canonical_db]
+
+canonical_refresh_release_id: canonical_refresh
+# The mount name is a compatibility contract; UUID is the physical identity.
+# A same-named replacement disk must fail closed instead of becoming production.
+production_storage_root: /Volumes/jrs
+production_storage_volume_uuid: 93F5EA71-2AAB-4A45-9A21-18220BBE4614
+archive_storage_root: /Volumes/jrs-archive
+archive_storage_volume_uuid: 748B704B-E074-40C1-A5F0-AC9205B52E9F
+# Immutable retired collector products. Consumers resolve semantic products
+# through the shared loader; they never embed targeted/full-ladder paths.
+historical_data_feed_runtime_root: /Volumes/jrs-archive/weather_data_feed_service_runtime
+historical_full_ladder_data_root: /Volumes/jrs-archive/weather_data_feed_service_runtime/full_ladder_output
+historical_targeted_data_root: /Volumes/jrs-archive/weather_data_feed_service_runtime/targeted_output
+# Immutable pre-current-production strategy snapshots.  This is a historical
+# PIT input, not a fallback current producer and not a second mutable owner.
+historical_paper_snapshot_root: /Volumes/jrs-archive/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots
+canonical_db_path: /Volumes/jrs/pm_agents/runtime/weather.db
+compatibility_db_paths:
+  - runtime/weather.db
+data_feed_runtime_root: /Volumes/jrs/weather_data_feed_service_runtime
+market_books_root: /Volumes/jrs/weather_data_feed_service_runtime/market_books
+strategy_snapshot_root: /Volumes/jrs/weather_data_feed_service_runtime/strategy_snapshots
+market_ladder_snapshot_root: /Volumes/jrs/weather_data_feed_service_runtime/market_ladder_snapshots
+forecast_output_root: /Volumes/jrs/weather_data_feed_service_runtime/forecast
+pm_runtime_root: /Volumes/jrs/pm_agents/runtime
+research_artifact_root: /Volumes/jrs-archive/pm_agents/research/artifact_store
+canonical_tmux_socket: weather-data-feed-jrs
+canonical_tmux_binary: /opt/homebrew/Cellar/tmux/3.6b/bin/tmux
+market_proxy_state_path: /Volumes/jrs/weather_data_feed_service_runtime/config/market_proxy.json
+market_proxy_default_url: http://127.0.0.1:7896
+market_proxy_controller_unix_socket: /tmp/verge/verge-mihomo.sock
+market_proxy_gateway_config_root: /Users/deepsleep/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev
+market_proxy_stable_upstream_url: http://127.0.0.1:7890
+market_proxy_routes:
+  default:
+    proxy_url: http://127.0.0.1:7896
+    clash_group: PM-STABLE
+  allblue:
+    proxy_url: http://127.0.0.1:7897
+    clash_group: Allblue 加速器
+  stable:
+    proxy_url: http://127.0.0.1:7896
+    clash_group: PM-STABLE
+
+# This is the current Mac production desired state. Historical/research
+# metadata remains in instances.yaml; only runtimes listed here are required to
+# survive a production change or canonical tmux rebuild.
+allowed_unmanaged_sessions:
+  - weather_canonical_refresh  # bounded one-shot, allowed to finish naturally
+
+managed_runtimes:
+  - instance_id: weather_core_carry_labels_and_reports
+    tmux_session: weather_core_carry_labels_and_reports
+    role: shadow
+    execution_mode: zero_notional_research
+    release_id: core_carry_labels_and_reports
+    start_script: scripts/ops/start_weather_core_carry_labels_and_reports.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/research/core_carry_labels_and_reports_20260912_v1/latest.json
+    health_format: json
+    max_health_age_sec: 1800
+    startup_grace_sec: 600
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      worker_id: core_carry_official_labels_and_reports_v1_20260912
+      collector_epoch_id: core_carry_independent_forward_20260911_v2
+      actual_notional: 0.0
+      orders: 0
+      orders_allowed: false
+    dependencies: [weather_jrs_context_keeper, weather_core_carry_independent_forward]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_core_carry_independent_forward
+    tmux_session: weather_core_carry_independent_forward
+    role: shadow
+    execution_mode: zero_notional_research
+    release_id: core_carry_independent_forward
+    start_script: scripts/ops/start_weather_core_carry_independent_forward.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/research/core_carry_independent_forward_20260911_v2/latest.json
+    health_format: json
+    max_health_age_sec: 180
+    startup_grace_sec: 120
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      epoch_id: core_carry_independent_forward_20260911_v2
+      actual_notional: 0.0
+      orders: 0
+      orders_allowed: false
+    dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_jrs_context_keeper
+    tmux_session: weather_jrs_context_keeper
+    role: infrastructure
+    execution_mode: infrastructure
+    recovery_policy: manual
+
+  - instance_id: weather_dashboard_api
+    tmux_session: weather_dashboard_api
+    role: dashboard_api
+    execution_mode: read_only_api
+    release_id: platform_control_plane
+    start_script: scripts/ops/start_weather_dashboard_api_jrs_tmux.sh
+    health_url: http://127.0.0.1:8000/health
+    health_format: http_json
+    accepted_health_statuses: [ok]
+    dependencies: [weather_jrs_context_keeper]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_data_feed_jrs
+    tmux_session: weather_data_feed_jrs
+    role: data_feed
+    execution_mode: collector
+    release_id: data_feed
+    start_script: scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json
+    max_health_age_sec: 1800
+    startup_grace_sec: 900
+    dependencies: [weather_market_books, weather_forecast_curve_collector_v1]
+    recovery_policy: safe
+
+  - instance_id: weather_forecast_curve_collector_v1
+    tmux_session: weather_forecast_curve_collector_v1
+    role: source_collector
+    execution_mode: collector
+    release_id: forecast_collector
+    start_script: scripts/ops/start_weather_forecast_curve_collector_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_curve_collector/latest.json
+    health_format: json
+    max_health_age_sec: 1800
+    accepted_health_statuses: [ok]
+    dependencies: [weather_jrs_context_keeper]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+      WEATHER_DATA_FEED_FORECAST_PROXY: http://127.0.0.1:7896
+
+  - instance_id: polymarket_weather_proposal_reward_shadow_v1
+    uses_market_proxy: true
+    tmux_session: weather_proposal_reward_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: proposal_reward
+    start_script: scripts/ops/start_weather_proposal_reward_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/proposal_reward_shadow_v1/latest.json
+    health_format: json
+    max_health_age_sec: 30
+    accepted_health_statuses: [ok]
+    dependencies: [weather_jrs_context_keeper]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: paired_bid_mm_shadow_v1
+    uses_market_proxy: true
+    tmux_session: paired_bid_mm_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: paired_bid_mm
+    start_script: scripts/ops/start_paired_bid_mm_shadow_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/pmm/paired_bid_mm_shadow_v1/health.json
+    health_format: json
+    max_health_age_sec: 30
+    accepted_health_statuses: [healthy, warming]
+    dependencies: [weather_jrs_context_keeper]
+    recovery_policy: safe
+
+  - instance_id: weather_market_books
+    uses_market_proxy: true
+    tmux_session: weather_market_books
+    role: market_collector
+    execution_mode: collector
+    release_id: market_books
+    start_script: scripts/ops/start_weather_market_books.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/market_books/collector_health.json
+    health_format: json
+    max_health_age_sec: 420
+    health_publish_interval_sec: 10
+    startup_grace_sec: 180
+    accepted_health_statuses: [ok, ok_with_discovery_reuse, ok_with_cold_book_failures]
+    expected_health_fields:
+      configured_cities: [Amsterdam, Tokyo, Helsinki, Busan]
+      active_bracket_count: 2
+      research_bracket_count: 3
+      event_bracket_count: 3
+      research_sample_modulus: 6
+      daily_payload_budget_bytes: 3000000000
+      execution_evidence.enabled: true
+      execution_evidence.schema_version: weather_execution_evidence_health_v1
+      execution_evidence.daily_budget_bytes: 1000000000
+      execution_evidence.semantics.public_trade_print: exchange match not own fill
+      execution_evidence.semantics.public_book: quote state not queue or execution
+    dependencies: [weather_jrs_context_keeper]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+      WEATHER_MARKET_BOOKS_WS_CITIES: "Amsterdam Tokyo Helsinki Busan"
+      WEATHER_MARKET_BOOKS_WS_ACTIVE_BRACKETS: "2"
+      WEATHER_MARKET_BOOKS_WS_RESEARCH_BRACKETS: "3"
+      WEATHER_MARKET_BOOKS_WS_EVENT_BRACKETS: "3"
+      WEATHER_MARKET_BOOKS_WS_RESEARCH_SAMPLE_MODULUS: "6"
+      WEATHER_MARKET_BOOKS_WS_DAILY_PAYLOAD_BUDGET_BYTES: "3000000000"
+      WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_MIN_INTERVAL_SEC: "10"
+      WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_CHECKPOINT_GRACE_SEC: "20"
+      WEATHER_MARKET_BOOKS_WS_EXECUTION_EVIDENCE_DAILY_BUDGET_BYTES: "1000000000"
+      WEATHER_MARKET_BOOKS_WS_CAPTURE_DEMANDS: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/market_capture_demands.jsonl
+      WEATHER_MARKET_BOOKS_WS_SHARED_CAPTURE_DEMANDS: "/Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/pretrigger_capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/capture_demands.jsonl /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_action_shadow_v2_20260904a/capture_demands.jsonl /Users/deepsleep/projects/pm_agents/runtime/us_fast_weather_lab_metarws_pro_market_20260830/market_capture_demands.jsonl /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v2/capture_demands.jsonl"
+      WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_TTL_MIN: "120"
+      WEATHER_MARKET_BOOKS_WS_CAPTURE_MAX_ACTIVE_TOKENS: "96"
+
+  - instance_id: weather_amsterdam_wcir_frozen_shadow_v2
+    desired_state: running
+    tmux_session: weather_amsterdam_wcir_frozen_shadow_v2
+    role: shadow
+    execution_mode: zero_notional_action_shadow
+    release_id: amsterdam_wcir_shadow
+    start_script: scripts/ops/start_weather_amsterdam_wcir_frozen_shadow_v2.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/research/wcir_amsterdam_frozen_v2/epoch=wcir_amsterdam_score_only_v2_bb04a8acbeafd66b/latest.json
+    health_format: json
+    max_health_age_sec: 420
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_key: weather_amsterdam_wcir_frozen_v2
+      execution_mode: zero_notional_action_shadow
+      action_shadow_enabled: true
+      policy_epoch_id: wcir_amsterdam_prevmax_no_action_shadow_v1_ccecfdc550d92068
+      live_authority: false
+      actual_notional: 0.0
+      orders: 0
+      fills: 0
+      notional: 0
+      forward_epoch_id: wcir_amsterdam_score_only_v2_bb04a8acbeafd66b
+    dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books, weather_live_cross_observations, weather_knmi_open_data_jrs]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1
+    uses_market_proxy: true
+    tmux_session: weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1
+    role: shadow
+    execution_mode: zero_notional_action_shadow
+    release_id: wcir_next_print_frozen
+    start_script: scripts/ops/start_weather_wcir_next_print_helsinki_tokyo_frozen_shadow_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/research/wcir_next_print_helsinki_tokyo_frozen_v1/epoch=wcir_ht_next_print_action_shadow_v2_20260904a/latest.json
+    health_format: json
+    max_health_age_sec: 180
+    startup_grace_sec: 180
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_key: weather_helsinki_tokyo_wcir_next_print_frozen_v1
+      execution_mode: zero_notional_action_shadow
+      policy_status: zero_notional_action_shadow
+      live_authority: false
+      forward_epoch_id: wcir_ht_next_print_action_shadow_v2_20260904a
+      safety.plans: 0
+      safety.orders: 0
+      safety.fills: 0
+      safety.exchange_calls: 0
+      safety.actual_notional_usd: 0.0
+      orders: 0
+      fills: 0
+      notional: 0
+      actual_notional: 0.0
+    dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books, weather_live_cross_observations, fast_source_prev_no_trial_v1]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: polymarket_dispute_repricing_zero_notional_v1
+    uses_market_proxy: true
+    tmux_session: polymarket_dispute_repricing_zero_notional_v1
+    role: shadow
+    execution_mode: zero_notional_shadow
+    release_id: dispute_repricing
+    start_script: scripts/ops/start_polymarket_dispute_repricing_zero_notional_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/health.json
+    health_format: json
+    max_health_age_sec: 180
+    accepted_health_statuses: [ok, warming]
+    expected_health_fields:
+      strategy_key: rule_lawyer.dispute_repricing
+      execution_mode: zero_notional_shadow
+      live_authority: false
+      actual_notional: 0.0
+      model_sha256: 0f5f06798c91451b76b897eb0e882fafd50b80b1a4a831a1781360ec09910252
+    dependencies: [weather_jrs_context_keeper, weather_market_books]
+    # User-paused pending Codex court token-usage review. Restart only through
+    # an explicit production-config change after the review is complete.
+    desired_state: paused
+    recovery_policy: safe
+
+  - instance_id: polymarket_dispute_clarification_court_v1
+    uses_market_proxy: true
+    tmux_session: polymarket_dispute_clarification_court_v1
+    role: shadow
+    execution_mode: zero_notional_shadow
+    release_id: dispute_repricing
+    start_script: scripts/ops/start_polymarket_dispute_clarification_court_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/dispute_repricing/forward_v1/clarification_health.json
+    health_format: json
+    max_health_age_sec: 420
+    accepted_health_statuses: [ok, degraded, running]
+    expected_health_fields:
+      strategy_key: rule_lawyer.dispute_repricing
+      execution_mode: zero_notional_shadow
+      live_authority: false
+      actual_notional: 0.0
+      worker: dispute_and_official_clarification_court
+    dependencies: [weather_jrs_context_keeper, polymarket_dispute_repricing_zero_notional_v1]
+    # User-paused pending Codex court token-usage review. Restart only through
+    # an explicit production-config change after the review is complete.
+    desired_state: paused
+    recovery_policy: safe
+
+  - instance_id: weather_forecast_run_capture_v1
+    tmux_session: weather_forecast_run_capture_v1
+    role: source_collector
+    execution_mode: collector
+    release_id: forecast_capture
+    start_script: scripts/ops/start_weather_forecast_run_capture_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/forecast_run_capture/latest.json
+    health_format: json
+    max_health_age_sec: 2400
+    accepted_health_statuses: [ok]
+    dependencies: [weather_data_feed_jrs]
+    recovery_policy: safe
+    # Explicitly disabled until the one-city collector deploy is confirmed.
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+      WEATHER_FORECAST_RUN_CAPTURE_MARKET_DEMAND_CITIES: ""
+      WEATHER_FORECAST_RUN_CAPTURE_MARKET_DEMAND_TTL_MIN: "120"
+      WEATHER_FORECAST_RUN_CAPTURE_MARKET_DEMAND_MAX_RUN_AGE_HOURS: "24"
+
+  - instance_id: weather_live_cross_observations
+    tmux_session: weather_live_cross_observations
+    role: source_collector
+    execution_mode: collector
+    release_id: wcir
+    start_script: scripts/ops/start_weather_live_cross_observations.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/latest.json
+    max_health_age_sec: 180
+    dependencies: [weather_data_feed_jrs]
+    recovery_policy: safe
+    launch_environment:
+      PYTHON_BIN: /Users/deepsleep/.local/share/pm_agents/releases/wcir/64c5805dc8253c928a6dedfbe71c50f2d8e641c4/.venv/bin/python
+      WEATHER_ENV_FILE: /Users/deepsleep/.local/share/pm_agents/releases/wcir/64c5805dc8253c928a6dedfbe71c50f2d8e641c4/.env
+
+  - instance_id: weather_city_probability_runtime_v3
+    tmux_session: weather_city_probability_runtime_v3
+    role: probability_runtime
+    execution_mode: shadow
+    release_id: city_probability_runtime
+    start_script: scripts/ops/start_weather_city_probability_runtime_v3.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3/latest_summary.json
+    max_health_age_sec: 1200
+    accepted_health_statuses: [ok]
+    dependencies: [weather_data_feed_jrs, weather_knmi_open_data_jrs, weather_knmi_first_seen_ladder_v1, weather_korea_first_seen_state_v1]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_knmi_first_seen_ladder_v1
+    uses_market_proxy: true
+    tmux_session: weather_knmi_first_seen_ladder_v1
+    role: market_collector
+    execution_mode: collector
+    release_id: fast_observation
+    start_script: scripts/ops/start_weather_knmi_first_seen_ladder_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/knmi_first_seen_ladder_v1/state.json
+    max_health_age_sec: 180
+    dependencies: [weather_data_feed_jrs, weather_knmi_open_data_jrs]
+    recovery_policy: safe
+
+  - instance_id: current_yes_core_carry_tiny_live_v2
+    uses_market_proxy: true
+    tmux_session: weather_current_yes_core_carry_tiny_live_v2
+    role: strategy
+    execution_mode: live
+    release_id: core_carry_budget_runtime
+    start_script: scripts/ops/start_weather_current_yes_core_carry_tiny_live_v2.sh
+    restart_script: scripts/ops/start_weather_current_yes_core_carry_tiny_live_v2.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/latest_summary.json
+    max_health_age_sec: 120
+    accepted_health_statuses: [ok]
+    expected_live: true
+    live_order_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/live_orders.jsonl
+    dependencies: [weather_data_feed_jrs, current_yes_core_carry_near_core_ws_controller]
+    recovery_policy: guarded_live
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: current_yes_core_carry_near_core_ws_controller
+    uses_market_proxy: true
+    tmux_session: weather_core_carry_near_core_ws_controller
+    role: execution_control
+    execution_mode: live
+    release_id: core_carry_runtime
+    start_script: scripts/ops/start_weather_core_carry_near_core_ws_controller.sh
+    restart_script: scripts/ops/start_weather_core_carry_near_core_ws_controller.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/near_core_ws_control_readiness.json
+    health_format: json
+    max_health_age_sec: 3
+    startup_grace_sec: 30
+    accepted_health_statuses: [ready]
+    expected_live: true
+    live_order_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/live_orders.jsonl
+    live_order_access: reader
+    dependencies: [weather_market_books, weather_jrs_context_keeper]
+    freshness_contracts:
+      - name: market_books_health
+        producer_instance_id: weather_market_books
+        consumer_max_age_sec: 30
+        min_missed_heartbeats: 3
+        consumer_max_age_arg: --market-health-max-age-sec
+    recovery_policy: guarded_live
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: current_yes_core_carry_event_rescore_shadow_v1
+    uses_market_proxy: true
+    tmux_session: weather_current_yes_core_carry_event_rescore_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: core_carry_event_shadow
+    start_script: scripts/ops/start_weather_current_yes_core_carry_event_rescore_shadow_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_event_rescore_shadow_v1/latest.json
+    max_health_age_sec: 60
+    accepted_health_statuses: [ok]
+    dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, weather_market_books]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: current_yes_core_carry_market_state_shadow_v2
+    tmux_session: weather_current_yes_core_carry_market_state_shadow_v2
+    role: shadow
+    execution_mode: zero_notional_shadow
+    release_id: core_carry_market_state_shadow
+    start_script: scripts/ops/start_weather_current_yes_core_carry_market_state_shadow_v2.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_market_state_shadow_v3_forward_20260824a/latest.json
+    max_health_age_sec: 120
+    accepted_health_statuses: [warming, ok]
+    dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, weather_market_books]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_scheduled_informed_maker_shadow_v1
+    tmux_session: weather_scheduled_informed_maker_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: scheduled_informed_maker
+    start_script: scripts/ops/start_weather_scheduled_informed_maker_shadow_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/scheduled_informed_maker_shadow_v1/latest.json
+    max_health_age_sec: 60
+    accepted_health_statuses: [ok]
+    dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, weather_market_books]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_first_selective_maker_v2_1_shadow
+    tmux_session: weather_first_selective_maker_v2_1_shadow
+    role: shadow
+    execution_mode: zero_notional_shadow
+    desired_state: running
+    release_id: weather_first_selective_maker_v2_1
+    start_script: scripts/ops/start_weather_first_selective_maker_v2_1_shadow.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_first_selective_maker_v2_1/latest.json
+    health_format: json
+    max_health_age_sec: 120
+    startup_grace_sec: 180
+    accepted_health_statuses: [warming, ok]
+    expected_health_fields:
+      execution_mode: zero_notional_shadow
+      live_authority: false
+      actual_notional: 0
+      trade_intents: 0
+      orders: 0
+      fills: 0
+      exchange_calls: 0
+      venue_call_allowed: false
+      formal_forward_start_utc: "2026-08-31T00:00:00Z"
+    dependencies: [weather_data_feed_jrs, current_yes_core_carry_tiny_live_v2, current_yes_core_carry_market_state_shadow_v2, weather_market_books]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_mm_w3_risk_limited_paired_probe_shadow_v2
+    tmux_session: weather_mm_w3_risk_limited_paired_probe_shadow_v2
+    role: shadow
+    execution_mode: zero_notional_shadow
+    desired_state: running
+    release_id: weather_mm_w3_event_fenced_paired_bid
+    start_script: scripts/ops/start_weather_mm_w3_event_fenced_paired_bid_shadow.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/weather_mm_w3_risk_limited_paired_probe_v2/latest.json
+    health_format: json
+    max_health_age_sec: 120
+    startup_grace_sec: 180
+    accepted_health_statuses: [warming, ok]
+    expected_health_fields:
+      strategy_key: weather_mm_w3_risk_limited_paired_probe_v2
+      execution_mode: zero_notional_shadow
+      live_authority: false
+      venue_call_allowed: false
+      actual_notional: 0
+      trade_intents: 0
+      plans: 0
+      orders: 0
+      fills: 0
+      exchange_calls: 0
+      formal_forward_start_utc: "2026-09-06T00:00:00Z"
+    dependencies: [weather_jrs_context_keeper, weather_data_feed_jrs, weather_market_books]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: fast_source_prev_no_trial_v1
+    uses_market_proxy: true
+    tmux_session: weather_fast_source_prev_no_trial
+    role: strategy
+    execution_mode: live
+    release_id: fast_source_runtime
+    start_script: scripts/ops/start_weather_fast_source_prev_no_trial.sh
+    restart_script: scripts/ops/start_weather_fast_source_prev_no_trial.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/latest_summary.json
+    max_health_age_sec: 180
+    accepted_health_statuses: [ok]
+    expected_live: true
+    live_order_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/orders.jsonl
+    dependencies: [weather_data_feed_jrs, weather_live_cross_observations, weather_knmi_open_data_jrs]
+    recovery_policy: guarded_live
+
+  # METAR.ws 快源试验（已归档 / 暂不启用）— owner confirmed 2026-09-09.
+  # Historical identity retained for orders/logs; this is not the active Cross-NO V1.
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: cross_no_v2_metar_v1
+    uses_market_proxy: true
+    tmux_session: weather_cross_no_v2_metar_v1
+    role: strategy
+    execution_mode: live
+    desired_state: paused
+    release_id: cross_no_v2_metar
+    start_script: scripts/ops/start_weather_cross_no_v2_metar.sh
+    restart_script: scripts/ops/start_weather_cross_no_v2_metar.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v2/latest.json
+    health_format: json
+    max_health_age_sec: 15
+    startup_grace_sec: 60
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: cross_no_v2_metar_v1
+      code_identity: 6561553bb9b2da7ee14ea4c8350b1b95b6328b4e
+      execution_mode: live_probe
+      live_enabled: true
+      shares_per_order: 5.0
+      daily_order_cap_enabled: false
+      daily_principal_cap_enabled: false
+      max_no_ask: 0.99
+      weather_taker_fee_rate: 0.05
+      clock_invalid_same_boot_override_enabled: true
+      settlement_hard_invalidation: false
+      source_attribution_schema_version: cross_no_v2_metar_source_attribution_runtime_v1
+      source_stream_monitor_enabled: true
+      market_unit_contract: universe_config_required_v1
+      native_lattice_contract: round_half_up_integer_market_unit_v1
+      live_cross_policy: single_current_bracket_cross_datis_only_with_official_supersession_v3
+      live_source_arms: [metar_ws_datis]
+      shadow_cross_policy: single_current_gt_0p5_v1
+      comparison_cross_policy: two_consecutive_current_gt_0p5_v1
+      official_supersession_policy: newer_official_observation_blocks_older_source_v1
+      confirmed_cross_margin: 0.5
+      confirmed_cross_observations: 2
+      source_running_max_execution_authority: false
+      confirmation_sequence_contract: consecutive_eligible_causally_current_observations_same_source_baseline_v1
+    expected_live: true
+    live_order_path: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v2/orders.jsonl
+    dependencies: [weather_jrs_context_keeper, weather_market_books]
+    recovery_policy: guarded_live
+    launch_environment:
+      WEATHER_CROSS_NO_V2_METAR_EVIDENCE_DB: /Users/deepsleep/projects/pm_agents/runtime/metarws_polymarket_48h_20260901_v4/evidence.sqlite3
+      WEATHER_CROSS_NO_V2_METAR_MARKET_BOOKS_LATEST: /Volumes/jrs/weather_data_feed_service_runtime/market_books/latest.json
+      WEATHER_CROSS_NO_V2_METAR_OUTPUT_DIR: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v2
+      WEATHER_CROSS_NO_V2_METAR_CAPTURE_DEMANDS_JSONL: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_v2/capture_demands.jsonl
+      WEATHER_CROSS_NO_V2_METAR_PAUSE_FILE: /Volumes/jrs/weather_data_feed_service_runtime/output/cross_no_v2_metar_polymarket_48h_v2/PAUSE
+      WEATHER_CROSS_NO_V2_METAR_INTERVAL_SEC: "0.5"
+      WEATHER_CROSS_NO_V2_METAR_MAX_SOURCE_AGE_SEC: "30"
+      WEATHER_CROSS_NO_V2_METAR_MAX_OBSERVATION_DELAY_SEC: "3600"
+      WEATHER_CROSS_NO_V2_METAR_MAX_STREAM_SILENCE_SEC: "120"
+      WEATHER_CROSS_NO_V2_METAR_BOOK_TIMEOUT_SEC: "5"
+      WEATHER_CROSS_NO_V2_METAR_STOP_AFTER_SEC: "172800"
+      WEATHER_CROSS_NO_V2_METAR_LIVE: "1"
+      WEATHER_CROSS_NO_V2_METAR_CONFIRM_LIVE: "1"
+      WEATHER_CROSS_NO_V2_METAR_ALLOW_CLOCK_INVALID_SAME_BOOT_MONOTONIC_PROBE: "1"
+      WEATHER_CROSS_NO_V2_METAR_UNIVERSE_CONFIG: configs/weather/cross_no_v2_metar_polymarket_48h_v1.json
+      WEATHER_CROSS_NO_V2_METAR_START_COLLECTOR: "1"
+      WEATHER_CROSS_NO_V2_METAR_COLLECTOR_RUNTIME_ROOT: /Users/deepsleep/projects/pm_agents/runtime/metarws_polymarket_48h_20260901_v4
+      WEATHER_CROSS_NO_V2_METAR_COLLECTOR_LOG: /Volumes/jrs/weather_data_feed_service_runtime/loop/metarws_polymarket_48h_20260901_v4.log
+      WEATHER_CROSS_NO_V2_METAR_SOURCE_ENV_FILE: /Users/deepsleep/.config/pm_agents/metar_ws.env
+
+  # The old multisource D1 shadow remains dormant research evidence. The
+  # distance-2 dual-NO instance below is a new zero-notional frozen forward;
+  # it records first-lock evidence and has no venue/order path.
+  - instance_id: europe_d1_distance2_dual_no_shadow_v1
+    tmux_session: europe_d1_distance2_dual_no_shadow_v1
+    role: shadow
+    execution_mode: zero_notional_shadow
+    desired_state: running
+    release_id: europe_d1_distance2_shadow
+    start_script: scripts/ops/start_europe_d1_distance2_dual_no_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/europe_d1_distance2_dual_no_shadow_v1/latest.json
+    health_format: json
+    max_health_age_sec: 900
+    startup_grace_sec: 240
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: europe_d1_distance2_dual_no_shadow_v1
+      execution_mode: zero_notional_shadow
+      orders_submitted: 0
+      actual_notional_usd: 0.0
+      joint_market_probability_max: 0.1
+    dependencies: [weather_data_feed_jrs, weather_market_books]
+    recovery_policy: safe
+
+  # Deterministic, zero-notional projection of the immutable D-1 basket journal
+  # into shared decision contracts. It owns no strategy decision or venue path.
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: europe_d1_distance2_lineage_adapter_v1
+    tmux_session: europe_d1_distance2_lineage_adapter_v1
+    role: shadow
+    execution_mode: zero_notional_adapter
+    desired_state: running
+    release_id: europe_d1_distance2_lineage_adapter
+    start_script: scripts/ops/start_europe_d1_distance2_lineage_adapter_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/europe_d1_distance2_lineage_adapter_v1/latest.json
+    health_format: json
+    max_health_age_sec: 900
+    startup_grace_sec: 240
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: europe_d1_distance2_lineage_adapter_v1
+      execution_mode: zero_notional_adapter
+      orders_submitted: 0
+      actual_notional_usd: 0.0
+      venue_calls: 0
+    dependencies: [europe_d1_distance2_dual_no_shadow_v1, weather_market_books]
+    recovery_policy: safe
+
+  # Owner-authorized fixed M/F50 comparison; no venue path. Original V1 stays running.
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: europe_d1_model_filter_shadow
+    tmux_session: europe_d1_model_filter_shadow
+    role: shadow
+    execution_mode: zero_notional_shadow
+    desired_state: running
+    release_id: europe_d1_model_filter_shadow
+    start_script: scripts/ops/start_europe_d1_model_filter_shadow.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/europe_d1_model_filter_shadow/latest.json
+    health_format: json
+    max_health_age_sec: 300
+    startup_grace_sec: 300
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: europe_d1_model_filter_shadow
+      execution_mode: zero_notional_shadow
+      orders_submitted: 0
+      actual_fills: 0
+      actual_notional_usd: 0.0
+      order_submission_enabled: false
+      venue_calls: 0
+      static_requested_shares_per_leg: 5
+    dependencies: [europe_d1_distance2_dual_no_shadow_v1, weather_market_books]
+    recovery_policy: safe
+
+  # Zero-notional/research services still use their original implementation,
+  # but their exact production entrypoint and health identity are controlled
+  # here.  ``safe`` means a missing session may be recreated; it does not
+  # authorize a live mode or any order placement.
+  - instance_id: low_price_yes_integrated_tail_shadow_v2
+    uses_market_proxy: true
+    tmux_session: low_price_yes_integrated_tail_shadow_v2
+    role: shadow
+    execution_mode: shadow
+    release_id: strategy_runtime
+    start_script: scripts/ops/start_low_price_yes_integrated_tail_shadow_v2.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/low_price_yes_integrated_tail_shadow_v2/latest_summary.json
+    max_health_age_sec: 1200
+    dependencies: [weather_data_feed_jrs]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: low_price_yes_lottery_shadow_v1
+    uses_market_proxy: true
+    tmux_session: low_price_yes_lottery_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: strategy_runtime
+    start_script: scripts/ops/start_low_price_yes_lottery_shadow_tmux.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1/latest_summary.json
+    max_health_age_sec: 1200
+    dependencies: [weather_data_feed_jrs]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: metar_reversal_false_fade_reheat_shadow_v1
+    tmux_session: metar_reversal_false_fade_reheat_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: strategy_runtime
+    start_script: scripts/ops/start_metar_reversal_false_fade_reheat_shadow_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/metar_reversal_false_fade_reheat_shadow_v1/summary_history.jsonl
+    health_format: mtime
+    max_health_age_sec: 600
+    dependencies: [weather_data_feed_jrs]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: regime_routed_no_shadow_v1
+    tmux_session: regime_routed_no_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: strategy_runtime
+    start_script: scripts/ops/start_mac_regime_routed_no_shadow_loop.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/regime_routed_no_shadow_v1/latest_summary.json
+    max_health_age_sec: 180
+    dependencies: [weather_data_feed_jrs]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: tmax_distribution_edge_first_lock_no_current_yes_shadow_v1
+    tmux_session: tmax_distribution_edge_first_lock_no_current_yes_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: fast_observation
+    start_script: scripts/ops/start_tmax_distribution_edge_first_lock_no_current_yes_shadow_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_shadow_v1/latest_summary.json
+    max_health_age_sec: 1800
+    accepted_health_statuses: [ok]
+    dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
+    recovery_policy: safe
+  - instance_id: weather_current_yes_heat_death_shadow_v1
+    uses_market_proxy: true
+    tmux_session: weather_current_yes_heat_death_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: strategy_runtime
+    start_script: scripts/ops/start_weather_current_yes_heat_death_shadow_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_heat_death_shadow_v1/latest_summary.json
+    max_health_age_sec: 2400
+    accepted_health_statuses: [ok]
+    dependencies: [weather_data_feed_jrs]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_fast_source_stale_book
+    uses_market_proxy: true
+    tmux_session: weather_fast_source_stale_book
+    role: collector
+    execution_mode: shadow
+    release_id: fast_observation
+    start_script: scripts/ops/start_weather_fast_source_stale_book_production.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_stale_book/health.json
+    max_health_age_sec: 180
+    accepted_health_statuses: [ok]
+    dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
+    recovery_policy: safe
+  - instance_id: weather_helsinki_pre_cross_active_ladder_shadow
+    uses_market_proxy: true
+    tmux_session: weather_helsinki_pre_cross_active_ladder_shadow
+    role: shadow
+    execution_mode: shadow
+    release_id: helsinki_ladder
+    start_script: scripts/ops/start_weather_helsinki_pre_cross_active_ladder_shadow.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/helsinki_pre_cross_active_ladder_shadow/latest.json
+    max_health_age_sec: 180
+    accepted_health_statuses: [ok, idle_outside_source_window]
+    dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
+    recovery_policy: safe
+  - instance_id: weather_knmi_open_data_jrs
+    tmux_session: weather_knmi_open_data_jrs
+    role: collector
+    execution_mode: collector
+    release_id: knmi
+    start_script: /Users/deepsleep/projects/pm_agents/scripts/ops/start_mac_knmi_open_data_jrs_tmux.sh
+    restart_script: /Users/deepsleep/projects/pm_agents/scripts/ops/start_mac_knmi_open_data_jrs_tmux.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/state.json
+    max_health_age_sec: 900
+    recovery_policy: safe
+    launch_environment:
+      WEATHER_DATA_FEED_SERVICE_DIR: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c
+      KNMI_PYTHON_BIN: /Users/deepsleep/.local/share/pm_agents/releases/knmi/ef64a2d0b14230d21e3544161dbf95a097eeca9c/.venv/bin/python
+      KNMI_ENV_FILE: /Users/deepsleep/.local/share/pm_agents/releases/control_plane/588d33fcf89a19bc68a765129444bd2d59500c21/.env.knmi
+  - instance_id: weather_korea_first_seen_state_v1
+    uses_market_proxy: true
+    tmux_session: weather_korea_first_seen_state_v1
+    role: collector
+    execution_mode: collector
+    release_id: city_runtime
+    start_script: scripts/ops/start_weather_korea_first_seen_collector.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/korea_first_seen_state_v1/latest.json
+    max_health_age_sec: 60
+    accepted_health_statuses: [ok]
+    dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_runtime_log_maintainer
+    tmux_session: weather_runtime_log_maintainer
+    role: monitor
+    execution_mode: infrastructure
+    release_id: control_plane
+    start_script: scripts/ops/start_weather_runtime_log_maintainer.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/runtime_log_maintainer/latest_summary.json
+    max_health_age_sec: 900
+    accepted_health_statuses: [ok, warning]
+    dependencies: [weather_jrs_context_keeper]
+    recovery_policy: safe
+  - instance_id: weather_source_event_ladder_repricing_shadow
+    uses_market_proxy: true
+    tmux_session: weather_source_event_ladder_repricing_shadow
+    role: shadow
+    execution_mode: shadow
+    release_id: fast_observation
+    start_script: scripts/ops/start_weather_source_event_ladder_repricing_shadow.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/source_event_ladder_repricing_shadow/health.json
+    max_health_age_sec: 1200
+    accepted_health_statuses: [ok]
+    dependencies: [weather_data_feed_jrs, weather_live_cross_observations, weather_market_books]
+    recovery_policy: safe
+  - instance_id: weather_tmin_cross_prev_no_shadow_v1
+    tmux_session: weather_tmin_cross_prev_no_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: tmin_cross_prev_no_shadow
+    start_script: scripts/ops/start_weather_tmin_cross_prev_no_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/tmin_cross_prev_no_shadow_v1/latest_summary.json
+    health_format: json
+    max_health_age_sec: 180
+    accepted_health_statuses: [ok]
+    dependencies: [weather_source_event_ladder_repricing_shadow]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_tmin_no_further_cooling_shadow_v1
+    tmux_session: weather_tmin_no_further_cooling_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: tmin_no_further_cooling
+    start_script: scripts/ops/start_weather_tmin_no_further_cooling_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/tmin_no_further_cooling_shadow_v1/latest_summary.json
+    health_format: json
+    max_health_age_sec: 180
+    accepted_health_statuses: [ok]
+    dependencies: [weather_data_feed_jrs, weather_forecast_curve_collector_v1, weather_market_books]
+    recovery_policy: safe
+  - instance_id: weather_tmin_no_further_cooling_tiny_live_v1
+    desired_state: running
+    uses_market_proxy: true
+    tmux_session: weather_tmin_no_further_cooling_tiny_live_v1
+    role: strategy
+    execution_mode: live
+    release_id: tmin_no_further_cooling_tiny_live
+    start_script: scripts/ops/start_weather_tmin_no_further_cooling_tiny_live_v1.sh
+    restart_script: scripts/ops/start_weather_tmin_no_further_cooling_tiny_live_v1.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/tmin_no_further_cooling_tiny_live_v1/latest_summary.json
+    health_format: json
+    max_health_age_sec: 60
+    startup_grace_sec: 120
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: weather_tmin_no_further_cooling_tiny_live_v1
+      execution_mode: live
+      live_enabled: true
+      shares_per_order: 5.0
+      safety.historical_backfill: false
+      safety.fresh_ladder_revalidation: true
+      safety.first_positive_once_per_city_date: true
+    expected_live: true
+    live_order_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/tmin_no_further_cooling_tiny_live_v1/live_orders.jsonl
+    dependencies: [weather_tmin_no_further_cooling_shadow_v1, weather_market_books, weather_jrs_context_keeper]
+    recovery_policy: guarded_live
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_tmin_v2_2_probability_shadow_v1
+    uses_market_proxy: true
+    tmux_session: weather_tmin_v2_2_probability_shadow_v1
+    role: shadow
+    execution_mode: zero_notional_probability_only
+    release_id: tmin_v2_2_probability_shadow
+    start_script: scripts/ops/start_weather_tmin_v2_2_probability_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/tmin_v2_2_probability_shadow_v1/latest_summary.json
+    health_format: json
+    max_health_age_sec: 180
+    startup_grace_sec: 180
+    accepted_health_statuses: [ok]
+    expected_health_fields:
+      strategy_instance: weather_tmin_v2_2_probability_shadow_v1
+      execution_mode: zero_notional_probability_only
+      live_authorization: false
+      safety.notional_usd: 0.0
+      safety.signal_candidates: 0
+      safety.trade_intents: 0
+      safety.orders: 0
+      safety.fills: 0
+      safety.exchange_calls: 0
+    dependencies: [weather_data_feed_jrs, weather_forecast_curve_collector_v1, weather_market_books]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: market_implied_tail_residual_shadow_v1
+    tmux_session: market_implied_tail_residual_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: market_tail
+    start_script: scripts/ops/start_market_implied_tail_residual_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/market_implied_tail_residual_shadow_v1/latest_summary.json
+    health_format: json
+    max_health_age_sec: 180
+    accepted_health_statuses: [ok]
+    dependencies: [weather_market_books]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime
+  - instance_id: weather_tokyo_current_break_active_ladder_shadow_v1
+    uses_market_proxy: true
+    tmux_session: weather_tokyo_current_break_active_ladder_shadow_v1
+    role: shadow
+    execution_mode: shadow
+    release_id: city_runtime
+    start_script: scripts/ops/start_weather_tokyo_current_break_active_ladder_shadow_v1.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/latest.json
+    max_health_age_sec: 180
+    accepted_health_statuses: [ok, idle_outside_source_window]
+    dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
+    recovery_policy: safe
+    launch_environment:
+      SQLITE_TMPDIR: /Volumes/jrs/pm_agents/runtime

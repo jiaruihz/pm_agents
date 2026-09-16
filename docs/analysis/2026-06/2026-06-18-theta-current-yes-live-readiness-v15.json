@@ -1,0 +1,64 @@
+{
+  "gates": {
+    "forecast_clock_upgrade_gate": {
+      "evidence": {
+        "both_peaks_passed_active_dates": 9,
+        "both_peaks_passed_orders": 14,
+        "both_peaks_passed_yes_roi": 0.17138914136061603,
+        "peak_forming_orders": 40,
+        "peak_forming_pass": false,
+        "peak_forming_yes_roi": 0.090852929430559,
+        "peak_forming_yes_roi_ci95": [
+          -0.09577598172079527,
+          0.2768276007849872
+        ]
+      },
+      "reason": "after-peak variants are profitable in backfill but below sample gate and not forward-native",
+      "status": "FAIL"
+    },
+    "forward_telemetry_gate": {
+      "evidence": {
+        "exists": true,
+        "first_created_at_utc": "2026-06-17T16:36:36+00:00",
+        "last_created_at_utc": "2026-06-17T16:36:36+00:00",
+        "path": "runtime/weather_edge_v1/remote_pm_agent/theta_current_yes_tiny_live_v1/forward_telemetry.jsonl",
+        "planned_rows": 0,
+        "rows": 44,
+        "status_counts": {
+          "outside_hour": 30,
+          "snapshot_rule_decline_lt_0_5": 2,
+          "target_date_not_local_date": 12
+        }
+      },
+      "reason": "need live/shadow forward would-order rows with planned/fresh-book states and later settlement",
+      "status": "FAIL"
+    },
+    "historical_v9_gate": {
+      "evidence": {
+        "active_dates": 11,
+        "orders": 31,
+        "yes_minus_d1_no_roi": 0.0412939571219847,
+        "yes_minus_d1_no_roi_ci95": [
+          0.013162579981727597,
+          0.07203124456529768
+        ],
+        "yes_roi": 0.1618750195978798,
+        "yes_roi_ci95": [
+          0.026504964836366798,
+          0.275994987401426
+        ]
+      },
+      "status": "PASS"
+    },
+    "production_native_peak_fields_gate": {
+      "reason": "current scorecard uses historical forecast backfill; production snapshots still need native point-in-time peak fields",
+      "status": "FAIL"
+    }
+  },
+  "generated_at_utc": "2026-06-17T16:52:31+00:00",
+  "git_head": "27b3eb1",
+  "inputs": {
+    "forward_telemetry": "runtime/weather_edge_v1/remote_pm_agent/theta_current_yes_tiny_live_v1/forward_telemetry.jsonl",
+    "v14_json": "docs/analysis/2026-06/2026-06-18-theta-current-yes-forecast-peak-scorecard-v14.json"
+  }
+}

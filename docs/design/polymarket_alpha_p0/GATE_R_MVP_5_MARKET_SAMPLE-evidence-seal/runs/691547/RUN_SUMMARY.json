@@ -1,0 +1,175 @@
+{
+  "blind_handoff": {
+    "approval_receipt_id": "export_approval_receipt:a165dbd7340602c04d4dcd19b8dae6f78f02f1d71ff86f86f35ce7a5deb9a799",
+    "blind_packet_id": "blind_packet:3d5fb6a085ccd09db77ca6b2011132734429006879555729d2887b3a2d4b0e4a",
+    "candidate_snapshot_id": "candidate_snapshot:5126865eddff3d1e5a34e6f49b6c088e33b62d635f36e65a87103d75addc9118",
+    "critical_question_count": 3,
+    "leakage_reasons": [],
+    "prompt_byte_length": 4260,
+    "prompt_expires_at": "2026-08-28T02:33:23.536528Z",
+    "prompt_locator": "gate_r/gpt-pro-blind-prompt-v2.txt",
+    "prompt_sha256": "813d64a3a2cc6d2b817161c2bf7ddf654cd37665ad0aa7b11aded5e0300d4de1",
+    "question_count": 6,
+    "stage": "BLIND_PACKET_FROZEN",
+    "work_order_id": "blind_work_order:d9629522ab6fc904e7819a683c2df98b74dc3c03ffefb9d7bec9f7f16c0d1f1c"
+  },
+  "candidate": {
+    "candidate_id": "candidate_card:2787dd295396de4cfadc57c6798c5cbfc344428e4670ae4267fc9bcda1adc553",
+    "recall_hit_ids": [
+      "recall_hit:5ea62512637782210af14ad3d9f6b8c25d716a2cdeb5aebeda5fdd6003d82bd0"
+    ]
+  },
+  "disposition": "WAITING_FOR_MANUAL_GPT_PRO_BLIND_RESULT",
+  "downstream": {
+    "book_requested": false,
+    "database_counts": {
+      "alpha_orderbook_snapshot": 0,
+      "alpha_prediction_record": 0,
+      "alpha_research_work_order_v1": 0,
+      "alpha_review_decision": 0
+    },
+    "finalized": false,
+    "reason": "FORMAL_REVIEW book is forbidden until a real Blind result is accepted"
+  },
+  "execution": "NO_ORDER",
+  "gamma": {
+    "auth_headers_present": false,
+    "completed_at": "2026-08-28T01:55:52.510949+00:00",
+    "connection_mode": "EXPLICIT_PROXY",
+    "event_count": 5,
+    "http_status": 200,
+    "nested_distinct_market_count": 24,
+    "proxy_profile_id": "mac_local_market_proxy_v1",
+    "raw_artifact_locator": "/private/tmp/polymarket-alpha-pilot/sample-20260828-J9LFuq/gamma/raw/ccc1fb43b1f3a4a784af4354d53ee8fdbd122a140cdb07e59b458b96fc13d9d1.bin",
+    "raw_bytes_sha256": "9085fbb8dd018ef6d54df011b23f7536ca5b7fa38db73391dfc757f3e1522f0e",
+    "redirect_count": 0,
+    "requested_at": "2026-08-28T01:55:52.034693+00:00"
+  },
+  "glm_semantic_triage": {
+    "decisions": {
+      "decisions": [
+        {
+          "attempt_id": null,
+          "candidate_snapshot_id": null,
+          "candidate_snapshot_sha256": null,
+          "created_at": "2026-08-28T01:59:04.386078Z",
+          "decision_id": "semantic_decision:7648b85ac3cde7a13fd6c84a9a166c31be84b761dacde6dab1312b812923fe0a",
+          "effective_disposition": "ADVANCE",
+          "eligibility": "ELIGIBLE",
+          "extensions": {},
+          "item_id": "semantic_item:3bbc761f6db4f0a927e6836d382ac3b907c3975ea198ca589321d95d4741d4e7",
+          "market_id": "691547",
+          "model_only_terminal_rejection": false,
+          "projection_id": "semantic_projection:1ebaba94fa488e996ac07d02892f9ecc63e58461ee72898d2c4690b1a884cf6f",
+          "provenance": [
+            {
+              "content_sha256": "7875f323e6af71097de09258c2d3b667c5c72dcfc95212bd79500ba26efc515d",
+              "relation": "semantic_projection",
+              "source_artifact_id": "semantic_projection:1ebaba94fa488e996ac07d02892f9ecc63e58461ee72898d2c4690b1a884cf6f",
+              "source_observed_at": "2026-08-28T01:59:04.386078Z"
+            }
+          ],
+          "record_id": "semantic_decision:7648b85ac3cde7a13fd6c84a9a166c31be84b761dacde6dab1312b812923fe0a",
+          "result": {
+            "ambiguity_codes": [],
+            "confidence_milli": 950,
+            "deadline_interpretation": "December 31, 2026 Eastern Time (January 1, 2027 UTC)",
+            "disposition": "ADVANCE",
+            "duplicate_group_hint": null,
+            "item_id": "semantic_item:3bbc761f6db4f0a927e6836d382ac3b907c3975ea198ca589321d95d4741d4e7",
+            "reason_codes": [
+              "CLEAR_CRITERIA",
+              "VISIBLE_EVENT",
+              "CREDIBLE_REPORTING",
+              "WELL_KNOWN_ENTITY"
+            ],
+            "researchability": "HIGH",
+            "resolution_source_type": "CONSENSUS",
+            "subject_entities": [
+              "Kraken"
+            ],
+            "topic_family": "CORPORATE_ACTIONS_IPO"
+          },
+          "run_id": "current-sample-20260828-semantic-691547",
+          "schema_version": "alpha_p0_v1.0",
+          "source": "external_glm_semantic_triage",
+          "source_version": "alpha_glm_semantic_triage_v1"
+        }
+      ]
+    },
+    "execution": "NO_ORDER",
+    "provider": {
+      "duration_ms": 7091,
+      "provider": "bigmodel_claude_compatible_cli",
+      "reported_model": "glm-4.7",
+      "requested_model": "haiku",
+      "total_cost_usd_micros": 26562,
+      "usage": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 64,
+        "input_tokens": 1306,
+        "output_tokens": 800
+      }
+    },
+    "receipt_id": "semantic_receipt:01658e94260345a9adcf3788612b0dba859f142c1682abeac2aea07ec43ecdc7"
+  },
+  "recall_routes": [
+    {
+      "error_code": null,
+      "hit_count": 1,
+      "provider_id": "new_changed",
+      "status": "SUCCESS",
+      "suppression_count": 0
+    },
+    {
+      "error_code": null,
+      "hit_count": 0,
+      "provider_id": "structural_metadata",
+      "status": "SUCCESS",
+      "suppression_count": 1
+    },
+    {
+      "error_code": "OPTIONAL_REQUEST_MISSING",
+      "hit_count": 0,
+      "provider_id": "controversy",
+      "status": "SKIPPED",
+      "suppression_count": 0
+    },
+    {
+      "error_code": "OPTIONAL_REQUEST_MISSING",
+      "hit_count": 0,
+      "provider_id": "specialist_wallet",
+      "status": "SKIPPED",
+      "suppression_count": 0
+    },
+    {
+      "error_code": "BOOK_ROUTE_DISABLED",
+      "hit_count": 0,
+      "provider_id": "book_anomaly",
+      "status": "SKIPPED",
+      "suppression_count": 0
+    }
+  ],
+  "retained_incomplete_artifacts": [
+    {
+      "locator": "gate_r/gpt-pro-blind-prompt.txt",
+      "reason": "first prompt export succeeded but companion metadata materialization failed; retained conservatively and superseded-for-now by v2",
+      "status": "INCOMPLETE_METADATA_DO_NOT_USE"
+    }
+  ],
+  "rule_a": {
+    "gate_a_id": "rule_gate_decision:be0991e5b11bc0300c33160a6336be8907188b4b8ea2e1ef78e8104cc771b5e2",
+    "rule_contract_id": "rule_contract:d7fb492d773325c3da8568dc3cbb4ee807e428c34bbf125fc878a975ec316a81",
+    "status": "PASS"
+  },
+  "run_date_bj": "2026-08-28",
+  "sample_selection": {
+    "derived_input_sha256": "cdf421b87649e6e22fcc0d84a44d55f6fb0f7fb6dd7d295e7c2e4404a6e08593",
+    "end_at": "2027-01-01T05:00:00Z",
+    "market_id": "691547",
+    "note": "one-market deterministic selection derived from the sealed 5-event Gamma response; original response remains immutable",
+    "question": "Kraken IPO by December 31, 2026?",
+    "selected_market_count": 1
+  },
+  "schema": "polymarket_alpha_current_sample_run_v1"
+}

@@ -1,0 +1,24 @@
+{
+  "contract": {
+    "canonical_sha256": "d3a31e02818d8e494bb7d3357eb74b78b399444f8e8216300308edce7e360ca1",
+    "contract_revision_id": "rule_revision:e7a58626ed5bba230550d9e2972c7275e813f24a0d25fdef0159e0cf103d8c28",
+    "record_id": "rule_contract:6c208799cf5e1d42739756d3d6be123706b9d2fbb933ceb9398090b32511423a",
+    "rule_gate": "PASS",
+    "rule_hash": "f8540cd5e2ad6daf7d65804c43b09235072069d0f9a8299c970a68dbef567ddc"
+  },
+  "gate_a": {
+    "canonical_sha256": "04eae117a555e8724ede3453bbc65e59401e0949b1075b1e0dc9d634990bd1bb",
+    "decision": "PASS",
+    "record_id": "rule_gate_decision:d23c6a7f1379f9f30ca819c7e6e6f8084ee9c7408921b304b4e1ca7ceaea4e75"
+  },
+  "gate_b": {
+    "canonical_sha256": "4d39de804b4e6ce3e79477b4133d928cd0fa2505e175e9e42073b379c5576dc4",
+    "decision": "PASS",
+    "record_id": "rule_gate_decision:f3443bfb3f0eaec30d830268a1521904ab92d85ca0d130de5a8c49530fc7b3cf"
+  },
+  "receipt": {
+    "canonical_sha256": "00e12223b0346147805e6a72ecac00d62b4260ac91aba6adf8318a887d066e96",
+    "record_id": "rule_compilation_receipt:24d781097240e5053018316c636fdae993bd1ffa722b29520c591d9970ced004",
+    "status": "COMPILED"
+  }
+}

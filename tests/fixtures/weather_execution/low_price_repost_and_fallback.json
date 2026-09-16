@@ -1,0 +1,22 @@
+{
+  "fixture_version": "weather_execution_phase0_v1",
+  "source": "deterministic old-runner inputs from test_low_price_yes_lottery_sizing.py",
+  "case": "low-price maker lifecycle repost lower and bounded fallback rule",
+  "input": {
+    "posted_price": 0.059,
+    "model_probability_yes": 0.36,
+    "tick_size": 0.001,
+    "age_minutes": 20.0,
+    "remaining_shares": 10.0,
+    "fresh_best_bid": 0.01,
+    "fresh_best_ask": 0.014
+  },
+  "expected": {
+    "action": "maker_lifecycle_repost_lower",
+    "maker_only": true,
+    "limit_price": 0.011,
+    "quote_mode": "maker_lifecycle_repost_lower",
+    "quote_reason": "book_moved_down_cancel_stale_overbid",
+    "fallback_constraint": "never take above source posted price"
+  }
+}

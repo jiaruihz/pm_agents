@@ -1,0 +1,36 @@
+{
+  "disposition": "P0_UNIFIED_OFFLINE_PIPELINE_COMPLETE",
+  "readiness_scope": "OFFLINE_IMPLEMENTATION_ONLY",
+  "source_commit": "c3a578c4ec4f98974c7f130b9dfd02b019460049",
+  "capabilities": {
+    "released_four_route_prebook_scan": true,
+    "book_optional_for_candidate": true,
+    "immutable_blind_market_handoff": true,
+    "formal_book_after_blind_acceptance_only": true,
+    "rule_a_rule_b_and_no_order_ledger": true,
+    "repeat_scan_refresh_invalidation": true,
+    "malformed_provider_isolation": true,
+    "accepted_result_single_bytes_per_packet": true
+  },
+  "verification": {
+    "focused_tests": {"passed": 27, "failed": 0},
+    "alpha_tests": {"passed": 430, "failed": 0},
+    "source_capability_violations": 0,
+    "compileall": "PASS",
+    "diff_check": "PASS"
+  },
+  "review": {
+    "initial_status": "CHANGES_REQUESTED",
+    "blocking_or_high_findings": 4,
+    "findings_fixed": 4,
+    "reviewer_edits": false,
+    "reviewer_usage_telemetry": "unavailable"
+  },
+  "authorization": {
+    "real_network": false,
+    "production_book_owner_demand": false,
+    "current_database_migration": false,
+    "production_deploy": false,
+    "order_signing_private_key": false
+  }
+}

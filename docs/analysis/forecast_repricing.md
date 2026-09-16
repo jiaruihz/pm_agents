@@ -1,0 +1,215 @@
+# Forecast Repricing
+
+## D-1 early repricing 启动审计（2026-08-29）
+
+已按 `slr07` 暴露的“D-1 revision 后数小时主动 SELL”机制启动现有 run-aware runner 的全分母
+coverage audit，而不是从钱包 selected fills 直接造 selector。审计扫描34城、target_date
+`2026-08-06..08-31`：911,176条forecast deliveries收敛为43,588个provider-run keys、38,976个
+run transitions，其中D-1为16,198、primary 18–24h为3,968；market侧有399,228个checkpoints，
+60m legacy markout可评分3,150行/23 dates。
+
+历史 formal forward 仍为**硬阻塞**：16,198个D-1 events全部是
+`legacy_provider_run_earliest_observed`，旧窗口的 `collector_response_complete`、executable、fills均为0；
+旧JSONL不能事后伪造时钟。legacy primary consensus的60m方向一致率为61.80%（89 events/20 dates，
+mean directional rung shift +2.074pp），只能说明机制值得采集，不能当alpha或A/B结果。
+
+collector blocker 已于2026-08-29 16:33 UTC解除：production
+`weather_forecast_run_capture_v1`从 `e943e956…d0d5f` 切到最小clock release
+`761a16d8…bd40`。首轮新增1,020 rows全部保存request-start/response-complete clocks，ordering
+violation=0，orders/fills delta=0/0。因为三个provider runs在部署前已经见过，这1,020行按append-only
+合同继续保留旧 `collector_exact`，没有伪造新的first-seen；第一条formal
+`collector_response_complete`将从下一个unseen provider run开始。随后累计至少30个clean settled
+target dates，再跑固定60m、同rows market baseline、direct ask→future bid且扣双边fee的A/B。
+当前不改shadow/live。完整readiness、影响半径与artifact见
+[D-1 early repricing readiness v1](2026-08/2026-08-29-d1-early-repricing-readiness-v1.md)。
+
+## Real run-aware / first-touch repair（2026-08-12）
+
+旧 selector 已停止继续调参：其 forecast innovation 来自 legacy strategy snapshots，不是真实 provider-run
+first-seen；maker label 又缺 first-touch 与 fill-relative exit。独立 raw market-books 重建共扫描2,442 batches /
+4,520,972 rows，形成186,803个 quote-path labels / 72 target dates，并排除所有 `<1¢` quote。
+
+Observed-touch 后的 executable bid 回报在5/15/30/60/120m全部为负；collector-exact touch rows的30m ROI
+为`-14.50%`。重训 quote-EV 的 collector-exact holdout为3,406 quote actions / 4 dates，选择0笔。因此旧
+`+30%~40% maker`只保留为错误 fill-conditional 上限，不再作为策略证据。
+
+新的主信号改为真实 provider-run first-seen 的 rolling multi-model consensus revision。2026-08-06..08-13
+已有3,638个 collector-exact D-1 provider events、13,279个complete market checkpoints；primary D-1
+18–24h中 consensus revision 的30m方向一致率约60%（独立日期仍只有6个）。每次完整 checkpoint现已保存
+native ladder真实bid/ask/depth，且同一盘口变化只归因一次。direct ask→30/60/90m future bid在官方双边fee
+和每边1¢ slippage后，fixed 2°F distribution 的30/60/90m全分母ROI为
+`-22.62%/-22.27%/-24.70%`，latest-two-date holdout为`-15.74%/-15.33%/-14.96%`，尚无 admitted trade。
+
+复核后上述3,638行已降级为`legacy poll-start observed`：旧collector在HTTP前取时钟，相对raw响应完成
+提前median 6.32s、p95 14.19s、max 28.34s。该秒级误差不会解释30–90m的大幅负ROI，但不能作为formal
+forward。新合同已改为每model保存request-start/response-complete，只有
+`collector_response_complete`可进入fresh forward；旧JSONL不改写。
+
+采集probe默认在production contract中明确disabled；确认后先仅为Tokyo的新 D-1 provider run开120分钟
+`revision path + 两侧邻档` WS capture demand；完整ladder继续由五分钟REST正本提供，WS只补queue/tape，避免把
+接近3GB/day的现有payload放大成全事件订阅。consumer强制producer/reason/city/TTL、12-token全局cap；
+代码和测试已完成，但collector实际部署需单独确认。live/order均未改。
+
+## Quote-level EV 目标修复（2026-08-12）
+
+旧55信号的低价尾档偏置已定位为模型目标错位：entry head预测`h60_relative_bid_move`，selector却把它
+当绝对现金markout；阈值又用假设best-bid全成交的selected ROI选择。现已重构为
+`forecast event × rung × legal post-only quote action`，直接训练30分钟ask-touch proxy下的每股美元EV，
+date→event→rung→action等权，并加入market-only/static-microstructure同分母基线与`NO_QUOTE`。
+
+Development expanding OOF为173,279 quote rows/5,117 events/42 dates，secondary reconstructed holdout为
+46,375/1,228/15；两者均0 admitted quotes。holdout touch head AUC/Brier=`0.8123/0.06601`，但成交后
+value head所有报价均为负。weather相对market-only仅development显著，holdout CI跨0；actual fills=0。
+结论：旧单腿maker expression判`rejected_for_expression`，新artifact可在zero-notional runner安全输出
+`NO_QUOTE`，不改live。详见 [quote-level EV retrain](2026-08/2026-08-12-forecast-repricing-quote-ev-retrain-v1.md)。
+
+## Independent raw book / PIT clock repair（2026-08-11）
+
+历史重建器原先只从 strategy snapshots 生成 quote history，独立 canonical
+`market_books/batches` 只在“同名 companion file”时参与 entry join；30/60m markout 又取 checkpoint
+之后第一笔 quote，存在未来信息。现已修为：独立扫描 raw books、按 YES/NO 两侧合成 executable YES
+top-of-book，并使用 `available_at_utc <= checkpoint` 的最后一份 book。8月7日起 v3
+`request/response/available_at` 标为 strict PIT；更早 `fetched_at` 只保留 legacy-observed 价格路径，明确
+`event_time_pit_scorable=false`。
+
+修复后全分母为132,416 rungs / 12,931 forecast events / 74 target dates（2026-05-20..08-10）；raw
+扫描2,144 files / 3,900,880 rows，接入766,081条 relevant effective quotes。原冻结的55个 holdout signals
+固定 identity 重放后：55/55匹配，30m可评分42、60m可评分54，dynamic exit可评分从46升至54；唯一
+CapeTown 8/3因60m as-of book已陈旧35.97分钟，超过预注册30分钟容忍，保持 blocker。
+
+- all reconstructed clocks：54个动态可评分；mixed bid+1/taker 条件ROI `+18.73%`，target-date CI
+  `[+0.33%,+35.99%]`；全部taker `-51.33%`，CI `[-60.41%,-39.44%]`。
+- strict PIT：只有7个动态可评分 / 4 dates（8/7..8/10）；mixed 条件ROI `+32.73%`，CI
+  `[-6.75%,+71.50%]`，仍不显著；同7笔全部taker `-44.86%`。
+- maker fill：50个 reconstructed maker routes 中仍为0个 ask-touch；mixed touch proxy只有4个自动taker，
+  ROI `-37.34%`。actual fills=0，因此正的 conditional maker 数字仍不能当可实现收益。
+
+这次修复将旧 `+27.92%` headline 标为 `superseded-for-decision-use`：方向仍是“spread很贵、maker条件价
+有空间”，但利润从 `+27.92%` 降到 `+18.73%`，且 strict-PIT 样本只有4天，尚不能升 live。
+可复跑 artifact：`forecast_repricing/full_ladder_base_20260811_raw_pit_v2` 与
+`forecast_repricing/full_ladder_mixed_execution_20260811_raw_pit_v2/{fixed_signal_execution_replay.csv,fixed_signal_execution_summary.json}`。
+
+## Tape / queue-conservative execution update（2026-08-11）
+
+同日又在**完整 D-1 ladder signal 分母**上重跑 execution matrix，而不是沿用 generic 60s tape。T-1 base
+覆盖47城、5,973 events/62,173 rungs/66 target dates（`2026-05-21..2026-08-10`）；secondary holdout
+为 `2026-07-30..2026-08-10`。legacy selector 共55个 signals，其中46个有 frozen 30m full-ladder
+continuation / 60m hard-exit 证据：42个可挂 `bid+1 native tick`，4个因新报价达到 ask 改按真实
+`TAKER_ASK+official fee`。
+
+- 若假设42个 maker 全成交，mixed 46笔 ROI `+27.92%`，target-date block-bootstrap 95% CI
+  `[+8.85%,+44.85%]`；移除最大赢家仍为 `+16.19%`。这是 fill-conditional 上限。
+- 42个 maker 中40个有60m window-min-ask证据，`0/40` observed ask 触及 `bid+1`；另2个缺60m
+  touch窗口。ask-touch 不能排除主动 SELL 直接打我们的 bid，因此它是保守 fill proxy，不是 `0 actual fills` 的证明。
+- 4个自动 taker（Dallas/Miami/Chicago/MexicoCity）全部亏，合计 ROI `-30.38%`；把同一46笔
+  全部改 taker 为 `-45.71%`，95% CI `[-56.96%,-34.95%]`。所以“bid+1碰ask就无条件taker”被当前
+  holdout 拒绝；cross 后必须按 ask+fee 重新算 edge，不能继承 maker-price signal。
+- fill-selection 敏感度仍留下可研究空间：即使所有26个亏损 maker 都成交，16个盈利 maker 只需成交
+  `22.39%` 的条件 PnL 才覆盖 maker亏损和4个taker亏损；最大赢家占正PnL `41.37%`。但旧 archive
+  没有这批 D-1 token 的 own queue/trade prints，不能用该数学缓冲替代 actual-fill 证据。
+
+可复跑结果：`forecast_repricing/full_ladder_mixed_execution_20260811_tminus1/{summary.json,report.md,secondary_holdout_legacy_execution_expressions.csv,position_policy.joblib}`。
+
+`0/48` 只表示旧 48 个 holdout quotes 没有 observed ask 跌到原 best bid，不能排除主动 SELL 打 bid；现已用
+现有 WS `last_trade_price` 做独立 execution transport 复核。固定 60s post、真实 SELL volume 吃完 visible
+queue+5 股才记保守成交：4,017 posts、44 possible fills、23 个 exit-scoreable fills，fixed60 ROI `-6.57%`
+（1/23 为正）。tight spread/light queue/supportive tape 仍为负；首次可保本动态退出为 `-6.93%`。
+盘口恶化前撤单只剩2 fills/1 date、ROI `+6.72%`，不足以冻结且不与 D-1 candidate 同分母。
+
+inside-spread v2 已区分固定 +1c 与 Polymarket native +1 tick（0.01/极端价0.001）。native +1 tick 把保守
+fill rate 从 `1.10%` 提到 `3.59%`（`3.28×`），但69个exit-scoreable fills的fixed60/dynamic ROI仍为
+`-3.69%/-3.62%`；adverse-cancel+tight/light也只有 `-1.22%/-1.25%`。因此 +1 tick 是更合理的
+signal-conditioned 报价 challenger，不是 generic maker alpha；要证明它能用于本 family，仍需 D-1 forecast
+candidate 同分母 WS + own order lifecycle，不能拿本次 hot-strip 1日样本替代。
+
+generic 60s 结果不得用于扣减旧 D-1 selected-position `+36.39%`：旧策略实际是30m continuation
+checkpoint / 60m hard exit。对旧49笔改成native bid+1 tick，3笔因达到ask不再post-only；余下46笔在冻结
+原dynamic exit path后，条件ROI仍为`+25.20%`（原同子集`+36.60%`），剔除最大赢家仍为`+13.69%`。
+所以1个native tick不会消灭条件edge；上面的T-1同分母重跑已将范围更新为46个动态可评分仓位中的
+42 maker/4 taker，并确认关键未知仍是actual fills是否逆向集中于亏单。generic tape只能证明无signal普挂
+逆选，不能回答D-1 selected fill distribution。
+
+历史 D-1 已更新至 `2026-08-10`：5,973 events/62,173 rungs/66 dates。entry challenger 相对 M0 的 holdout
+MSE delta `-0.000000487`，CI `[-0.000001851,+0.000000939]`，仍跨0；新 holdout anti-toxic selector 选择0笔，
+full-ladder completion 仍未通过。generic single-leg passive expression 判 `rejected_for_expression`，completion runner
+继续 zero-notional abstain。完整证据见 [tape execution v1](2026-08/2026-08-11-forecast-repricing-tape-execution-v1.md)。
+
+## Anti-toxic maker / full-ladder completion handoff（2026-08-10）
+
+旧 position policy 的 maker-fill-conditional `+36.39%` 已完成 fillability 体检：secondary holdout 48 个旧
+quotes 中 `0/48` 出现 best-bid trade-through；全体 D-1 的 trade-through rows 98% 以上 60m markout 为负。
+这说明旧收益来自未成交报价，不是可复制 maker edge。linear/HGB 能识别 toxicity（holdout ROC-AUC
+`0.84156`），但找不到成交后为正的单腿 slice。
+
+当前可运行 expression 改为 `full_ladder_completion_v1` zero-notional probe：一档 best-bid maker fill 后只在
+其余所有 YES asks + official fee + 1 tick/leg 仍把完整 set 成本压到 `$0.99` 以下时立即补齐；挂单期间每个
+完整 ladder checkpoint 重算并动态撤单。历史 development 33 quotes 仅1个 trade-through，触价时 completion
+ROI `-11.45%`；holdout 2 quotes/0 touch，所以 research gate 为 FAIL，不能 live。current raw 106 个真实 revision
+pairs/1,155 rungs 中最大 margin `-4.72c`，runner 正确输出0个 POST_MAKER。完整证据、artifact 和命令见
+[anti-toxic maker v1](2026-08/2026-08-10-forecast-repricing-antitoxic-maker-v1.md)。
+
+Runner 默认输入已从历史 `full_ladder_output` 修正为 current canonical `strategy_snapshots`。当前 WS 只覆盖
+intraday hot strip，D-1 candidate tape/queue/own-fill 仍缺；扩 subscription 前需显式部署确认。
+
+## Full-ladder position handoff（2026-08-10）
+
+本 family 已有可加载的 `forecast_repricing_full_ladder_position_v1`：D-1 revision 后按
+`weather shock × signed mode distance × neighbor propagation` 给所有 rungs 评分，maker-fill-gated entry，
+30m 用完整 ladder continuation head 做 HOLD/EXIT，60m hard exit；不使用 max/min selector。2026-08-10 已修复
+历史重建适配器漏接独立 orderbook/full-ladder 数据层的问题，重建范围由 `2026-07-07` 扩至默认 T-1
+`2026-08-09`。Secondary reconstructed holdout 的 maker-fill-conditional dynamic ROI 为 `+36.39%`
+CI `[+17.20%,+52.44%]`（49 positions/11 active dates），但同 rows dynamic 相对 fixed60 为 `-1.07pp`
+CI `[-7.46pp,+5.01pp]`，taker 反事实 `-48.25%`，entry relative-markout 相对 M0 的 OOF/holdout CI 均跨0、
+actual fills=0、formal forward=NA。因此状态仍是 `runnable zero-notional / inconclusive`，不是 live alpha。
+旧 39 positions/6 dates/`+13.13%` 结果已 superseded-for-decision-use。实现、命令和证据见
+[full-ladder position v1](2026-08/2026-08-10-forecast-repricing-full-ladder-position-v1.md)。
+
+`Forecast Repricing` 是独立于 Core Carry 的短周期 market-response family。它预测 D-2/D-1 forecast revision 被本系统 first-seen 后，完整 temperature ladder 在未来 5/15/30/60 分钟的可执行价格变化；它不预测最终 Tmax winner，也不继承 Core Carry 的持仓、阈值或 live 授权。
+
+## 当前判定
+
+状态：`inconclusive / no tradable edge / collector-exact event denominator accumulating / event-book forward not deployed`。
+
+- 固定 `city × target_date × forecast-event` 分母的修复后历史重建覆盖 6,003 个 events、62,444 个 ladder rungs；D-1 position universe 为 5,902 events/61,392 rungs/65 dates，目标日期覆盖 `2026-05-21..2026-08-09`。`2026-07-08..2026-07-15` 仍因全城 full-ladder collector 尚未开始而是真实 evidence gap。
+- 5m 无覆盖；15m 只有 4 dates；只有 30m/60m 达到历史建模下限。development expanding OOF 选中 60m `weather + market level` Ridge，threshold 固定为 predicted taker net markout > 0。
+- 修复后 secondary chronological holdout `2026-07-29..2026-08-09` 中，entry challenger 相对 market-level M0 的 full-ladder MSE delta 为 `-0.00000058`，target-date bootstrap 95% CI `[-0.00000195,+0.00000073]`，跨 0；development OOF 也跨 0。因此尚未证明独立 forecast alpha。
+- 早期 fixed-horizon taker diagnostic 为 28 个 signals/4 dates、ROI `-31.96%`；修复后同一 49 个 selected position 的 taker 反事实为 `-48.25%`。两种口径方向一致：拒绝 taker。
+- 修复后 maker-fill-conditional dynamic point estimate 为 `+36.39%`，CI `[+17.20%,+52.44%]`，但同 rows 不胜 fixed60，且同一 selected rows 的 taker 反事实为 `-48.25%`。actual maker fills=0；queue、partial fill、expire 与 adverse selection 均未观测，所以它不是可实现 ROI。
+- terminal settlement head 单独失败：legacy model Brier `0.08423` vs market `0.06716`，delta `+0.01707` CI `[+0.01532,+0.01877]`；该负结论不能拿来替代短周期 repricing 检验。
+
+## 跨城市 first-seen 关系
+
+本 family 只池化 `forecast_revision`，不把 FMI/JMA/KNMI/AMOS 等 intraday observation first-seen
+混进同一模型。两者共用 event-ladder panel、market-prior correction、四组 baseline 和执行评测，
+但 observation family 的主 horizon 是 `30/120/300s/next_official`，source-basis/settlement adapter 也不同。
+跨城完整 review 见 [城市模型 living doc](../WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md#12-first-seen--repricing-跨城-review2026-08-09)。
+
+2026-08-09 current raw 已有 52 城 collector-exact forecast content first-seen：D-1 `5,339` 个 unique events /
+`13` 个 first-seen dates（material `2,342`），D-2 `555/12`（material `177`）。这说明事件分母已开始积累，
+但 source response 不暴露 provider run/issue time，且没有把每个 revision 绑定到 event-driven
+pre/t0/5/15/30/60m full-ladder burst；周期 market-books 不能事后拼成 formal forward。
+
+## 冻结研究合同
+
+- primary horizon：60m；5/15/30m 只保留 coverage/secondary diagnostics，不能在 forward 中重选。
+- primary model：`weather_plus_market_level` fixed Ridge；threshold=0；每个 forecast event 最多一档、每个 city-target_date 只取 first signal。
+- required comparisons：market level only、weather innovation only、weather+market、weather+market+static microstructure；另保留 market+static microstructure control，用于隔离 weather 的真实增量。
+- 权重：target_date 等权，再 event 等权，再 rung 等权；bootstrap block=`target_date`。
+- clocks：forecast issue time、provider availability/first-seen、collector first-seen、book snapshot/available time、virtual execution time 分列。缺 provider clock 时保持 missing，不得借 collector clock替代。
+- taker：entry ask、真实 top depth、future bid、双边 Weather fee；maker：posted bid、queue ahead、partial fill、expire、adverse selection；touch-only 仅作诊断。
+- formal forward：只能用冻结后 `collector_exact` forecast events 与 policy-valid D-2/D-1 ladder capture；archive secondary holdout 不叫 forward。
+
+## 下一步唯一动作
+
+共享 all-event `first_seen_event_ladder_panel_v1` materializer 已实现并离线 contract-test；Amsterdam golden
+2,756 events 的 slot shape coverage 为96.95%–99.06%，但旧 dedicated post captures 没有严格 request/response/parse clocks；
+Helsinki 255 events 的 t0仅10且完整链为0，证明当前周期 snapshot不能替代 event burst。下一步经显式部署确认后补
+D-2/D-1 与日内 observation event burst；不部署真实订单、不改现有 live 策略。固定设计见
+[2026-08-09 full-ladder/readiness snapshot](2026-08/2026-08-09-forecast-repricing-full-ladder-readiness-v1.md)。
+
+可复跑 artifact：
+
+- base：`/Volumes/jrs-archive/pm_agents/research/artifact_store/active/forecast_repricing/full_ladder_base_20260810_tminus1`
+- position：`/Volumes/jrs-archive/pm_agents/research/artifact_store/active/forecast_repricing/full_ladder_position_20260810_tminus1`
+- input SHA-256：`4f7b0f002b19dafd414aaac69a437d03c79f5f6146e2c2de6b5a58ca1ff449a3`
+- position model SHA-256：`812adb1e8f548babedc486a2f35f7b5b967c6d3b0c7bc84f3b155eecf5833c16`；zero-notional artifact，不是 live 授权。

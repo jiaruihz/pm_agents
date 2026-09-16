@@ -1,0 +1,34 @@
+{
+  "fixture_version": "weather_execution_phase0_v1",
+  "source": "deterministic old-runner input from test_weather_current_yes_core_carry_tiny_live_v2.py",
+  "case": "core carry split entry with trigger-time/model capped maker",
+  "input": {
+    "city": "Busan",
+    "target_date": "2026-07-24",
+    "best_bid": 0.8,
+    "best_ask": 0.84,
+    "tick_size": 0.01,
+    "model_probability_hold": 0.91,
+    "taker_shares": 5.0,
+    "maker_shares": 5.0
+  },
+  "expected_children": [
+    {
+      "role": "taker",
+      "shares": 5.0,
+      "limit_price": 0.84,
+      "maker_only": false,
+      "execution_policy": "current_yes_residual_carry_taker_v1",
+      "order_lifecycle_policy": "taker_now"
+    },
+    {
+      "role": "maker",
+      "shares": 5.0,
+      "limit_price": 0.81,
+      "maker_price_cap": 0.82,
+      "maker_only": true,
+      "execution_policy": "current_yes_residual_carry_maker_v1",
+      "order_lifecycle_policy": "maker_chase_until_observation_or_ttl_v1"
+    }
+  ]
+}

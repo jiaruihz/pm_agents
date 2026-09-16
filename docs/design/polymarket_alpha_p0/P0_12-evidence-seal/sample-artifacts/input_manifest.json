@@ -1,0 +1,8 @@
+{
+  "external_network_inputs": 0,
+  "fixture_clock": "2026-08-27T10:00:00Z",
+  "private_key_inputs": 0,
+  "production_database_inputs": 0,
+  "run_id": "alpha-p0-12-offline-20260827",
+  "source_commit": "3335cbaa3196adf46e7ef284fcd094515ca89e37"
+}

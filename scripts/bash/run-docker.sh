@@ -1,2 +1,2 @@
 #!/bin/bash
-docker run --rm -it polymarket-agents:latest
+docker run --rm -it pm-trader-agent:latest

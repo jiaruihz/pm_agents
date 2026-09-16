@@ -1,0 +1,3 @@
+forecast_source,rows,city_dates,mean_error,median_error,p10_error,p90_error,under_by_1_rate,under_by_2_rate,over_by_1_rate,min_error,max_error
+open_meteo_live_ecmwf,930,37,3.1988,3.02,-1.43,8.71,0.1366,0.0892,0.7065,-6.44,11.7
+open_meteo_live_gfs,768,30,5.8443,3.3,-1.2,14.76,0.1315,0.0612,0.7318,-2.9,32.24

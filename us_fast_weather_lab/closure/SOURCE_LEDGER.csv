@@ -1,0 +1,31 @@
+source_id,class,family,access_path,transport,official_or_vendor_evidence,current_status,next_gate
+WIS2_NOAA_NODE,METAR_TRANSPORT,public_push,public everyone/everyone,MQTT TLS 8883,NOAA dataset metadata,CONNECTED_SILENT,NOAA confirms publication or first message arrives
+WIS2_NOAA_GLOBAL_BROKER,METAR_TRANSPORT,public_push,public everyone/everyone,MQTT TLS 8883,NOAA SCN 25-75,CONNECTED_SILENT,first METAR notification
+WIS2_NOAA_GLOBAL_CACHE,METAR_TRANSPORT,public_push,public everyone/everyone,MQTT TLS 8883,NOAA PNS 25-62,CONNECTED_SILENT,first METAR notification
+WIS2_GDC_STALE_NOAA,METAR_TRANSPORT,public_push,GDC-advertised hostname,MQTT TLS 8883,WMO GDC result,TLS_HOSTNAME_MISMATCH,GDC correction
+AWC_API,METAR_TRANSPORT,public_baseline,public REST,HTTP polling,AWC API documentation,OBSERVED,clock-valid paired bakeoff
+AWC_CACHE,METAR_TRANSPORT,public_baseline,public cache,HTTP gzip minute cache,AWC API documentation,OBSERVED,clock-valid paired bakeoff
+DIRECT_ASOS_PHONE,DIRECT_SENSOR,direct_airport,FAA-published dial-in,PSTN audio,FAA DCS 2026-07-09,READY_NEEDS_TELEPHONY,approved account and spend cap
+DIRECT_D_ATIS,DIRECT_SENSOR,direct_airport,FAA-published dial-in or subscription,PSTN audio or vendor feed,FAA DCS 2026-07-09,READY_NEEDS_TELEPHONY,approved account and spend cap
+NOAAPORT_DIRECT,METAR_TRANSPORT,official_push,C-band receive station,DVB-S2/SBN,NOAA SCN 24-99,HARDWARE_REQUIRED,receiver quote or hosted relay
+NOAAPORT_RELAY,METAR_TRANSPORT,official_push,commercial relay,LDM or vendor stream,NOAA SCN 24-99,RESEARCHED_NEEDS_PROVIDER,trial feed
+NOAAPORT_NOVRA_S300N,METAR_TRANSPORT,official_push,commercial receiver purchase,DVB-S2 multicast IP,Novra official S300N page,RFQ_SENT,complete BOM quote and US-East install
+UNIDATA_IDD_NTEXT,METAR_TRANSPORT,community_push,authorized upstream,LDM,NSF Unidata current IDD and NTEXT docs,REQUEST_SENT,authorized upstream and stable host
+FAA_SCDS_CSS_WX,METAR_TRANSPORT,government_push,public account plus SAA,Solace JMS,FAA NSRR/SWIFT,MANUAL_ACCOUNT_REQUIRED,account SAA and current catalog export
+MADIS_OMO_PUBLIC,DIRECT_SENSOR,one_minute_sensor,public NOAA files,HTTP file,existing project evidence,OBSERVED_SLOW_CONTROL,retain negative control and matched study
+MADIS_OMO_LDM,DIRECT_SENSOR,one_minute_sensor,approved MADIS/LDM,LDM or file push,NOAA MADIS access process,ACCESS_REQUIRED,approval and first receipt
+SYNOPTIC_PUSH,DIRECT_SENSOR,commercial_trial,one-time 14-day trial,WebSocket,Synoptic official docs and provider reply,COLLECTOR_READY_TRIAL_PENDING,explicit activation approval credentials and live trial
+METAR_WS,METAR_TRANSPORT,commercial_relay,72-hour Professional or 7-day Starter trial,WebSocket; US mainly NOAAPort satellite,METAR.ws official docs and provider reply,COLLECTOR_READY_TRIAL_PENDING,API key explicit activation then 72-hour all-station trial
+MESOTECH_AWOS_LIVE,DIRECT_SENSOR,manufacturer_cloud,airport/vendor access,HTTPS live stream,Mesotech official AWOS Live page,RESEARCHED,<5-second airport coverage and trial response
+WMSCR_AWI,METAR_TRANSPORT,wmscr_intermediary,sales inquiry,unknown receive path,FAA WMSCR list 2025-12-16,INQUIRY_SENT,receive-only yes/no
+WMSCR_DBT,METAR_TRANSPORT,wmscr_intermediary,sales inquiry,unknown receive path,FAA WMSCR list 2025-12-16,INQUIRY_SENT,receive-only yes/no
+WMSCR_ANYAWOS,METAR_TRANSPORT,wmscr_intermediary,sales inquiry,unknown receive path,FAA WMSCR list 2025-12-16,INQUIRY_SENT,receive-only yes/no
+WMSCR_RSI,METAR_TRANSPORT,wmscr_intermediary,sales inquiry,unknown receive path,FAA WMSCR list 2025-12-16,INQUIRY_SENT,receive-only yes/no
+WMSCR_URF,METAR_TRANSPORT,wmscr_intermediary,sales inquiry,unknown receive path,FAA WMSCR list 2025-12-16,INQUIRY_SENT,receive-only yes/no
+VAISALA_XWEATHER,METAR_TRANSPORT,commercial_weather,sales inquiry,API,Vaisala official aviation/contact pages,RESEARCHED,confirm METAR upstream and latency trial
+BARON_AVIATION,METAR_TRANSPORT,commercial_weather,sales inquiry,Weather API,Baron official aviation brochure,RESEARCHED,confirm raw METAR push and timestamps
+CIRIUM_WEATHER,METAR_TRANSPORT,commercial_aviation,sales inquiry,REST API,Cirium official Sky API docs,RESEARCHED,confirm upstream cadence; no push shown
+IPS_METEOSTAR,METAR_TRANSPORT,commercial_aviation,sales inquiry,enterprise feed,AWC WIFS vendor list and vendor material,RESEARCHED,confirm raw U.S. METAR trial
+OAG_FLIGHTVIEW,METAR_TRANSPORT,commercial_aviation,sales inquiry,web service,OAG weather conditions data feed,RESEARCHED,confirm upstream cadence; likely polling relay
+AVIOWEATHER,METAR_TRANSPORT,commercial_relay,free account,REST edge API,AvioWeather official docs,REJECT_FAST_HYPOTHESIS,official docs say 5-minute AWC snapshot
+PEAKMET,COMPETITOR_VISIBLE,competitor,account plus wallet/member,web/API/Telegram,PeakMet public site,MANUAL_ACCOUNT_REQUIRED,legitimate 7-day observation

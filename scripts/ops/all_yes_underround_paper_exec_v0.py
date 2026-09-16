@@ -1,0 +1,1538 @@
+#!/usr/bin/env python3
+"""Paper executor and gate for all-YES underround baskets.
+
+This script never places live orders. It turns scanner candidates into an
+all-leg-or-none paper ledger, then evaluates those baskets against the
+canonical `settlements` table by condition_id.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sqlite3
+import sys
+from datetime import datetime, time, timedelta, timezone
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.ops.all_yes_underround_guards import BasketGuardConfig, check_candidate, decision_to_dict
+from scripts.analysis.market_structure_edge.all_yes_underround_settlement import (
+    PM_HISTORY_DEFAULT,
+    load_city_bracket_settlements,
+    resolve_leg_settlement,
+)
+SCAN_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-14-all-yes-underround-live-prep-v0.json"
+DB_DEFAULT = ROOT / "runtime" / "weather.db"
+GATE_DEFAULT = ROOT / "runtime" / "_dashboard_logs" / "clob_fill_coverage_gate.json"
+RUN_DIR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0"
+STRATEGY_ID = "all_yes_underround_basket_v0"
+EXECUTION_CONTRACT_VERSION = "all_yes_execution_contract_v0"
+DEFAULT_INVALID_SHAPE_QUARANTINE_BEFORE_UTC = "2026-06-14T06:00:00+00:00"
+SOURCE_SNAPSHOT_MTIME_TOLERANCE_SECONDS = 5.0
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=["cycle", "eval", "gate", "monitor"])
+    parser.add_argument("--scan-json", default=str(SCAN_JSON_DEFAULT))
+    parser.add_argument("--db-path", default=str(DB_DEFAULT))
+    parser.add_argument("--gate-path", default=str(GATE_DEFAULT))
+    parser.add_argument("--pm-history-dir", default=str(PM_HISTORY_DEFAULT))
+    parser.add_argument("--run-dir", default=str(RUN_DIR_DEFAULT))
+    parser.add_argument("--shares-per-leg", type=float, default=5.0)
+    parser.add_argument("--max-baskets-per-cycle", type=int, default=2)
+    parser.add_argument("--max-basket-cost-usd", type=float, default=5.0)
+    parser.add_argument("--min-underround", type=float, default=0.02)
+    parser.add_argument("--max-spread", type=float, default=0.05)
+    parser.add_argument("--max-snapshot-age-seconds", type=float, default=180.0)
+    parser.add_argument("--min-settled-baskets", type=int, default=20)
+    parser.add_argument("--min-settled-active-dates", type=int, default=7)
+    parser.add_argument("--min-positive-basket-rate", type=float, default=0.55)
+    parser.add_argument("--min-roi", type=float, default=0.02)
+    parser.add_argument("--max-gate-fact-age-hours", type=float, default=48.0)
+    parser.add_argument("--settlement-lag-days", type=int, default=1)
+    parser.add_argument("--settlement-pipeline-hour-utc", type=int, default=9)
+    parser.add_argument("--settlement-pipeline-minute-utc", type=int, default=20)
+    parser.add_argument(
+        "--quarantine-invalid-shape-before-utc",
+        default=DEFAULT_INVALID_SHAPE_QUARANTINE_BEFORE_UTC,
+        help="Treat invalid basket-shape observations recorded before this UTC timestamp as legacy quarantined observations.",
+    )
+    parser.add_argument("--settlement-now-utc", default=None, help=argparse.SUPPRESS)
+    return parser.parse_args()
+
+
+def now_utc() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def parse_utc(value: Any) -> datetime | None:
+    if not value:
+        return None
+    text = str(value)
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def recording_ttl_audit(basket: dict[str, Any], max_age_seconds: float | None) -> dict[str, Any]:
+    recorded_at = parse_utc(basket.get("recorded_at_utc"))
+    snapshot_ts = parse_utc(
+        basket.get("orderbook_fetched_at_utc_min")
+        or basket.get("orderbook_fetched_at_utc_max")
+        or basket.get("snapshot_ts_utc")
+    )
+    if recorded_at is None or snapshot_ts is None:
+        return {
+            "recording_age_seconds": None,
+            "ttl_equivalent": False,
+            "ttl_status": "missing_timestamp",
+        }
+    age = (recorded_at - snapshot_ts).total_seconds()
+    if age < -1:
+        return {
+            "recording_age_seconds": round(age, 3),
+            "ttl_equivalent": False,
+            "ttl_status": "snapshot_ts_in_future",
+        }
+    if max_age_seconds is None:
+        return {
+            "recording_age_seconds": round(age, 3),
+            "ttl_equivalent": None,
+            "ttl_status": "ttl_not_configured",
+        }
+    if age > max_age_seconds:
+        return {
+            "recording_age_seconds": round(age, 3),
+            "ttl_equivalent": False,
+            "ttl_status": "stale_recording",
+        }
+    return {
+        "recording_age_seconds": round(age, 3),
+        "ttl_equivalent": True,
+        "ttl_status": "live_equivalent",
+    }
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"status": "missing", "path": str(path)}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def file_mtime_utc(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
+
+
+def source_snapshot_audit(
+    basket: dict[str, Any],
+    *,
+    mtime_tolerance_seconds: float = SOURCE_SNAPSHOT_MTIME_TOLERANCE_SECONDS,
+) -> dict[str, Any]:
+    source = basket.get("source_scan")
+    if not source:
+        return {
+            "source_snapshot_valid": False,
+            "source_snapshot_status": "missing_source_scan",
+            "source_snapshot_blockers": ["missing_source_scan"],
+        }
+    path = Path(str(source))
+    if not path.is_absolute():
+        path = ROOT / path
+    recorded_at = parse_utc(basket.get("recorded_at_utc"))
+    if recorded_at is None:
+        return {
+            "source_snapshot_valid": False,
+            "source_snapshot_status": "missing_recorded_at",
+            "source_snapshot_path": str(path),
+            "source_snapshot_blockers": ["missing_recorded_at"],
+        }
+    if not path.exists():
+        return {
+            "source_snapshot_valid": False,
+            "source_snapshot_status": "source_snapshot_missing",
+            "source_snapshot_path": str(path),
+            "source_snapshot_blockers": ["source_snapshot_missing"],
+        }
+    stat = path.stat()
+    mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+    changed_after_seconds = (mtime - recorded_at).total_seconds()
+    blockers: list[str] = []
+    status = "source_snapshot_stable"
+    if changed_after_seconds > mtime_tolerance_seconds:
+        blockers.append("source_snapshot_changed_after_recording")
+        status = "source_snapshot_changed_after_recording"
+    return {
+        "source_snapshot_valid": not blockers,
+        "source_snapshot_status": status,
+        "source_snapshot_path": str(path),
+        "source_snapshot_size_bytes": stat.st_size,
+        "source_snapshot_mtime_utc": mtime.isoformat(),
+        "source_snapshot_changed_after_recording_seconds": round(changed_after_seconds, 3),
+        "source_snapshot_blockers": blockers,
+    }
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            if line.strip():
+                rows.append(json.loads(line))
+    return rows
+
+
+def append_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+def basket_id(scan: dict[str, Any], candidate: dict[str, Any]) -> str:
+    snapshot_ts = scan.get("snapshot_summary", {}).get("snapshot_ts_utc_max")
+    return "|".join(
+        [
+            STRATEGY_ID,
+            str(snapshot_ts),
+            str(candidate.get("event_date")),
+            str(candidate.get("city")),
+            str(candidate.get("event_slug")),
+        ]
+    )
+
+
+def opportunity_key_from_parts(event_date: Any, city: Any, event_slug: Any) -> str:
+    return "|".join([str(event_date), str(city), str(event_slug)])
+
+
+def opportunity_key_from_basket(row: dict[str, Any]) -> str:
+    return opportunity_key_from_parts(row.get("event_date"), row.get("city"), row.get("event_slug"))
+
+
+def leg_order_id(bid: str, condition_id: str) -> str:
+    return f"{bid}|{condition_id}"
+
+
+def cycle(args: argparse.Namespace) -> dict[str, Any]:
+    run_dir = Path(args.run_dir)
+    basket_path = run_dir / "paper_baskets.jsonl"
+    leg_path = run_dir / "paper_leg_orders.jsonl"
+    scan = read_json(Path(args.scan_json))
+    existing_rows = read_jsonl(basket_path)
+    existing = {str(row.get("basket_id")) for row in existing_rows}
+    existing_opportunities = {opportunity_key_from_basket(row) for row in existing_rows}
+    guard_cfg = BasketGuardConfig(
+        min_underround=args.min_underround,
+        shares_per_leg=args.shares_per_leg,
+        max_basket_cost_usd=args.max_basket_cost_usd,
+        max_yes_spread=args.max_spread,
+        max_candidates_per_cycle=args.max_baskets_per_cycle,
+        max_snapshot_age_seconds=args.max_snapshot_age_seconds,
+    )
+    baskets_to_append: list[dict[str, Any]] = []
+    legs_to_append: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
+    guard_audit: list[dict[str, Any]] = []
+
+    for candidate in list(scan.get("paper_shadow_candidates") or []):
+        bid = basket_id(scan, candidate)
+        opportunity_key = opportunity_key_from_parts(candidate.get("event_date"), candidate.get("city"), candidate.get("event_slug"))
+        decision_ts = now_utc()
+        guard = check_candidate(cfg=guard_cfg, repo_root=ROOT, candidate=candidate, decision_ts_utc=decision_ts)
+        guard_audit.append(
+            {
+                "basket_id": bid,
+                "city": candidate.get("city"),
+                "event_date": candidate.get("event_date"),
+                "guard": decision_to_dict(guard),
+            }
+        )
+        if not guard.allow:
+            rejected.append(
+                {
+                    "basket_id": bid,
+                    "city": candidate.get("city"),
+                    "event_date": candidate.get("event_date"),
+                    "guard": decision_to_dict(guard),
+                }
+            )
+            continue
+        if len(baskets_to_append) >= args.max_baskets_per_cycle:
+            continue
+        if bid in existing or opportunity_key in existing_opportunities:
+            continue
+
+        basket = {
+            "recorded_at_utc": now_utc(),
+            "strategy_id": STRATEGY_ID,
+            "execution_mode": "paper_all_leg_or_none",
+            "no_order_placed": True,
+            "basket_id": bid,
+            "opportunity_key": opportunity_key,
+            "source_scan": scan.get("snapshot_path"),
+            "source_report_generated_at_utc": scan.get("generated_at_utc"),
+            "source_scan_size_bytes": Path(str(scan.get("snapshot_path"))).stat().st_size if scan.get("snapshot_path") and Path(str(scan.get("snapshot_path"))).exists() else None,
+            "source_scan_mtime_utc": file_mtime_utc(Path(str(scan.get("snapshot_path")))) if scan.get("snapshot_path") else None,
+            "snapshot_ts_utc": scan.get("snapshot_summary", {}).get("snapshot_ts_utc_max"),
+            "snapshot_rows": scan.get("snapshot_summary", {}).get("rows"),
+            "orderbook_fetched_at_utc_min": candidate.get("orderbook_fetched_at_utc_min"),
+            "orderbook_fetched_at_utc_max": candidate.get("orderbook_fetched_at_utc_max"),
+            "event_date": candidate.get("event_date"),
+            "city": candidate.get("city"),
+            "event_slug": candidate.get("event_slug"),
+            "legs": len(guard.leg_orders),
+            "shares_per_leg": guard_cfg.shares_per_leg,
+            "total_yes_ask_cost": candidate.get("total_yes_ask_cost"),
+            "underround": candidate.get("underround"),
+            "basket_cost_usd": guard.basket_cost_usd,
+            "gross_profit_if_complete_usd": guard.expected_profit_usd,
+            "status": "paper_filled_all_legs",
+            "live_blocker": "paper_only_no_partial_fill_engine",
+            "guard": decision_to_dict(guard),
+        }
+        baskets_to_append.append(basket)
+        existing_opportunities.add(opportunity_key)
+        for leg in guard.leg_orders:
+            price = float(leg["price"])
+            condition_id = str(leg["condition_id"])
+            legs_to_append.append(
+                {
+                    "recorded_at_utc": basket["recorded_at_utc"],
+                    "strategy_id": STRATEGY_ID,
+                    "basket_id": bid,
+                    "opportunity_key": opportunity_key,
+                    "leg_order_id": leg_order_id(bid, condition_id),
+                    "event_date": candidate.get("event_date"),
+                    "city": candidate.get("city"),
+                    "event_slug": candidate.get("event_slug"),
+                    "condition_id": condition_id,
+                    "bracket": leg.get("bracket"),
+                    "side": "BUY_YES",
+                    "price": price,
+                    "shares": leg.get("shares"),
+                    "notional_usd": leg.get("notional_usd"),
+                    "available_ask_size": leg.get("available_ask_size"),
+                    "status": "paper_filled",
+                    "no_order_placed": True,
+                }
+            )
+
+    append_jsonl(basket_path, baskets_to_append)
+    append_jsonl(leg_path, legs_to_append)
+    result = {
+        "command": "cycle",
+        "generated_at_utc": now_utc(),
+        "run_dir": str(run_dir),
+        "source_scan": str(Path(args.scan_json)),
+        "max_snapshot_age_seconds": args.max_snapshot_age_seconds,
+        "scanner_candidate_count": len(list(scan.get("paper_shadow_candidates") or [])),
+        "appended_baskets": len(baskets_to_append),
+        "appended_leg_orders": len(legs_to_append),
+        "rejected": rejected,
+        "guard_audit": guard_audit,
+        "total_baskets": len(read_jsonl(basket_path)),
+    }
+    (run_dir / "last_cycle.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return result
+
+
+def connect_db(path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=1.0)
+    conn.execute("PRAGMA query_only=ON")
+    conn.execute("PRAGMA busy_timeout=1000")
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def fact_built_at_utc(path: Path) -> dict[str, Any]:
+    try:
+        conn = connect_db(path)
+        try:
+            value = conn.execute("SELECT MAX(fact_built_at_utc) FROM fact_trades").fetchone()[0]
+        finally:
+            conn.close()
+        return {"fact_built_at_utc": value}
+    except sqlite3.Error as exc:
+        return {"fact_built_at_utc": None, "error": str(exc)}
+
+
+def coverage_gate_freshness_audit(
+    *,
+    gate_path: Path,
+    db_path: Path,
+    now_dt: datetime,
+    max_gate_fact_age_hours: float | None,
+) -> dict[str, Any]:
+    max_age_seconds = None if max_gate_fact_age_hours is None else float(max_gate_fact_age_hours) * 3600.0
+    fact = fact_built_at_utc(db_path)
+    fact_dt = parse_utc(fact.get("fact_built_at_utc"))
+    gate_mtime = file_mtime_utc(gate_path)
+    gate_dt = parse_utc(gate_mtime)
+    fact_age_seconds = round((now_dt - fact_dt).total_seconds(), 3) if fact_dt else None
+    gate_file_age_seconds = round((now_dt - gate_dt).total_seconds(), 3) if gate_dt else None
+    stale_reasons: list[str] = []
+    if max_age_seconds is not None:
+        if fact_age_seconds is not None and fact_age_seconds > max_age_seconds:
+            stale_reasons.append("fact_built_at_utc_older_than_threshold")
+        if gate_file_age_seconds is not None and gate_file_age_seconds > max_age_seconds:
+            stale_reasons.append("gate_file_mtime_older_than_threshold")
+    return {
+        "gate_path": str(gate_path),
+        "db_path": str(db_path),
+        "gate_file_mtime_utc": gate_mtime,
+        "fact_built_at_utc": fact.get("fact_built_at_utc"),
+        "fact_built_at_error": fact.get("error"),
+        "fact_age_seconds": fact_age_seconds,
+        "gate_file_age_seconds": gate_file_age_seconds,
+        "max_gate_fact_age_hours": max_gate_fact_age_hours,
+        "stale": bool(stale_reasons),
+        "stale_reasons": stale_reasons,
+    }
+
+
+def final_yes(price: Any) -> float | None:
+    if price is None:
+        return None
+    value = float(price)
+    if value >= 0.999:
+        return 1.0
+    if value <= 0.001:
+        return 0.0
+    return None
+
+
+def load_settlements(conn: sqlite3.Connection, condition_ids: list[str]) -> dict[str, dict[str, Any]]:
+    if not condition_ids:
+        return {}
+    placeholders = ",".join("?" for _ in condition_ids)
+    rows = conn.execute(
+        f"SELECT condition_id, bracket, final_price, settlement_status FROM settlements WHERE condition_id IN ({placeholders})",
+        condition_ids,
+    ).fetchall()
+    return {str(row["condition_id"]): {**dict(row), "settlement_source": "settlements_condition_id"} for row in rows}
+
+
+def sorted_unique_values(rows: list[dict[str, Any]], field: str) -> list[str]:
+    return sorted({str(row.get(field)) for row in rows if row.get(field)})
+
+
+def basket_shape_audit(leg_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    blockers: list[str] = []
+    brackets = [str(row.get("bracket")).strip() for row in leg_rows if row.get("bracket") is not None]
+    condition_ids = [str(row.get("condition_id")).strip() for row in leg_rows if row.get("condition_id")]
+    if len(set(condition_ids)) != len(condition_ids):
+        blockers.append("duplicate_condition_id")
+    if len(set(brackets)) != len(brackets):
+        blockers.append("duplicate_bracket")
+    if not brackets:
+        blockers.append("missing_brackets")
+    return {
+        "basket_shape_valid": not blockers,
+        "basket_shape_blockers": blockers,
+        "unique_brackets": len(set(brackets)),
+        "leg_brackets": brackets,
+    }
+
+
+def compact_opportunity_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    compact: list[dict[str, Any]] = []
+    for row in rows:
+        if not row.get("unique_opportunity_first"):
+            continue
+        compact.append(
+            {
+                "recorded_at_utc": row.get("recorded_at_utc"),
+                "event_date": row.get("event_date"),
+                "city": row.get("city"),
+                "event_slug": row.get("event_slug"),
+                "ttl_equivalent": row.get("ttl_equivalent"),
+                "ttl_status": row.get("ttl_status"),
+                "basket_shape_valid": row.get("basket_shape_valid"),
+                "basket_shape_blockers": row.get("basket_shape_blockers"),
+                "basket_shape_quarantined": row.get("basket_shape_quarantined"),
+                "basket_shape_quarantine_reason": row.get("basket_shape_quarantine_reason"),
+                "recording_age_seconds": row.get("recording_age_seconds"),
+                "settlement_eval_status": row.get("settlement_eval_status"),
+                "settled_legs": row.get("settled_legs"),
+                "missing_settlement_legs": row.get("missing_settlement_legs"),
+                "unresolved_settlement_legs": row.get("unresolved_settlement_legs"),
+                "pending_reason": row.get("pending_reason"),
+                "pending_due_status": row.get("pending_due_status"),
+                "expected_settlement_after_utc": row.get("expected_settlement_after_utc"),
+                "seconds_until_expected_settlement": row.get("seconds_until_expected_settlement"),
+                "winner_count": row.get("winner_count"),
+                "winner_brackets": row.get("winner_brackets"),
+                "total_yes_ask_cost": row.get("total_yes_ask_cost"),
+                "underround": row.get("underround"),
+                "basket_cost_usd": row.get("basket_cost_usd"),
+                "gross_profit_if_complete_usd": row.get("gross_profit_if_complete_usd"),
+                "pnl_usd": row.get("pnl_usd"),
+                "roi": row.get("roi"),
+            }
+        )
+    return sorted(compact, key=lambda row: (str(row.get("event_date")), str(row.get("city")), str(row.get("recorded_at_utc"))))
+
+
+def pending_reason(row: dict[str, Any]) -> str | None:
+    if row.get("settlement_eval_status") != "pending":
+        return None
+    if int(row.get("missing_settlement_legs") or 0) > 0:
+        return "missing_settlement_rows"
+    if int(row.get("unresolved_settlement_legs") or 0) > 0:
+        return "settlement_rows_unresolved"
+    if int(row.get("legs") or 0) <= 0:
+        return "missing_paper_legs"
+    return "pending_unknown"
+
+
+def expected_settlement_after_utc(
+    target_date: Any,
+    *,
+    lag_days: int,
+    pipeline_hour_utc: int,
+    pipeline_minute_utc: int,
+) -> datetime | None:
+    try:
+        target = datetime.strptime(str(target_date), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+    hour = min(max(int(pipeline_hour_utc), 0), 23)
+    minute = min(max(int(pipeline_minute_utc), 0), 59)
+    expected_date = target + timedelta(days=int(lag_days))
+    return datetime.combine(expected_date, time(hour=hour, minute=minute), tzinfo=timezone.utc)
+
+
+def settlement_due_audit(
+    row: dict[str, Any],
+    *,
+    now_dt: datetime,
+    lag_days: int,
+    pipeline_hour_utc: int,
+    pipeline_minute_utc: int,
+) -> dict[str, Any]:
+    if row.get("settlement_eval_status") != "pending":
+        return {
+            "expected_settlement_after_utc": None,
+            "seconds_until_expected_settlement": None,
+            "pending_due_status": None,
+        }
+    expected = expected_settlement_after_utc(
+        row.get("event_date"),
+        lag_days=lag_days,
+        pipeline_hour_utc=pipeline_hour_utc,
+        pipeline_minute_utc=pipeline_minute_utc,
+    )
+    if expected is None:
+        return {
+            "expected_settlement_after_utc": None,
+            "seconds_until_expected_settlement": None,
+            "pending_due_status": "unknown_schedule",
+        }
+    seconds_until = (expected - now_dt).total_seconds()
+    prefix = "not_due" if seconds_until > 0 else "overdue"
+    reason = str(row.get("pending_reason") or "pending_unknown")
+    if reason == "missing_settlement_rows":
+        suffix = "missing_rows"
+    elif reason == "settlement_rows_unresolved":
+        suffix = "unresolved_rows"
+    elif reason == "missing_paper_legs":
+        suffix = "missing_paper_legs"
+    else:
+        suffix = "unknown"
+    return {
+        "expected_settlement_after_utc": expected.isoformat(),
+        "seconds_until_expected_settlement": round(seconds_until, 3),
+        "pending_due_status": f"{prefix}_{suffix}",
+    }
+
+
+def count_values(rows: list[dict[str, Any]], field: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        value = row.get(field)
+        if value is None:
+            continue
+        key = str(value)
+        counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def settlement_pending_audit(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    audit: list[dict[str, Any]] = []
+    for row in rows:
+        audit.append(
+            {
+                "recorded_at_utc": row.get("recorded_at_utc"),
+                "event_date": row.get("event_date"),
+                "city": row.get("city"),
+                "event_slug": row.get("event_slug"),
+                "ttl_equivalent": row.get("ttl_equivalent"),
+                "basket_shape_valid": row.get("basket_shape_valid"),
+                "pending_reason": row.get("pending_reason"),
+                "pending_due_status": row.get("pending_due_status"),
+                "expected_settlement_after_utc": row.get("expected_settlement_after_utc"),
+                "seconds_until_expected_settlement": row.get("seconds_until_expected_settlement"),
+                "legs": row.get("legs"),
+                "settled_legs": row.get("settled_legs"),
+                "missing_settlement_legs": row.get("missing_settlement_legs"),
+                "unresolved_settlement_legs": row.get("unresolved_settlement_legs"),
+            }
+        )
+    return sorted(audit, key=lambda row: (str(row.get("event_date")), str(row.get("city")), str(row.get("recorded_at_utc"))))
+
+
+def invalid_shape_quarantine(row: dict[str, Any], before_utc: Any) -> dict[str, Any]:
+    if row.get("basket_shape_valid"):
+        return {
+            "basket_shape_quarantined": False,
+            "basket_shape_quarantine_reason": None,
+        }
+    cutoff = parse_utc(before_utc)
+    recorded_at = parse_utc(row.get("recorded_at_utc"))
+    if cutoff is not None and recorded_at is not None and recorded_at < cutoff:
+        return {
+            "basket_shape_quarantined": True,
+            "basket_shape_quarantine_reason": "recorded_before_shape_guard_fix",
+        }
+    return {
+        "basket_shape_quarantined": False,
+        "basket_shape_quarantine_reason": "current_or_unknown_invalid_shape",
+    }
+
+
+def live_plan_gate_items(live_plan: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    blockers: list[dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
+    if live_plan.get("status") == "missing" or not live_plan.get("generated_at_utc"):
+        blockers.append(
+            {
+                "code": "dry_run_live_plan_missing",
+                "message": "No all-YES dry-run live plan artifact is available for deploy review.",
+                "path": live_plan.get("path"),
+            }
+        )
+        return blockers, passed
+    if live_plan.get("live_now") is not False:
+        blockers.append(
+            {
+                "code": "dry_run_live_plan_unsafe_live_flag",
+                "message": "The all-YES live plan artifact must never enable live submission.",
+                "live_now": live_plan.get("live_now"),
+            }
+        )
+    if live_plan.get("verdict") != "DRY_RUN_PLAN_ONLY":
+        blockers.append(
+            {
+                "code": "dry_run_live_plan_bad_verdict",
+                "message": "The all-YES live plan artifact must remain dry-run only.",
+                "verdict": live_plan.get("verdict"),
+            }
+        )
+    unsafe_plans: list[dict[str, Any]] = []
+    for plan in list(live_plan.get("plans") or []):
+        intents = list(plan.get("order_intents") or [])
+        contract = dict(plan.get("execution_contract") or {})
+        unsafe_reasons: list[str] = []
+        if plan.get("live_submit_enabled") is not False:
+            unsafe_reasons.append("live_submit_enabled_not_false")
+        if plan.get("no_order_placed") is not True:
+            unsafe_reasons.append("no_order_placed_not_true")
+        if not intents:
+            unsafe_reasons.append("missing_order_intents")
+        if any(intent.get("submit_now") is not False for intent in intents):
+            unsafe_reasons.append("order_intent_submit_now_not_false")
+        if plan.get("partial_fill_policy") != "block_live_until_cancel_or_unwind_engine_exists":
+            unsafe_reasons.append("partial_fill_policy_not_blocking_live")
+        if contract.get("contract_version") != EXECUTION_CONTRACT_VERSION:
+            unsafe_reasons.append("execution_contract_bad_version")
+        if contract.get("live_submit_enabled") is not False:
+            unsafe_reasons.append("execution_contract_live_submit_enabled_not_false")
+        if contract.get("no_order_placed") is not True:
+            unsafe_reasons.append("execution_contract_no_order_placed_not_true")
+        if contract.get("all_leg_or_none_required") is not True:
+            unsafe_reasons.append("execution_contract_all_leg_or_none_not_true")
+        if contract.get("order_submission_mode") != "disabled_dry_run_only":
+            unsafe_reasons.append("execution_contract_order_submission_mode_not_disabled")
+        if contract.get("per_leg_time_in_force") != "FOK_OR_CANCEL_REQUIRED_BEFORE_LIVE":
+            unsafe_reasons.append("execution_contract_time_in_force_not_blocking_live")
+        if contract.get("partial_fill_policy") != "reject_partial_before_live":
+            unsafe_reasons.append("execution_contract_partial_fill_policy_not_reject")
+        if contract.get("partial_fill_live_action") != "cancel_unfilled_then_unwind_filled_or_pause_strategy":
+            unsafe_reasons.append("execution_contract_partial_fill_action_not_fail_closed")
+        if unsafe_reasons:
+            unsafe_plans.append(
+                {
+                    "plan_id": plan.get("plan_id"),
+                    "city": plan.get("city"),
+                    "event_date": plan.get("event_date"),
+                    "unsafe_reasons": unsafe_reasons,
+                }
+            )
+    if unsafe_plans:
+        blockers.append(
+            {
+                "code": "dry_run_live_plan_unsafe_order_intents",
+                "message": "Some dry-run live plans are not safely marked as non-submitting.",
+                "unsafe_plans": unsafe_plans,
+            }
+        )
+    if not blockers:
+        passed.append(
+            {
+                "code": "dry_run_live_plan_available",
+                "message": "All-YES dry-run live plan artifact is present and non-submitting.",
+                "scanner_candidate_count": live_plan.get("scanner_candidate_count"),
+                "planned_baskets": live_plan.get("planned_baskets"),
+                "rejected_baskets": live_plan.get("rejected_baskets"),
+            }
+        )
+        if int(live_plan.get("planned_baskets") or 0) > 0:
+            passed.append(
+                {
+                    "code": "dry_run_live_plan_order_intents_safe",
+                    "message": "Dry-run all-leg order intents are marked non-submitting.",
+                    "planned_baskets": live_plan.get("planned_baskets"),
+                }
+            )
+    return blockers, passed
+
+
+def executor_state_gate_items(executor_state: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    blockers: list[dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
+    if executor_state.get("status") == "missing" or not executor_state.get("generated_at_utc"):
+        blockers.append(
+            {
+                "code": "dry_run_executor_state_missing",
+                "message": "No all-YES dry-run executor state artifact is available for deploy review.",
+                "path": executor_state.get("path"),
+            }
+        )
+        return blockers, passed
+    if executor_state.get("live_now") is not False:
+        blockers.append(
+            {
+                "code": "dry_run_executor_state_unsafe_live_flag",
+                "message": "The all-YES executor state artifact must never enable live submission.",
+                "live_now": executor_state.get("live_now"),
+            }
+        )
+    if executor_state.get("no_order_placed") is not True:
+        blockers.append(
+            {
+                "code": "dry_run_executor_state_order_placed",
+                "message": "The all-YES executor state artifact must prove no order was placed.",
+                "no_order_placed": executor_state.get("no_order_placed"),
+            }
+        )
+    if executor_state.get("verdict") != "DRY_RUN_EXECUTOR_READY":
+        blockers.append(
+            {
+                "code": "dry_run_executor_state_not_ready",
+                "message": "The all-YES executor state artifact must remain ready in dry-run mode.",
+                "verdict": executor_state.get("verdict"),
+                "blockers": executor_state.get("blockers"),
+            }
+        )
+    if not blockers:
+        passed.append(
+            {
+                "code": "dry_run_executor_state_available",
+                "message": "All-YES dry-run executor state artifact is present and fail-closed.",
+                "plans_checked": executor_state.get("plans_checked"),
+            }
+        )
+    return blockers, passed
+
+
+def executor_plan_bridge_gate_items(summary: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    blockers: list[dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
+    if summary.get("status") == "missing" or not summary.get("generated_at_utc"):
+        blockers.append(
+            {
+                "code": "dry_run_executor_plan_bridge_missing",
+                "message": "No all-YES executor-plan bridge artifact is available for deploy review.",
+                "path": summary.get("path"),
+            }
+        )
+        return blockers, passed
+    if summary.get("live_now") is not False or summary.get("live_enabled") is not False:
+        blockers.append(
+            {
+                "code": "dry_run_executor_plan_bridge_unsafe_live_flag",
+                "message": "The executor-plan bridge must keep live disabled.",
+                "live_now": summary.get("live_now"),
+                "live_enabled": summary.get("live_enabled"),
+            }
+        )
+    if summary.get("verdict") != "DRY_RUN_EXECUTOR_PLANS_READY":
+        blockers.append(
+            {
+                "code": "dry_run_executor_plan_bridge_not_ready",
+                "message": "The executor-plan bridge did not produce a ready dry-run artifact.",
+                "verdict": summary.get("verdict"),
+                "blockers": summary.get("blockers"),
+            }
+        )
+    if not blockers:
+        passed.append(
+            {
+                "code": "dry_run_executor_plan_bridge_available",
+                "message": "All-YES plan can be converted into live-disabled weather executor plans.",
+                "plans": summary.get("plans"),
+                "out_jsonl": summary.get("out_jsonl"),
+            }
+        )
+    return blockers, passed
+
+
+def basket_executor_gate_items(summary: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    blockers: list[dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
+    if summary.get("status") == "missing" or not summary.get("generated_at_utc"):
+        blockers.append(
+            {
+                "code": "dry_run_basket_executor_missing",
+                "message": "No all-YES basket-level executor readiness artifact is available for deploy review.",
+                "path": summary.get("path"),
+            }
+        )
+        return blockers, passed
+    if summary.get("live_now") is not False or summary.get("live_enabled") is not False:
+        blockers.append(
+            {
+                "code": "dry_run_basket_executor_unsafe_live_flag",
+                "message": "The basket executor readiness artifact must keep live disabled.",
+                "live_now": summary.get("live_now"),
+                "live_enabled": summary.get("live_enabled"),
+            }
+        )
+    if summary.get("no_order_placed") is not True:
+        blockers.append(
+            {
+                "code": "dry_run_basket_executor_order_placed",
+                "message": "The basket executor readiness artifact must prove no order was placed.",
+                "no_order_placed": summary.get("no_order_placed"),
+            }
+        )
+    if summary.get("verdict") != "DRY_RUN_BASKET_EXECUTOR_READY":
+        blockers.append(
+            {
+                "code": "dry_run_basket_executor_not_ready",
+                "message": "The all-YES basket executor contract is not ready in dry-run mode.",
+                "verdict": summary.get("verdict"),
+                "blockers": summary.get("blockers"),
+            }
+        )
+    if not blockers:
+        passed.append(
+            {
+                "code": "dry_run_basket_executor_available",
+                "message": "All-YES basket-level dry-run executor artifact is present and fail-closed.",
+                "baskets_checked": summary.get("baskets_checked"),
+                "executor_legs_checked": summary.get("executor_legs_checked"),
+                "fail_closed_paths": sum(
+                    1
+                    for row in list(summary.get("basket_states") or [])
+                    if row.get("status") == "fail_closed_cancel_or_unwind_required"
+                ),
+            }
+        )
+    return blockers, passed
+
+
+def fok_executor_gate_items(summary: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    blockers: list[dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
+    if summary.get("status") == "missing" or not summary.get("generated_at_utc"):
+        blockers.append(
+            {
+                "code": "dry_run_fok_executor_missing",
+                "message": "No all-YES FOK executor readiness artifact is available for deploy review.",
+                "path": summary.get("path"),
+            }
+        )
+        return blockers, passed
+    if summary.get("live_now") is not False or summary.get("live_enabled") is not False:
+        blockers.append(
+            {
+                "code": "dry_run_fok_executor_unsafe_live_flag",
+                "message": "The FOK executor readiness artifact must keep live disabled.",
+                "live_now": summary.get("live_now"),
+                "live_enabled": summary.get("live_enabled"),
+            }
+        )
+    if summary.get("no_order_placed") is not True:
+        blockers.append(
+            {
+                "code": "dry_run_fok_executor_order_placed",
+                "message": "The FOK executor readiness artifact must prove no order was placed.",
+                "no_order_placed": summary.get("no_order_placed"),
+            }
+        )
+    if summary.get("verdict") != "DRY_RUN_FOK_EXECUTOR_READY":
+        blockers.append(
+            {
+                "code": "dry_run_fok_executor_not_ready",
+                "message": "The all-YES FOK executor proof is not ready in dry-run mode.",
+                "verdict": summary.get("verdict"),
+                "blockers": summary.get("blockers"),
+            }
+        )
+    if not blockers:
+        passed.append(
+            {
+                "code": "dry_run_fok_executor_available",
+                "message": "All-YES FOK executor proof is present, non-submitting, and fail-closed.",
+                "baskets_checked": summary.get("baskets_checked"),
+                "executor_legs_checked": summary.get("executor_legs_checked"),
+                "order_type": summary.get("order_type"),
+                "clob_order_type_module": (summary.get("clob_order_type_audit") or {}).get("module"),
+            }
+        )
+    return blockers, passed
+
+
+def evaluate(args: argparse.Namespace) -> dict[str, Any]:
+    run_dir = Path(args.run_dir)
+    baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
+    legs = read_jsonl(run_dir / "paper_leg_orders.jsonl")
+    legs_by_basket: dict[str, list[dict[str, Any]]] = {}
+    condition_ids: list[str] = []
+    for leg in legs:
+        legs_by_basket.setdefault(str(leg.get("basket_id")), []).append(leg)
+        if leg.get("condition_id"):
+            condition_ids.append(str(leg["condition_id"]))
+    conn = connect_db(Path(args.db_path))
+    try:
+        settlements = load_settlements(conn, sorted(set(condition_ids)))
+        pm_history_dir = getattr(args, "pm_history_dir", None)
+        city_bracket_settlements = load_city_bracket_settlements(conn, pm_history_dir)
+    finally:
+        conn.close()
+    settlement_now = parse_utc(getattr(args, "settlement_now_utc", None)) or datetime.now(timezone.utc)
+    settlement_lag_days = int(getattr(args, "settlement_lag_days", 1))
+    settlement_pipeline_hour_utc = int(getattr(args, "settlement_pipeline_hour_utc", 9))
+    settlement_pipeline_minute_utc = int(getattr(args, "settlement_pipeline_minute_utc", 20))
+    quarantine_invalid_before_utc = getattr(
+        args,
+        "quarantine_invalid_shape_before_utc",
+        DEFAULT_INVALID_SHAPE_QUARANTINE_BEFORE_UTC,
+    )
+
+    rows: list[dict[str, Any]] = []
+    seen_opportunities: set[str] = set()
+    for basket in baskets:
+        bid = str(basket.get("basket_id"))
+        opportunity_key = str(basket.get("opportunity_key") or opportunity_key_from_basket(basket))
+        duplicate_opportunity = opportunity_key in seen_opportunities
+        if not duplicate_opportunity:
+            seen_opportunities.add(opportunity_key)
+        ttl = recording_ttl_audit(basket, args.max_snapshot_age_seconds)
+        leg_rows = legs_by_basket.get(bid, [])
+        missing = []
+        settled_legs = []
+        unresolved = []
+        winners = []
+        for leg in leg_rows:
+            settlement = resolve_leg_settlement(
+                leg=leg,
+                city=basket.get("city"),
+                event_date=basket.get("event_date"),
+                condition_settlements=settlements,
+                city_bracket_settlements=city_bracket_settlements,
+            )
+            if settlement is None:
+                missing.append(leg)
+                continue
+            yes = final_yes(settlement.get("final_price"))
+            if settlement.get("settlement_status") != "settled" or yes is None:
+                unresolved.append(leg)
+                continue
+            settled_legs.append(leg)
+            if yes == 1.0:
+                winners.append(leg)
+        all_settled = len(leg_rows) > 0 and not missing and not unresolved and len(settled_legs) == len(leg_rows)
+        shape = basket_shape_audit(leg_rows)
+        status = "pending"
+        payout = None
+        pnl = None
+        roi = None
+        winner_count = None
+        if all_settled:
+            winner_count = len(winners)
+            payout = float(basket.get("shares_per_leg") or 0.0) * winner_count
+            pnl = payout - float(basket.get("basket_cost_usd") or 0.0)
+            roi = pnl / float(basket.get("basket_cost_usd") or 1.0)
+            status = "settled_exactly_one_winner" if winner_count == 1 else "settled_winner_count_anomaly"
+        source = source_snapshot_audit(basket)
+        if not source.get("source_snapshot_valid"):
+            ttl = {
+                **ttl,
+                "ttl_original_status": ttl.get("ttl_status"),
+                "ttl_equivalent": False,
+                "ttl_status": "source_snapshot_invalid",
+            }
+        rows.append(
+            {
+                **basket,
+                **ttl,
+                **source,
+                **shape,
+                "opportunity_key": opportunity_key,
+                "unique_opportunity_first": not duplicate_opportunity,
+                "duplicate_opportunity": duplicate_opportunity,
+                "settlement_eval_status": status,
+                "settled_legs": len(settled_legs),
+                "missing_settlement_legs": len(missing),
+                "unresolved_settlement_legs": len(unresolved),
+                "winner_count": winner_count,
+                "payout_usd": round(payout, 6) if payout is not None else None,
+                "pnl_usd": round(pnl, 6) if pnl is not None else None,
+                "roi": round(roi, 6) if roi is not None else None,
+                "winner_brackets": [leg.get("bracket") for leg in winners],
+            }
+        )
+        rows[-1].update(invalid_shape_quarantine(rows[-1], quarantine_invalid_before_utc))
+        rows[-1]["pending_reason"] = pending_reason(rows[-1])
+        rows[-1].update(
+            settlement_due_audit(
+                rows[-1],
+                now_dt=settlement_now,
+                lag_days=settlement_lag_days,
+                pipeline_hour_utc=settlement_pipeline_hour_utc,
+                pipeline_minute_utc=settlement_pipeline_minute_utc,
+            )
+        )
+    decision_rows = [row for row in rows if row.get("unique_opportunity_first")]
+    shape_invalid = [row for row in decision_rows if not row.get("basket_shape_valid")]
+    shape_invalid_current = [row for row in shape_invalid if not row.get("basket_shape_quarantined")]
+    shape_invalid_quarantined = [row for row in shape_invalid if row.get("basket_shape_quarantined")]
+    source_invalid = [row for row in decision_rows if not row.get("source_snapshot_valid")]
+    live_prep_rows = [row for row in decision_rows if row.get("basket_shape_valid") and row.get("source_snapshot_valid")]
+    settled = [row for row in decision_rows if row["settlement_eval_status"].startswith("settled_")]
+    exact = [row for row in settled if row["settlement_eval_status"] == "settled_exactly_one_winner"]
+    live_prep_settled = [row for row in live_prep_rows if row["settlement_eval_status"].startswith("settled_")]
+    live_prep_exact = [row for row in live_prep_settled if row["settlement_eval_status"] == "settled_exactly_one_winner"]
+    ttl_equivalent = [row for row in live_prep_rows if row.get("ttl_equivalent") is True]
+    ttl_equivalent_exact = [row for row in live_prep_exact if row.get("ttl_equivalent") is True]
+    ttl_equivalent_pending = [
+        row for row in live_prep_rows
+        if row.get("ttl_equivalent") is True and row["settlement_eval_status"] == "pending"
+    ]
+    pending_rows = [row for row in live_prep_rows if row["settlement_eval_status"] == "pending"]
+    stale_recorded = [row for row in live_prep_rows if row.get("ttl_status") == "stale_recording"]
+    bad_ttl = [row for row in live_prep_rows if row.get("ttl_equivalent") is False]
+    cost = sum(float(row.get("basket_cost_usd") or 0.0) for row in exact)
+    pnl = sum(float(row.get("pnl_usd") or 0.0) for row in exact)
+    ttl_cost = sum(float(row.get("basket_cost_usd") or 0.0) for row in ttl_equivalent_exact)
+    ttl_pnl = sum(float(row.get("pnl_usd") or 0.0) for row in ttl_equivalent_exact)
+    ages = [float(row["recording_age_seconds"]) for row in rows if row.get("recording_age_seconds") is not None]
+    summary = {
+        "command": "eval",
+        "generated_at_utc": now_utc(),
+        "run_dir": str(run_dir),
+        "db_path": str(Path(args.db_path)),
+        "max_snapshot_age_seconds": args.max_snapshot_age_seconds,
+        "quarantine_invalid_shape_before_utc": quarantine_invalid_before_utc,
+        "settlement_now_utc": settlement_now.isoformat(),
+        "settlement_schedule": {
+            "lag_days": settlement_lag_days,
+            "pipeline_hour_utc": settlement_pipeline_hour_utc,
+            "pipeline_minute_utc": settlement_pipeline_minute_utc,
+        },
+        "raw_baskets": len(rows),
+        "duplicate_opportunity_baskets": len([row for row in rows if row.get("duplicate_opportunity")]),
+        "baskets": len(decision_rows),
+        "unique_opportunity_baskets": len(decision_rows),
+        "shape_valid_baskets": len(live_prep_rows),
+        "shape_invalid_baskets": len(shape_invalid),
+        "shape_invalid_current_baskets": len(shape_invalid_current),
+        "shape_invalid_quarantined_baskets": len(shape_invalid_quarantined),
+        "source_snapshot_invalid_baskets": len(source_invalid),
+        "source_snapshot_invalid_opportunities": [
+            {
+                "event_date": row.get("event_date"),
+                "city": row.get("city"),
+                "event_slug": row.get("event_slug"),
+                "source_snapshot_status": row.get("source_snapshot_status"),
+                "source_snapshot_blockers": row.get("source_snapshot_blockers"),
+                "source_snapshot_path": row.get("source_snapshot_path"),
+                "source_snapshot_mtime_utc": row.get("source_snapshot_mtime_utc"),
+                "source_snapshot_changed_after_recording_seconds": row.get("source_snapshot_changed_after_recording_seconds"),
+                "recorded_at_utc": row.get("recorded_at_utc"),
+            }
+            for row in source_invalid
+        ],
+        "shape_invalid_opportunities": [
+            {
+                "event_date": row.get("event_date"),
+                "city": row.get("city"),
+                "event_slug": row.get("event_slug"),
+                "basket_shape_blockers": row.get("basket_shape_blockers"),
+                "basket_shape_quarantined": row.get("basket_shape_quarantined"),
+                "basket_shape_quarantine_reason": row.get("basket_shape_quarantine_reason"),
+                "unique_brackets": row.get("unique_brackets"),
+                "legs": row.get("legs"),
+            }
+            for row in shape_invalid
+        ],
+        "shape_invalid_current_opportunities": [
+            {
+                "event_date": row.get("event_date"),
+                "city": row.get("city"),
+                "event_slug": row.get("event_slug"),
+                "basket_shape_blockers": row.get("basket_shape_blockers"),
+                "basket_shape_quarantine_reason": row.get("basket_shape_quarantine_reason"),
+                "unique_brackets": row.get("unique_brackets"),
+                "legs": row.get("legs"),
+            }
+            for row in shape_invalid_current
+        ],
+        "settled": len(settled),
+        "settled_exactly_one_winner": len(exact),
+        "pending": len([row for row in decision_rows if row["settlement_eval_status"] == "pending"]),
+        "live_prep_pending": len(pending_rows),
+        "pending_reason_counts": count_values(pending_rows, "pending_reason"),
+        "pending_due_status_counts": count_values(pending_rows, "pending_due_status"),
+        "ttl_equivalent_pending_reason_counts": count_values(ttl_equivalent_pending, "pending_reason"),
+        "ttl_equivalent_pending_due_status_counts": count_values(ttl_equivalent_pending, "pending_due_status"),
+        "ttl_equivalent_pending_settlement_audit": settlement_pending_audit(ttl_equivalent_pending),
+        "pending_missing_settlement_legs": sum(int(row.get("missing_settlement_legs") or 0) for row in pending_rows),
+        "pending_unresolved_settlement_legs": sum(int(row.get("unresolved_settlement_legs") or 0) for row in pending_rows),
+        "ttl_equivalent_pending_missing_settlement_legs": sum(int(row.get("missing_settlement_legs") or 0) for row in ttl_equivalent_pending),
+        "ttl_equivalent_pending_unresolved_settlement_legs": sum(int(row.get("unresolved_settlement_legs") or 0) for row in ttl_equivalent_pending),
+        "winner_count_anomaly": len([row for row in decision_rows if row["settlement_eval_status"] == "settled_winner_count_anomaly"]),
+        "ttl_equivalent_baskets": len(ttl_equivalent),
+        "ttl_non_equivalent_baskets": len(bad_ttl),
+        "stale_recorded_baskets": len(stale_recorded),
+        "settled_active_event_dates": len(sorted_unique_values(exact, "event_date")),
+        "settled_event_dates": sorted_unique_values(exact, "event_date"),
+        "ttl_equivalent_pending": len(ttl_equivalent_pending),
+        "ttl_equivalent_pending_active_event_dates": len(sorted_unique_values(ttl_equivalent_pending, "event_date")),
+        "ttl_equivalent_pending_event_dates": sorted_unique_values(ttl_equivalent_pending, "event_date"),
+        "ttl_equivalent_settled_exactly_one_winner": len(ttl_equivalent_exact),
+        "ttl_equivalent_settled_active_event_dates": len(sorted_unique_values(ttl_equivalent_exact, "event_date")),
+        "ttl_equivalent_settled_event_dates": sorted_unique_values(ttl_equivalent_exact, "event_date"),
+        "ttl_recording_age_seconds_max": round(max(ages), 3) if ages else None,
+        "settled_cost_usd": round(cost, 6),
+        "settled_pnl_usd": round(pnl, 6),
+        "settled_roi": round(pnl / cost, 6) if cost else None,
+        "positive_basket_rate": round(sum(1 for row in exact if float(row.get("pnl_usd") or 0.0) > 0) / len(exact), 6) if exact else None,
+        "ttl_equivalent_settled_cost_usd": round(ttl_cost, 6),
+        "ttl_equivalent_settled_pnl_usd": round(ttl_pnl, 6),
+        "ttl_equivalent_settled_roi": round(ttl_pnl / ttl_cost, 6) if ttl_cost else None,
+        "ttl_equivalent_positive_basket_rate": (
+            round(sum(1 for row in ttl_equivalent_exact if float(row.get("pnl_usd") or 0.0) > 0) / len(ttl_equivalent_exact), 6)
+            if ttl_equivalent_exact
+            else None
+        ),
+        "rows": rows,
+    }
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "eval.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return summary
+
+
+def gate(args: argparse.Namespace) -> dict[str, Any]:
+    run_dir = Path(args.run_dir)
+    eval_summary = evaluate(args)
+    gate_path = Path(args.gate_path)
+    db_path = Path(args.db_path)
+    clob_gate = read_json(gate_path)
+    generated_dt = datetime.now(timezone.utc)
+    max_gate_fact_age_hours = getattr(args, "max_gate_fact_age_hours", 48.0)
+    clob_gate_freshness = coverage_gate_freshness_audit(
+        gate_path=gate_path,
+        db_path=db_path,
+        now_dt=generated_dt,
+        max_gate_fact_age_hours=max_gate_fact_age_hours,
+    )
+    last_cycle = read_json(run_dir / "last_cycle.json")
+    live_plan = read_json(run_dir / "latest_live_plan.json")
+    executor_state = read_json(run_dir / "latest_executor_readiness.json")
+    executor_plan_bridge = read_json(run_dir / "executor_trade_plan_summary.json")
+    basket_executor = read_json(run_dir / "latest_basket_executor_readiness.json")
+    fok_executor = read_json(run_dir / "latest_fok_executor_readiness.json")
+    blockers: list[dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
+    if clob_gate_freshness["stale"]:
+        blockers.append(
+            {
+                "code": "clob_coverage_gate_stale_or_fail",
+                "message": "CLOB coverage evidence is stale and cannot support any live readiness claim.",
+                "gate_pass": clob_gate.get("gate_pass"),
+                "freshness": clob_gate_freshness,
+            }
+        )
+    elif not clob_gate.get("gate_pass"):
+        blockers.append(
+            {
+                "code": "clob_coverage_gate_fail",
+                "message": "CLOB coverage gate must pass before any live readiness claim.",
+                "freshness": clob_gate_freshness,
+            }
+        )
+    else:
+        passed.append(
+            {
+                "code": "clob_coverage_gate_pass",
+                "message": "CLOB fill coverage gate passes and evidence is fresh enough for live-prep gating.",
+                "freshness": clob_gate_freshness,
+            }
+        )
+    if eval_summary["baskets"] <= 0:
+        blockers.append({"code": "paper_ledger_empty", "message": "No all-YES paper baskets have been recorded."})
+    else:
+        passed.append({"code": "paper_ledger_exists", "message": "Paper basket ledger has recorded all-leg baskets.", "baskets": eval_summary["baskets"]})
+    if eval_summary["ttl_equivalent_baskets"] <= 0:
+        blockers.append(
+            {
+                "code": "live_equivalent_paper_ledger_empty",
+                "message": "No paper baskets were recorded within the configured snapshot TTL, so forward evidence is observation-only.",
+                "max_snapshot_age_seconds": args.max_snapshot_age_seconds,
+            }
+        )
+    else:
+        passed.append(
+            {
+                "code": "live_equivalent_paper_ledger_exists",
+                "message": "Some paper baskets were recorded within the configured snapshot TTL.",
+                "ttl_equivalent_baskets": eval_summary["ttl_equivalent_baskets"],
+            }
+        )
+    if eval_summary["ttl_non_equivalent_baskets"]:
+        blockers.append(
+            {
+                "code": "paper_baskets_not_live_equivalent",
+                "message": "Some paper baskets were recorded after the snapshot TTL and cannot count toward live-prep forward evidence.",
+                "ttl_non_equivalent_baskets": eval_summary["ttl_non_equivalent_baskets"],
+                "stale_recorded_baskets": eval_summary["stale_recorded_baskets"],
+                "max_recording_age_seconds": eval_summary["ttl_recording_age_seconds_max"],
+                "max_snapshot_age_seconds": args.max_snapshot_age_seconds,
+            }
+        )
+    if eval_summary["shape_invalid_current_baskets"]:
+        blockers.append(
+            {
+                "code": "basket_shape_invalid",
+                "message": "Some unique paper opportunities have invalid bracket shape and are excluded from live-prep counts.",
+                "shape_invalid_baskets": eval_summary["shape_invalid_current_baskets"],
+                "shape_invalid_opportunities": eval_summary["shape_invalid_current_opportunities"],
+            }
+        )
+    if eval_summary["shape_invalid_quarantined_baskets"]:
+        passed.append(
+            {
+                "code": "legacy_invalid_shape_quarantined",
+                "message": "Legacy invalid basket-shape observations are quarantined and excluded from live-prep counts.",
+                "shape_invalid_quarantined_baskets": eval_summary["shape_invalid_quarantined_baskets"],
+                "quarantine_invalid_shape_before_utc": eval_summary["quarantine_invalid_shape_before_utc"],
+            }
+        )
+    if eval_summary["source_snapshot_invalid_baskets"]:
+        blockers.append(
+            {
+                "code": "source_snapshot_invalid",
+                "message": "Some paper baskets reference source snapshot files that are missing or changed after recording; exclude them from live-prep counts.",
+                "source_snapshot_invalid_baskets": eval_summary["source_snapshot_invalid_baskets"],
+                "source_snapshot_invalid_opportunities": eval_summary["source_snapshot_invalid_opportunities"],
+            }
+        )
+    guard_audit = list(last_cycle.get("guard_audit") or [])
+    guard_failures = [row for row in guard_audit if not row.get("guard", {}).get("allow")]
+    guard_allowed = [row for row in guard_audit if row.get("guard", {}).get("allow")]
+    scanner_candidate_count = last_cycle.get("scanner_candidate_count")
+    if scanner_candidate_count == 0:
+        blockers.append({"code": "no_current_scanner_candidates", "message": "Latest scanner run found no current all-YES underround candidates."})
+    elif not guard_audit:
+        blockers.append({"code": "current_guard_audit_missing", "message": "Latest cycle did not audit current scanner candidates through the all-leg guard."})
+    elif guard_allowed:
+        passed.append(
+            {
+                "code": "current_guard_audit_has_allowed",
+                "message": "At least one current scanner candidate passes the shared all-leg guard.",
+                "allowed_candidates": len(guard_allowed),
+                "rejected_candidates": len(guard_failures),
+                "rejections": guard_failures,
+            }
+        )
+    else:
+        blockers.append({"code": "current_guard_audit_fail", "message": "No current scanner candidates passed the all-leg guard.", "failures": guard_failures})
+    if eval_summary["ttl_equivalent_settled_exactly_one_winner"] < args.min_settled_baskets:
+        blockers.append(
+            {
+                "code": "forward_settled_baskets_low",
+                "message": "Need more settled live-equivalent forward paper baskets before deploy review.",
+                "ttl_equivalent_settled_exactly_one_winner": eval_summary["ttl_equivalent_settled_exactly_one_winner"],
+                "required": args.min_settled_baskets,
+            }
+        )
+    else:
+        passed.append({"code": "forward_settled_baskets_ready", "message": "Forward paper basket sample is large enough."})
+    if eval_summary["ttl_equivalent_settled_active_event_dates"] < args.min_settled_active_dates:
+        blockers.append(
+            {
+                "code": "forward_settled_active_dates_low",
+                "message": "Need more active settled event dates before deploy review; same-day baskets are correlated.",
+                "ttl_equivalent_settled_active_event_dates": eval_summary["ttl_equivalent_settled_active_event_dates"],
+                "ttl_equivalent_settled_event_dates": eval_summary["ttl_equivalent_settled_event_dates"],
+                "required": args.min_settled_active_dates,
+            }
+        )
+    else:
+        passed.append(
+            {
+                "code": "forward_settled_active_dates_ready",
+                "message": "Forward paper sample spans enough settled event dates.",
+                "ttl_equivalent_settled_active_event_dates": eval_summary["ttl_equivalent_settled_active_event_dates"],
+            }
+        )
+    if eval_summary["ttl_equivalent_pending"]:
+        blockers.append(
+            {
+                "code": "forward_settlements_pending",
+                "message": "Some live-equivalent paper baskets are still pending settlement evaluation.",
+                "ttl_equivalent_pending": eval_summary["ttl_equivalent_pending"],
+                "ttl_equivalent_pending_event_dates": eval_summary["ttl_equivalent_pending_event_dates"],
+                "ttl_equivalent_pending_reason_counts": eval_summary["ttl_equivalent_pending_reason_counts"],
+                "ttl_equivalent_pending_due_status_counts": eval_summary["ttl_equivalent_pending_due_status_counts"],
+                "ttl_equivalent_pending_missing_settlement_legs": eval_summary["ttl_equivalent_pending_missing_settlement_legs"],
+                "ttl_equivalent_pending_unresolved_settlement_legs": eval_summary["ttl_equivalent_pending_unresolved_settlement_legs"],
+            }
+        )
+    if eval_summary["winner_count_anomaly"]:
+        blockers.append({"code": "settlement_winner_count_anomaly", "message": "Some settled baskets did not have exactly one winning leg."})
+    if eval_summary["ttl_equivalent_settled_roi"] is None or eval_summary["ttl_equivalent_settled_roi"] < args.min_roi:
+        blockers.append(
+            {
+                "code": "forward_roi_not_ready",
+                "message": "Live-equivalent forward paper ROI has not passed the live-prep threshold.",
+                "roi": eval_summary["ttl_equivalent_settled_roi"],
+                "required": args.min_roi,
+            }
+        )
+    else:
+        passed.append({"code": "forward_roi_ready", "message": "Live-equivalent forward paper ROI passes threshold.", "roi": eval_summary["ttl_equivalent_settled_roi"]})
+    if eval_summary["ttl_equivalent_positive_basket_rate"] is None or eval_summary["ttl_equivalent_positive_basket_rate"] < args.min_positive_basket_rate:
+        blockers.append(
+            {
+                "code": "positive_basket_rate_not_ready",
+                "message": "Live-equivalent forward positive basket rate has not passed the live-prep threshold.",
+                "positive_basket_rate": eval_summary["ttl_equivalent_positive_basket_rate"],
+                "required": args.min_positive_basket_rate,
+            }
+        )
+    else:
+        passed.append({"code": "positive_basket_rate_ready", "message": "Live-equivalent positive basket rate passes threshold.", "positive_basket_rate": eval_summary["ttl_equivalent_positive_basket_rate"]})
+    live_plan_blockers, live_plan_passed = live_plan_gate_items(live_plan)
+    blockers.extend(live_plan_blockers)
+    passed.extend(live_plan_passed)
+    executor_state_blockers, executor_state_passed = executor_state_gate_items(executor_state)
+    blockers.extend(executor_state_blockers)
+    passed.extend(executor_state_passed)
+    bridge_blockers, bridge_passed = executor_plan_bridge_gate_items(executor_plan_bridge)
+    blockers.extend(bridge_blockers)
+    passed.extend(bridge_passed)
+    basket_executor_blockers, basket_executor_passed = basket_executor_gate_items(basket_executor)
+    blockers.extend(basket_executor_blockers)
+    passed.extend(basket_executor_passed)
+    fok_executor_blockers, fok_executor_passed = fok_executor_gate_items(fok_executor)
+    blockers.extend(fok_executor_blockers)
+    passed.extend(fok_executor_passed)
+    if any(row.get("code") == "dry_run_fok_executor_available" for row in passed):
+        blockers.append(
+            {
+                "code": "live_executor_not_armed",
+                "message": "FOK executor proof exists but is dry-run only; live still requires passing forward gates and weather-strategy-deploy review.",
+            }
+        )
+    else:
+        blockers.append(
+            {
+                "code": "live_executor_missing",
+                "message": "This script is paper-only; live requires weather-strategy-deploy plus signed all-leg-or-none execution and partial-fill handling.",
+            }
+        )
+    verdict = "READY_FOR_DEPLOY_REVIEW" if not blockers else "NOT_READY_ACCUMULATE_PAPER_SHADOW"
+    result = {
+        "command": "gate",
+        "generated_at_utc": generated_dt.isoformat(),
+        "strategy_id": STRATEGY_ID,
+        "verdict": verdict,
+        "live_now": False,
+        "blockers": blockers,
+        "passed": passed,
+        "eval": {k: v for k, v in eval_summary.items() if k != "rows"},
+        "clob_coverage_gate": {
+            "gate_pass": clob_gate.get("gate_pass"),
+            "fail_reasons": clob_gate.get("fail_reasons"),
+            "db_fill_cost_minus_fact_cost": clob_gate.get("db_fill_cost_minus_fact_cost"),
+            "order_caps": clob_gate.get("order_caps"),
+            "freshness": clob_gate_freshness,
+        },
+        "next_actions": [
+            "Keep running scanner + paper cycle on fresh snapshots.",
+            "Wait for at least 20 settled exactly-one-winner live-equivalent paper baskets across at least 7 active event dates with positive ROI.",
+            "Design signed all-leg-or-none execution and partial-fill cancellation/unwind before any live deployment.",
+            "Use weather-strategy-deploy for any N100/live change.",
+        ],
+    }
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "live_prep_gate.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return result
+
+
+def monitor(args: argparse.Namespace) -> dict[str, Any]:
+    run_dir = Path(args.run_dir)
+    gate_result = gate(args)
+    last_cycle = read_json(run_dir / "last_cycle.json")
+    latest_scan_path = Path(last_cycle.get("source_scan") or run_dir / "latest_scan.json")
+    latest_scan = read_json(latest_scan_path)
+    fresh_cycle = read_json(run_dir / "fresh_cycle.json")
+    live_plan = read_json(run_dir / "latest_live_plan.json")
+    executor_state = read_json(run_dir / "latest_executor_readiness.json")
+    executor_plan_bridge = read_json(run_dir / "executor_trade_plan_summary.json")
+    basket_executor = read_json(run_dir / "latest_basket_executor_readiness.json")
+    fok_executor = read_json(run_dir / "latest_fok_executor_readiness.json")
+    baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
+    eval_rows = read_json(run_dir / "eval.json").get("rows") or []
+    unique_opportunities = compact_opportunity_rows(eval_rows)
+    pending_rows = [
+        row for row in eval_rows
+        if row.get("unique_opportunity_first") and row.get("settlement_eval_status") == "pending"
+    ]
+    city_counts: dict[str, int] = {}
+    pending_event_dates: dict[str, int] = {}
+    for row in pending_rows:
+        city = str(row.get("city"))
+        event_date = str(row.get("event_date"))
+        city_counts[city] = city_counts.get(city, 0) + 1
+        pending_event_dates[event_date] = pending_event_dates.get(event_date, 0) + 1
+    result = {
+        "generated_at_utc": now_utc(),
+        "strategy_id": STRATEGY_ID,
+        "verdict": gate_result.get("verdict"),
+        "live_now": False,
+        "latest_scan_path": str(latest_scan_path),
+        "latest_underround_threshold_telemetry": latest_scan.get("underround_threshold_telemetry"),
+        "latest_fresh_cycle": {
+            "generated_at_utc": fresh_cycle.get("generated_at_utc"),
+            "verdict": fresh_cycle.get("verdict"),
+            "reason": fresh_cycle.get("reason"),
+            "executed_cycle": fresh_cycle.get("executed_cycle"),
+            "snapshot_age_seconds": fresh_cycle.get("snapshot_age_seconds"),
+            "snapshot_path": fresh_cycle.get("snapshot_path"),
+        },
+        "latest_scanner_candidate_count": last_cycle.get("scanner_candidate_count"),
+        "latest_appended_baskets": last_cycle.get("appended_baskets"),
+        "latest_live_plan": {
+            "generated_at_utc": live_plan.get("generated_at_utc"),
+            "verdict": live_plan.get("verdict"),
+            "scanner_candidate_count": live_plan.get("scanner_candidate_count"),
+            "planned_baskets": live_plan.get("planned_baskets"),
+            "rejected_baskets": live_plan.get("rejected_baskets"),
+            "live_now": live_plan.get("live_now"),
+        },
+        "latest_executor_readiness": {
+            "generated_at_utc": executor_state.get("generated_at_utc"),
+            "verdict": executor_state.get("verdict"),
+            "live_now": executor_state.get("live_now"),
+            "no_order_placed": executor_state.get("no_order_placed"),
+            "plans_checked": executor_state.get("plans_checked"),
+        },
+        "latest_executor_plan_bridge": {
+            "generated_at_utc": executor_plan_bridge.get("generated_at_utc"),
+            "verdict": executor_plan_bridge.get("verdict"),
+            "live_now": executor_plan_bridge.get("live_now"),
+            "live_enabled": executor_plan_bridge.get("live_enabled"),
+            "plans": executor_plan_bridge.get("plans"),
+            "out_jsonl": executor_plan_bridge.get("out_jsonl"),
+        },
+        "latest_basket_executor_readiness": {
+            "generated_at_utc": basket_executor.get("generated_at_utc"),
+            "verdict": basket_executor.get("verdict"),
+            "live_now": basket_executor.get("live_now"),
+            "live_enabled": basket_executor.get("live_enabled"),
+            "no_order_placed": basket_executor.get("no_order_placed"),
+            "baskets_checked": basket_executor.get("baskets_checked"),
+            "executor_legs_checked": basket_executor.get("executor_legs_checked"),
+        },
+        "latest_fok_executor_readiness": {
+            "generated_at_utc": fok_executor.get("generated_at_utc"),
+            "verdict": fok_executor.get("verdict"),
+            "live_now": fok_executor.get("live_now"),
+            "live_enabled": fok_executor.get("live_enabled"),
+            "no_order_placed": fok_executor.get("no_order_placed"),
+            "order_type": fok_executor.get("order_type"),
+            "baskets_checked": fok_executor.get("baskets_checked"),
+            "executor_legs_checked": fok_executor.get("executor_legs_checked"),
+        },
+        "max_snapshot_age_seconds": last_cycle.get("max_snapshot_age_seconds"),
+        "paper_baskets": len(baskets),
+        "paper_unique_opportunity_baskets": gate_result.get("eval", {}).get("unique_opportunity_baskets"),
+        "paper_duplicate_opportunity_baskets": gate_result.get("eval", {}).get("duplicate_opportunity_baskets"),
+        "shape_invalid_current_baskets": gate_result.get("eval", {}).get("shape_invalid_current_baskets"),
+        "shape_invalid_quarantined_baskets": gate_result.get("eval", {}).get("shape_invalid_quarantined_baskets"),
+        "ttl_equivalent_baskets": gate_result.get("eval", {}).get("ttl_equivalent_baskets"),
+        "ttl_non_equivalent_baskets": gate_result.get("eval", {}).get("ttl_non_equivalent_baskets"),
+        "stale_recorded_baskets": gate_result.get("eval", {}).get("stale_recorded_baskets"),
+        "ttl_recording_age_seconds_max": gate_result.get("eval", {}).get("ttl_recording_age_seconds_max"),
+        "ttl_equivalent_settled_exactly_one_winner": gate_result.get("eval", {}).get("ttl_equivalent_settled_exactly_one_winner"),
+        "ttl_equivalent_settled_active_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_settled_active_event_dates"),
+        "ttl_equivalent_settled_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_settled_event_dates"),
+        "ttl_equivalent_pending_active_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_pending_active_event_dates"),
+        "ttl_equivalent_pending_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_pending_event_dates"),
+        "ttl_equivalent_pending_reason_counts": gate_result.get("eval", {}).get("ttl_equivalent_pending_reason_counts"),
+        "ttl_equivalent_pending_due_status_counts": gate_result.get("eval", {}).get("ttl_equivalent_pending_due_status_counts"),
+        "ttl_equivalent_pending_settlement_audit": gate_result.get("eval", {}).get("ttl_equivalent_pending_settlement_audit"),
+        "ttl_equivalent_pending_missing_settlement_legs": gate_result.get("eval", {}).get("ttl_equivalent_pending_missing_settlement_legs"),
+        "ttl_equivalent_pending_unresolved_settlement_legs": gate_result.get("eval", {}).get("ttl_equivalent_pending_unresolved_settlement_legs"),
+        "paper_eval": gate_result.get("eval"),
+        "unique_opportunities": unique_opportunities,
+        "pending_by_city": dict(sorted(city_counts.items())),
+        "pending_by_event_date": dict(sorted(pending_event_dates.items())),
+        "passed_codes": [item.get("code") for item in gate_result.get("passed", [])],
+        "blocker_codes": [item.get("code") for item in gate_result.get("blockers", [])],
+        "next_actions": gate_result.get("next_actions"),
+    }
+    monitor_path = run_dir / "monitor.json"
+    history_path = run_dir / "monitor_history.jsonl"
+    monitor_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    append_jsonl(history_path, [result])
+    return result
+
+
+def main() -> None:
+    args = parse_args()
+    if args.command == "cycle":
+        result = cycle(args)
+    elif args.command == "eval":
+        result = evaluate(args)
+    elif args.command == "gate":
+        result = gate(args)
+    else:
+        result = monitor(args)
+    print(json.dumps(result, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

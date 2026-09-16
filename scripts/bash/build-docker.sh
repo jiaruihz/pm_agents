@@ -1,2 +1,2 @@
 #!/bin/bash
-docker build -f Dockerfile --tag polymarket-agents:latest .
+docker build -f Dockerfile --tag pm-trader-agent:latest .

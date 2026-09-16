@@ -1,0 +1,58 @@
+{
+  "schema_version": "low_price_yes_parallel_frozen_profiles_v1",
+  "profile_set_id": "low_price_yes_parallel_frozen_profiles_v1",
+  "status": "preregistered_zero_notional",
+  "frozen_target_date_start": "2026-07-29",
+  "frozen_target_date_end": "2026-08-12",
+  "calendar_days": 15,
+  "grain": "first_cheap_yes_ticket_per_city_target_date",
+  "universe": {
+    "side": "BUY_YES",
+    "min_decision_ask": 0.05,
+    "max_decision_ask": 0.20,
+    "raw_edge_gate": null
+  },
+  "pcal_v3_artifact": "src/strategies/weather_edge_v1/config/low_price_yes_tail_pcal_expanded_v3.json",
+  "pcal_v3_artifact_sha256": "e33fcd6d5525d178707cba9162953e72875a9c3a590825f1379c7a2afdeacbeb",
+  "profiles": [
+    {
+      "profile_id": "P0_broad",
+      "conditions": ["universe"]
+    },
+    {
+      "profile_id": "P1_edge20",
+      "conditions": ["raw_edge_ge_0p20"]
+    },
+    {
+      "profile_id": "P2_mechanism",
+      "conditions": ["hours_to_settle_22_24", "dist_gt_0"]
+    },
+    {
+      "profile_id": "P3_legacy_headA",
+      "conditions": ["hours_to_settle_22_24", "dist_gt_0", "raw_edge_ge_0p20"]
+    },
+    {
+      "profile_id": "P4_pcal_v3",
+      "conditions": ["pcal_v3_minus_ask_ge_theta"]
+    },
+    {
+      "profile_id": "P5_mechanism_pcal_v3",
+      "conditions": ["hours_to_settle_22_24", "dist_gt_0", "pcal_v3_minus_ask_ge_theta"]
+    }
+  ],
+  "evidence_policy": {
+    "fresh_book_is_not_signal_condition": true,
+    "score_executable_subset_requires_book_status_ok": true,
+    "minimum_fresh_book_coverage": 0.9,
+    "fee_rate": 0.05,
+    "actual_fill": false
+  },
+  "scoring": {
+    "probability_metrics": ["brier", "logloss"],
+    "trade_metrics": ["fee_adjusted_taker_roi", "selected_minus_P0_roi"],
+    "bootstrap_block": "target_date",
+    "open_once_after_target_date": "2026-08-12",
+    "no_interim_label_or_roi_peeking": true
+  },
+  "live_action": "none"
+}

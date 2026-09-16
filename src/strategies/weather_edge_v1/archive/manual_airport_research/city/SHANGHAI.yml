@@ -1,0 +1,86 @@
+identity:
+  city_key: shanghai
+  display_name: Shanghai
+  market_unit: C
+  timezone: Asia/Shanghai
+
+station:
+  station_name: Shanghai Pudong International Airport
+  station_code: ZSPD
+  iata_code: PVG
+  object_type: airport
+  settlement_scope: Only the Shanghai Pudong airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values, matching Shanghai weather-market rules.
+  station_match_rule: Must match Shanghai Pudong International Airport Station / ZSPD. Do not substitute a generic Shanghai city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: ZSPD
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not treat provisional history as final settlement.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: ZSPD
+    role: trading_anchor
+    use_for: Record target-day high, peak timing, and whether the airport path is warming into the afternoon.
+    do_not_use_for: Do not map the displayed forecast integer directly to a guaranteed settlement call.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain market consensus inside the TWC stack.
+      do_not_use_for: Do not replace ZSPD with a generic Shanghai page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check wind, haze, and airport observations.
+    - family: checkwx
+      page_type: metar_taf
+      location_object: airport
+      use_for: Check the current airport observation and whether the day is warming cleanly.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and warm-tail risk.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: A generic Shanghai page is not the ZSPD airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Urban core pages can diverge from the airport by multiple degrees.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: City guidance should only be used to explain noise.
+
+operator_notes:
+  summary: Shanghai is attractive because the airport object is clean and the market is often liquid. It is better for disciplined tail NO trades than for heroic exact-bin calls, especially on coastal transition days.
+  why_this_station: ZSPD is the airport station explicitly referenced by Shanghai weather markets and has clean airport identity across weather sites.
+  main_risks:
+    - Coastal wind or sea influence flattening the expected peak.
+    - Haze and cloud slowing the daytime warm-up.
+    - Urban Shanghai pages running warmer than the airport.
+  common_wrong_anchor:
+    - Downtown Shanghai city pages instead of ZSPD.
+    - Regional East China summaries without a station match.
+  usage_order:
+    - Open Polymarket rules and confirm ZSPD plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check CheckWX and one more airport support page for current ramp confirmation.
+    - Treat city pages only as a wrong-anchor diagnostic.

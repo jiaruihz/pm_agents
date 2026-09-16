@@ -1,0 +1,166 @@
+{
+    "id":"urn:wmo:md:us-noaa-nws:aviation-metar-observations",
+    "conformsTo":[
+        "http://wis.wmo.int/spec/wcmp/2/conf/core"
+    ],
+    "type":"Feature",
+    "geometry":{
+        "type":"Polygon",
+        "coordinates":[
+            [
+                [
+                    -180.0,
+                    -90.0
+                ],
+                [
+                    -180.0,
+                    90.0
+                ],
+                [
+                    180.0,
+                    90.0
+                ],
+                [
+                    180.0,
+                    -90.0
+                ],
+                [
+                    -180.0,
+                    -90.0
+                ]
+            ]
+        ]
+    },
+    "properties":{
+        "title":"Surface METAR observations from USA",
+        "description":"Surface METAR observations from USA",
+        "themes":[
+            {
+                "concepts":[
+                    {
+                        "id":"weather"
+                    }
+                ],
+                "scheme":"https://codes.wmo.int/wis/topic-hierarchy/earth-system-discipline"
+            }
+        ],
+        "type":"dataset",
+        "created":"2023-05-30T00:00:00Z",
+        "updated":"2026-03-12T20:05:55Z",
+        "rights":"WMO Unified Policy for the International Exchange of Earth System Data",
+        "contacts":[
+            {
+                "addresses":[
+                    {
+                        "deliveryPoint":[
+                            "5830 University Research Court"
+                        ],
+                        "city":"College Park",
+                        "administrativeArea":"NA",
+                        "postalCode":"NA",
+                        "country":"USA"
+                    }
+                ],
+                "roles":[
+                    "host",
+                    "processor"
+                ],
+                "organization":"National Weather Service",
+                "name":"Firstname Lastname",
+                "position":"Position Name",
+                "hoursOfService":"0700h - 1500h UTC",
+                "contactInstructions":"email",
+                "phones":[
+                    {
+                        "value":"+3015551212"
+                    }
+                ],
+                "emails":[
+                    {
+                        "value":"ncep.pmb.dm@noaa.gov"
+                    }
+                ],
+                "links":[
+                    {
+                        "rel":"canonical",
+                        "type":"text/html",
+                        "href":"https://www.weather.gov"
+                    }
+                ]
+            }
+        ],
+        "keywords":[
+            "surface weather",
+            "temperature",
+            "observations"
+        ],
+        "wmo:dataPolicy":"core",
+        "wmo:topicHierarchy":"origin/a/wis2/us-noaa-nws/data/core/weather/aviation/metar",
+        "reportId":"urn:wmo:md:us-noaa-nws:aviation-metar-observations"
+    },
+    "links":[
+        {
+            "href":"https://wis2node.globaldata.nws.noaa.gov/collections/metar_features",
+            "type":"OAFeat",
+            "rel":"collection",
+            "title":"urn:wmo:md:us-noaa-nws:aviation-metar-observations"
+        },
+        {
+            "href":"mqtts://everyone:everyone@wis2node.globaldata.nws.noaa.gov:8883",
+            "type":"application/geo+json",
+            "rel":"items",
+            "title":"origin/a/wis2/us-noaa-nws/data/core/weather/aviation/metar",
+            "channel":"origin/a/wis2/us-noaa-nws/data/core/weather/aviation/metar"
+        },
+        {
+            "href":"https://wis2node.globaldata.nws.noaa.gov/collections/discovery_metadata/items/urn:wmo:md:us-noaa-nws:aviation-metar-observations",
+            "type":"OARec",
+            "rel":"canonical",
+            "title":"urn:wmo:md:us-noaa-nws:aviation-metar-observations"
+        },
+        {
+            "type":"application/json",
+            "rel":"root",
+            "title":"The landing page of this server as JSON",
+            "href":"https:?f=json"
+        },
+        {
+            "type":"text/html",
+            "rel":"root",
+            "title":"The landing page of this server as HTML",
+            "href":"https:?f=html"
+        },
+        {
+            "rel":"self",
+            "type":"application/geo+json",
+            "title":"This document as JSON",
+            "href":"https:/collections/discovery_metadata/items/urn:wmo:md:us-noaa-nws:aviation-metar-observations?f=json"
+        },
+        {
+            "rel":"alternate",
+            "type":"application/ld+json",
+            "title":"This document as RDF (JSON-LD)",
+            "href":"https:/collections/discovery_metadata/items/urn:wmo:md:us-noaa-nws:aviation-metar-observations?f=jsonld"
+        },
+        {
+            "rel":"alternate",
+            "type":"text/html",
+            "title":"This document as HTML",
+            "href":"https:/collections/discovery_metadata/items/urn:wmo:md:us-noaa-nws:aviation-metar-observations?f=html"
+        },
+        {
+            "rel":"collection",
+            "type":"application/json",
+            "title":"Discovery Metadata",
+            "href":"https:/collections/discovery_metadata"
+        }
+    ],
+    "time":{
+        "interval":[
+            "2023-05-30",
+            ".."
+        ],
+        "resolution":"PT1H"
+    },
+    "generated_by":"pygeometa 0.19.0"
+}

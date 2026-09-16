@@ -1,0 +1,49 @@
+{
+  "config_files": [
+    {
+      "bytes": 1445,
+      "path": "/Users/deepsleep/projects/pm_agents/us_fast_weather_lab/config/airports.yaml",
+      "sha256": "168717afd6f8e389bc045ff4d072216c50796d2f8b07ae6f6df23b3175325096"
+    },
+    {
+      "bytes": 1085,
+      "path": "/Users/deepsleep/projects/pm_agents/us_fast_weather_lab/config/acceptance_contract.yaml",
+      "sha256": "0072bc3d98ab9e6e6458a5f8b338e1525ee75e80da04d34a47c2626b2f8a362b"
+    },
+    {
+      "bytes": 848,
+      "path": "/Users/deepsleep/projects/pm_agents/us_fast_weather_lab/config/sources.yaml",
+      "sha256": "f0e66ccb0a52ea0d8a28f759de7a4418a0a1160ff3de50b5d4758692c37fb2db"
+    }
+  ],
+  "counts": {
+    "all_pairs": 21,
+    "clock_valid_pairs": 0,
+    "observation_versions": 21,
+    "source_seen_rows": 2980,
+    "transport_messages": 149
+  },
+  "disposition": "BLOCKED_BY_ACCESS_OR_INSUFFICIENT_EVIDENCE",
+  "generated_at_ns": 1787917509633593000,
+  "git_commit": "aa08922bb7833fad23d3da38f7d4fdf261b7965a",
+  "run_ends": [
+    {
+      "ended_at_ns": 1787917496779687000,
+      "run_end_id": "run_end_9b59755d2ee069d676e233aff9560e7ef099e956463edb57c93d8397b778e0f1",
+      "run_id": "run_1787917192971120000_6ff2a357",
+      "termination_reason": "duration_complete"
+    }
+  ],
+  "runs": [
+    {
+      "collector_commit": "aa08922bb7833fad23d3da38f7d4fdf261b7965a",
+      "config_hash": "aa024843d732f94c6d10c4e5d2e757f5fdc3e623d3742b4a12e6b93a08ef961a",
+      "host_fqdn": "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa",
+      "run_id": "run_1787917192971120000_6ff2a357",
+      "started_at_ns": 1787917192981510000,
+      "vantage_id": "LOCAL_MAC_ASIA_NETWORK"
+    }
+  ],
+  "runtime_db": "runtime/us_fast_weather_lab_wis2_5m_20260828/evidence.sqlite3",
+  "runtime_db_sha256": "be450c4a64b632e42c21f641ad8a886b80c0d351b15ffb5bdd4cd10f762e8a82"
+}

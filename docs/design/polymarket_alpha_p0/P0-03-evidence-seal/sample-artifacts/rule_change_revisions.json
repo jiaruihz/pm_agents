@@ -1,0 +1,19 @@
+{
+  "one_character_change": {
+    "both_revisions_retained": true,
+    "revision_1": "gamma_market_snapshot:9688758b95f29f219e48329581e70c98f4653138e3ee3efd5a8d589010d2a729",
+    "revision_2": "gamma_market_snapshot:743bfc57f6bc3b41a769953ff557719ed3a6806e4cb9dfa13122f82b8bd05822",
+    "rule_hash_1": "402dd5e70b74c51eb0dddf088f15eaff722f2f7632aace9e2144610c345c132c",
+    "rule_hash_2": "d2855cd7352fc9c837b8ead7a2225b0d5418f21508477b4161785961da366d6d",
+    "rule_hash_changed": true
+  },
+  "whitespace_only_change": {
+    "raw_revisions_distinct": true,
+    "revision_1": "gamma_market_snapshot:71871f9886b6cc8b877d3a06d563167880108a20de0aa8dee0cc2a159ea22c28",
+    "revision_2": "gamma_market_snapshot:04bcfa8df49fb43560d4fdf77716011f44b4469c1d419752960dd58552935f1f",
+    "rule_hash_1": "402dd5e70b74c51eb0dddf088f15eaff722f2f7632aace9e2144610c345c132c",
+    "rule_hash_2": "402dd5e70b74c51eb0dddf088f15eaff722f2f7632aace9e2144610c345c132c",
+    "rule_hash_identical": true,
+    "rules_normalized_identical": true
+  }
+}

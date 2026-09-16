@@ -1,0 +1,11 @@
+[Unit]
+Description=Run weather data feed daily cache pipeline
+
+[Timer]
+OnCalendar=*-*-* 09:20:00 UTC
+Persistent=true
+Unit=weather-data-feed-daily.service
+
+[Install]
+WantedBy=timers.target
+

@@ -1,0 +1,2932 @@
+{
+  "generated_at_utc": "2026-06-10T01:36:01.270369+00:00",
+  "target_metric": "side_band_mechanism_attribution_v1",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "db_last_modified_utc": "2026-06-09T17:38:04.156943+00:00",
+  "mandatory_self_check": {
+    "max_fact_built_at_utc": "2026-06-09T17:37:40.513320+00:00",
+    "trade_class_distribution": [
+      {
+        "trade_class": "paper",
+        "n": 2285
+      },
+      {
+        "trade_class": "live_real",
+        "n": 1405
+      },
+      {
+        "trade_class": "live_simulated",
+        "n": 1147
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "n": 636
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "settlement_status": "settled",
+        "n": 5241
+      },
+      {
+        "settlement_status": null,
+        "n": 232
+      }
+    ],
+    "candidate_coverage": [
+      {
+        "rows": 25117,
+        "eligible": 8306,
+        "paper_ordered": 3139,
+        "live_filled": 554
+      }
+    ],
+    "order_fill_coverage": [
+      {
+        "status": "error",
+        "orders": 151,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 1635,
+        "with_fill": 1405
+      }
+    ]
+  },
+  "clob_gate": {
+    "cache_checks": {
+      "/home/rui/projects/pm_agent/runtime/weather_edge_v1/clob_fills.jsonl": {
+        "cost_usd": 3767.650378,
+        "distinct_executions": 847,
+        "distinct_fill_ids": 1405,
+        "missing_order_cost_usd": 0.0,
+        "missing_order_rows": 0,
+        "multi_fill_executions": 377,
+        "over_order_cost_usd": 0.0,
+        "over_order_excess_cost_usd": 0.0,
+        "over_order_keys": 0,
+        "rows": 1405,
+        "top_over_order": []
+      }
+    },
+    "db": "/home/rui/projects/pm_agent/runtime/weather.db",
+    "db_fill_cost_minus_fact_cost": 0.0,
+    "db_fills": {
+      "cost_usd": 3767.650378,
+      "distinct_executions": 847,
+      "distinct_fill_ids": 1405,
+      "missing_order_cost_usd": 0.0,
+      "missing_order_rows": 0,
+      "multi_fill_executions": 377,
+      "over_order_cost_usd": 0.0,
+      "over_order_excess_cost_usd": 0.0,
+      "over_order_keys": 0,
+      "rows": 1405,
+      "top_over_order": []
+    },
+    "db_vs_primary_cache": {
+      "cache_not_in_db": 0,
+      "db_cost_minus_cache_cost": 0.0,
+      "db_not_in_cache": 0,
+      "sample_cache_not_in_db": [],
+      "sample_db_not_in_cache": []
+    },
+    "fact_trades_live_real": {
+      "cost_usd": 3767.650378,
+      "executions": 847,
+      "fill_ids": 1405,
+      "rows": 1405
+    },
+    "fail_reasons": [],
+    "gate_pass": true,
+    "order_caps": 1077,
+    "returncode": 0
+  },
+  "split": {
+    "method": "event_date chronological 70/30 split",
+    "train_start": "2026-05-06",
+    "train_end": "2026-05-28",
+    "holdout_start": "2026-05-29",
+    "holdout_end": "2026-06-07",
+    "train_dates": 21,
+    "holdout_dates": 9
+  },
+  "regime_thresholds_train_only": {
+    "entropy_low_max": 0.7076763739132063,
+    "entropy_high_min": 0.8423549096219223,
+    "mode_prob_high_min": 0.5599337356525855,
+    "adj2_high_min": 0.9703901532745008,
+    "adj3_high_min": 1.0,
+    "hist_miss_low_max": 0.0,
+    "hist_miss_high_min": 0.062962962962963,
+    "tail_high_min": 0.0,
+    "l1_high_min": 1.1012017457685161
+  },
+  "analysis_pool": {
+    "rows": 1086,
+    "active_dates": 30,
+    "description": "analysis_usable rows restricted to T-18-24"
+  },
+  "selectors": [
+    {
+      "name": "old_side_band_proxy",
+      "idea": "近似旧 side_band：BUY_YES 买 0.20-0.45 且 abs_edge>=0.20，BUY_NO 买 0.35-0.65 且 abs_edge>=0.10。",
+      "baseline": "same_side_hour_price",
+      "train": {
+        "rows": 149,
+        "active_dates": 20,
+        "cities": 41,
+        "cost_usd_1share": 75.6045,
+        "counterfactual_pnl_usd_1share": 23.955,
+        "roi": 0.31684621947106323,
+        "top5_removed_roi": -1.2621685505281908,
+        "worst_day_pnl": -30.200000000000003,
+        "low_price_buy_yes_rows": 12,
+        "baseline_rows": 326,
+        "baseline_roi": -0.01847512058426017,
+        "excess_roi": 0.3353213400553234,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.4407809076726941,
+          1.109100609683419
+        ]
+      },
+      "holdout": {
+        "rows": 52,
+        "active_dates": 7,
+        "cities": 23,
+        "cost_usd_1share": 25.128999999999998,
+        "counterfactual_pnl_usd_1share": 28.71000000000001,
+        "roi": 1.1425046758724984,
+        "top5_removed_roi": -4.614970382337104,
+        "worst_day_pnl": -9.940000000000001,
+        "low_price_buy_yes_rows": 6,
+        "baseline_rows": 80,
+        "baseline_roi": 1.0683748858573838,
+        "excess_roi": 0.07412979001511455,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.8314760119636467,
+          1.8629406267825923
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "by_date": [
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-28",
+            "rows": 19,
+            "cost": 10.02,
+            "pnl": -30.200000000000003,
+            "roi": -3.013972055888224
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-12",
+            "rows": 7,
+            "cost": 3.2735,
+            "pnl": -12.735,
+            "roi": -3.8903314495188637
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-25",
+            "rows": 3,
+            "cost": 1.09,
+            "pnl": -10.9,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-06-04",
+            "rows": 7,
+            "cost": 2.9939999999999998,
+            "pnl": -9.940000000000001,
+            "roi": -3.3199732798931203
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-09",
+            "rows": 8,
+            "cost": 3.775,
+            "pnl": -7.750000000000001,
+            "roi": -2.0529801324503314
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-29",
+            "rows": 24,
+            "cost": 12.55,
+            "pnl": 34.5,
+            "roi": 2.749003984063745
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-26",
+            "rows": 6,
+            "cost": 1.915,
+            "pnl": 20.85,
+            "roi": 10.887728459530027
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-11",
+            "rows": 13,
+            "cost": 7.01,
+            "pnl": 19.9,
+            "roi": 2.8388017118402282
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-13",
+            "rows": 10,
+            "cost": 5.545,
+            "pnl": 14.550000000000002,
+            "roi": 2.6239855725879173
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-14",
+            "rows": 16,
+            "cost": 8.565,
+            "pnl": 14.349999999999998,
+            "roi": 1.6754232340922357
+          }
+        ],
+        "by_city": [
+          {
+            "bucket": "worst",
+            "city": "NYC",
+            "rows": 15,
+            "cost": 6.881,
+            "pnl": -28.81,
+            "roi": -4.186891440197646
+          },
+          {
+            "bucket": "worst",
+            "city": "Paris",
+            "rows": 9,
+            "cost": 4.955,
+            "pnl": -19.55,
+            "roi": -3.9455095862764886
+          },
+          {
+            "bucket": "worst",
+            "city": "Ankara",
+            "rows": 3,
+            "cost": 1.785,
+            "pnl": -17.849999999999998,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "BuenosAires",
+            "rows": 4,
+            "cost": 1.63,
+            "pnl": -16.299999999999997,
+            "roi": -9.999999999999998
+          },
+          {
+            "bucket": "worst",
+            "city": "SaoPaulo",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "bucket": "best",
+            "city": "LA",
+            "rows": 14,
+            "cost": 5.5425,
+            "pnl": 34.574999999999996,
+            "roi": 6.238159675236806
+          },
+          {
+            "bucket": "best",
+            "city": "Warsaw",
+            "rows": 7,
+            "cost": 3.51,
+            "pnl": 24.9,
+            "roi": 7.094017094017094
+          },
+          {
+            "bucket": "best",
+            "city": "Miami",
+            "rows": 16,
+            "cost": 7.45,
+            "pnl": 15.5,
+            "roi": 2.0805369127516777
+          },
+          {
+            "bucket": "best",
+            "city": "Milan",
+            "rows": 5,
+            "cost": 2.66,
+            "pnl": 13.4,
+            "roi": 5.037593984962406
+          },
+          {
+            "bucket": "best",
+            "city": "Tokyo",
+            "rows": 7,
+            "cost": 3.915,
+            "pnl": 10.850000000000001,
+            "roi": 2.7713920817369098
+          }
+        ],
+        "by_side": [
+          {
+            "bucket": "worst",
+            "side": "BUY_NO",
+            "rows": 157,
+            "cost": 88.545,
+            "pnl": 4.5500000000000025,
+            "roi": 0.051386300751030574
+          },
+          {
+            "bucket": "worst",
+            "side": "BUY_YES",
+            "rows": 44,
+            "cost": 12.1885,
+            "pnl": 48.115,
+            "roi": 3.947573532428109
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_YES",
+            "rows": 44,
+            "cost": 12.1885,
+            "pnl": 48.115,
+            "roi": 3.947573532428109
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_NO",
+            "rows": 157,
+            "cost": 88.545,
+            "pnl": 4.5500000000000025,
+            "roi": 0.051386300751030574
+          }
+        ],
+        "top_rows": [
+          {
+            "candidate_id": "0x1b29a0e92477478b53e0e5ec944f15a1319e7670f716fa69e2055df2bc5c58f4|BUY_YES|2026-06-01",
+            "city": "London",
+            "event_date": "2026-06-01",
+            "side": "BUY_YES",
+            "bracket": "23",
+            "decision_entry_price": 0.21,
+            "counterfactual_pnl": 7.9,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xeb1df1dbd34ca9154673ff80ae05b7bad94ec1e7bf9eef997295acf9d23f7474|BUY_YES|2026-05-30",
+            "city": "Miami",
+            "event_date": "2026-05-30",
+            "side": "BUY_YES",
+            "bracket": "86-87",
+            "decision_entry_price": 0.225,
+            "counterfactual_pnl": 7.75,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0x46e877c67adadd62e738382704a39c8eaa2692b7167ccb56a6a8a167834bd638|BUY_YES|2026-05-26",
+            "city": "Miami",
+            "event_date": "2026-05-26",
+            "side": "BUY_YES",
+            "bracket": "86-87",
+            "decision_entry_price": 0.23,
+            "counterfactual_pnl": 7.7,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0x946a4694ebab87b0d4c0381db220b3062a0e68f38a868f56763e85a1d23e421c|BUY_YES|2026-05-30",
+            "city": "Warsaw",
+            "event_date": "2026-05-30",
+            "side": "BUY_YES",
+            "bracket": "22",
+            "decision_entry_price": 0.235,
+            "counterfactual_pnl": 7.65,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xa3d50a9afff75c9130a1908de07928c090411e007a5873af20db0048214944d4|BUY_YES|2026-05-26",
+            "city": "NYC",
+            "event_date": "2026-05-26",
+            "side": "BUY_YES",
+            "bracket": "80-81",
+            "decision_entry_price": 0.25,
+            "counterfactual_pnl": 7.5,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xd56f9586b361d18e097fea3770badbbb2d37f5955186a21bc7f18131ad4d251b|BUY_YES|2026-05-29",
+            "city": "Atlanta",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "82-83",
+            "decision_entry_price": 0.255,
+            "counterfactual_pnl": 7.45,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xa703bfffdee0c1f4736594fd4f63a57a08ec8c43c9438f0eef75884f71ea6302|BUY_YES|2026-05-27",
+            "city": "LA",
+            "event_date": "2026-05-27",
+            "side": "BUY_YES",
+            "bracket": "64-65",
+            "decision_entry_price": 0.255,
+            "counterfactual_pnl": 7.45,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xd461e7eb8d3889c2cd201650c235979b6ead6c73231fc638efa37603813d0940|BUY_YES|2026-05-27",
+            "city": "Houston",
+            "event_date": "2026-05-27",
+            "side": "BUY_YES",
+            "bracket": "78-79",
+            "decision_entry_price": 0.285,
+            "counterfactual_pnl": 7.15,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xfbbb833d53dd45e45ebc9d91f37e0c5d910a113a8f786f286ce8c9ac2b6dc6a8|BUY_YES|2026-05-29",
+            "city": "LA",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "66-67",
+            "decision_entry_price": 0.285,
+            "counterfactual_pnl": 7.15,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xc7a801c915021e0fe09a3fe927d71456df8f2ce0e57e9d06c6f5aabb323ebf87|BUY_YES|2026-05-29",
+            "city": "Chicago",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "84+",
+            "decision_entry_price": 0.315,
+            "counterfactual_pnl": 6.8500000000000005,
+            "forecast_regime": "low_uncertainty_allowed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "old_side_band_no_low_yes",
+      "idea": "旧 side_band 但剔除 BUY_YES<0.25 彩票腿，看旧利润是否只是低价 YES 驱动。",
+      "baseline": "same_side_hour_price",
+      "train": {
+        "rows": 137,
+        "active_dates": 20,
+        "cities": 41,
+        "cost_usd_1share": 72.90350000000001,
+        "counterfactual_pnl_usd_1share": 40.965,
+        "roi": 0.5619071786676908,
+        "top5_removed_roi": -0.993799577401365,
+        "worst_day_pnl": -25.800000000000004,
+        "low_price_buy_yes_rows": 0,
+        "baseline_rows": 290,
+        "baseline_roi": 0.17599248542093376,
+        "excess_roi": 0.38591469324675703,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.4412430595757993,
+          1.2019140652765667
+        ]
+      },
+      "holdout": {
+        "rows": 46,
+        "active_dates": 7,
+        "cities": 23,
+        "cost_usd_1share": 23.838999999999995,
+        "counterfactual_pnl_usd_1share": 11.610000000000003,
+        "roi": 0.48701707286379486,
+        "top5_removed_roi": -3.002099370188944,
+        "worst_day_pnl": -17.8,
+        "low_price_buy_yes_rows": 0,
+        "baseline_rows": 69,
+        "baseline_roi": -0.221932501703754,
+        "excess_roi": 0.7089495745675489,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.5590252272961115,
+          3.1275592787623347
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "by_date": [
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-28",
+            "rows": 17,
+            "cost": 9.58,
+            "pnl": -25.800000000000004,
+            "roi": -2.6931106471816286
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-30",
+            "rows": 11,
+            "cost": 5.78,
+            "pnl": -17.8,
+            "roi": -3.0795847750865053
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-12",
+            "rows": 7,
+            "cost": 3.2735,
+            "pnl": -12.735,
+            "roi": -3.8903314495188637
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-25",
+            "rows": 2,
+            "cost": 0.865,
+            "pnl": -8.65,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-06-04",
+            "rows": 6,
+            "cost": 2.794,
+            "pnl": -7.9399999999999995,
+            "roi": -2.8418038654259123
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-29",
+            "rows": 24,
+            "cost": 12.55,
+            "pnl": 34.5,
+            "roi": 2.749003984063745
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-11",
+            "rows": 11,
+            "cost": 6.56,
+            "pnl": 24.4,
+            "roi": 3.7195121951219514
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-14",
+            "rows": 15,
+            "cost": 8.335,
+            "pnl": 16.65,
+            "roi": 1.9976004799040188
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-26",
+            "rows": 4,
+            "cost": 1.46,
+            "pnl": 15.399999999999999,
+            "roi": 10.54794520547945
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-13",
+            "rows": 10,
+            "cost": 5.545,
+            "pnl": 14.550000000000002,
+            "roi": 2.6239855725879173
+          }
+        ],
+        "by_city": [
+          {
+            "bucket": "worst",
+            "city": "NYC",
+            "rows": 12,
+            "cost": 6.2,
+            "pnl": -22.0,
+            "roi": -3.5483870967741935
+          },
+          {
+            "bucket": "worst",
+            "city": "Paris",
+            "rows": 9,
+            "cost": 4.955,
+            "pnl": -19.55,
+            "roi": -3.9455095862764886
+          },
+          {
+            "bucket": "worst",
+            "city": "Ankara",
+            "rows": 3,
+            "cost": 1.785,
+            "pnl": -17.849999999999998,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "BuenosAires",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "SaoPaulo",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "bucket": "best",
+            "city": "LA",
+            "rows": 13,
+            "cost": 5.3175,
+            "pnl": 36.824999999999996,
+            "roi": 6.9252468265162195
+          },
+          {
+            "bucket": "best",
+            "city": "Warsaw",
+            "rows": 6,
+            "cost": 3.275,
+            "pnl": 17.25,
+            "roi": 5.2671755725190845
+          },
+          {
+            "bucket": "best",
+            "city": "Milan",
+            "rows": 5,
+            "cost": 2.66,
+            "pnl": 13.4,
+            "roi": 5.037593984962406
+          },
+          {
+            "bucket": "best",
+            "city": "Tokyo",
+            "rows": 7,
+            "cost": 3.915,
+            "pnl": 10.850000000000001,
+            "roi": 2.7713920817369098
+          },
+          {
+            "bucket": "best",
+            "city": "Chengdu",
+            "rows": 4,
+            "cost": 1.9300000000000002,
+            "pnl": 10.7,
+            "roi": 5.544041450777201
+          }
+        ],
+        "by_side": [
+          {
+            "bucket": "worst",
+            "side": "BUY_NO",
+            "rows": 157,
+            "cost": 88.545,
+            "pnl": 4.5500000000000025,
+            "roi": 0.051386300751030574
+          },
+          {
+            "bucket": "worst",
+            "side": "BUY_YES",
+            "rows": 26,
+            "cost": 8.1975,
+            "pnl": 48.025,
+            "roi": 5.858493443122903
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_YES",
+            "rows": 26,
+            "cost": 8.1975,
+            "pnl": 48.025,
+            "roi": 5.858493443122903
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_NO",
+            "rows": 157,
+            "cost": 88.545,
+            "pnl": 4.5500000000000025,
+            "roi": 0.051386300751030574
+          }
+        ],
+        "top_rows": [
+          {
+            "candidate_id": "0xa3d50a9afff75c9130a1908de07928c090411e007a5873af20db0048214944d4|BUY_YES|2026-05-26",
+            "city": "NYC",
+            "event_date": "2026-05-26",
+            "side": "BUY_YES",
+            "bracket": "80-81",
+            "decision_entry_price": 0.25,
+            "counterfactual_pnl": 7.5,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xa703bfffdee0c1f4736594fd4f63a57a08ec8c43c9438f0eef75884f71ea6302|BUY_YES|2026-05-27",
+            "city": "LA",
+            "event_date": "2026-05-27",
+            "side": "BUY_YES",
+            "bracket": "64-65",
+            "decision_entry_price": 0.255,
+            "counterfactual_pnl": 7.45,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xd56f9586b361d18e097fea3770badbbb2d37f5955186a21bc7f18131ad4d251b|BUY_YES|2026-05-29",
+            "city": "Atlanta",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "82-83",
+            "decision_entry_price": 0.255,
+            "counterfactual_pnl": 7.45,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xd461e7eb8d3889c2cd201650c235979b6ead6c73231fc638efa37603813d0940|BUY_YES|2026-05-27",
+            "city": "Houston",
+            "event_date": "2026-05-27",
+            "side": "BUY_YES",
+            "bracket": "78-79",
+            "decision_entry_price": 0.285,
+            "counterfactual_pnl": 7.15,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xfbbb833d53dd45e45ebc9d91f37e0c5d910a113a8f786f286ce8c9ac2b6dc6a8|BUY_YES|2026-05-29",
+            "city": "LA",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "66-67",
+            "decision_entry_price": 0.285,
+            "counterfactual_pnl": 7.15,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xc7a801c915021e0fe09a3fe927d71456df8f2ce0e57e9d06c6f5aabb323ebf87|BUY_YES|2026-05-29",
+            "city": "Chicago",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "84+",
+            "decision_entry_price": 0.315,
+            "counterfactual_pnl": 6.8500000000000005,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0x5aa85785e79a5e7c902db80dd8cee137c57a98d79707aff0298e745d144de32c|BUY_YES|2026-05-09",
+            "city": "LA",
+            "event_date": "2026-05-09",
+            "side": "BUY_YES",
+            "bracket": "68-69",
+            "decision_entry_price": 0.33,
+            "counterfactual_pnl": 6.699999999999999,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0x15438384f4d6d16841909f2148c4ffc2165e293f5144e8a5fc22e59f06a0f7f5|BUY_YES|2026-05-29",
+            "city": "Karachi",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "37+",
+            "decision_entry_price": 0.345,
+            "counterfactual_pnl": 6.550000000000001,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0x917670f785ea9bb3373dce3fe4f0c79f31c22e61bb513eab2ae05737b74b5e6a|BUY_YES|2026-05-28",
+            "city": "Chengdu",
+            "event_date": "2026-05-28",
+            "side": "BUY_YES",
+            "bracket": "29+",
+            "decision_entry_price": 0.355,
+            "counterfactual_pnl": 6.45,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xb0b4083b8e0a7b67bed53c35c5293e76a07cb9ff24e02e700367c832d30d0ad4|BUY_YES|2026-05-07",
+            "city": "LA",
+            "event_date": "2026-05-07",
+            "side": "BUY_YES",
+            "bracket": "68-69",
+            "decision_entry_price": 0.375,
+            "counterfactual_pnl": 6.25,
+            "forecast_regime": "low_uncertainty_allowed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "low_price_yes_lottery_leg",
+      "idea": "只看 BUY_YES 0.20-0.25 彩票腿，判断旧 side_band 的高回报是否来自少数命中。",
+      "baseline": "same_side_hour_price",
+      "train": {
+        "rows": 13,
+        "active_dates": 8,
+        "cities": 9,
+        "cost_usd_1share": 2.951,
+        "counterfactual_pnl_usd_1share": -9.509999999999998,
+        "roi": -3.222636394442561,
+        "top5_removed_roi": -10.0,
+        "worst_day_pnl": -4.5,
+        "low_price_buy_yes_rows": 12,
+        "baseline_rows": 69,
+        "baseline_roi": -0.020838836547210218,
+        "excess_roi": -3.201797557895351,
+        "excess_roi_ci95_event_date_cluster": [
+          -11.951227708751897,
+          6.69065802595022
+        ]
+      },
+      "holdout": {
+        "rows": 6,
+        "active_dates": 4,
+        "cities": 5,
+        "cost_usd_1share": 1.29,
+        "counterfactual_pnl_usd_1share": 17.1,
+        "roi": 13.255813953488373,
+        "top5_removed_roi": null,
+        "worst_day_pnl": -2.15,
+        "low_price_buy_yes_rows": 6,
+        "baseline_rows": 11,
+        "baseline_roi": 19.288702928870293,
+        "excess_roi": -6.032888975381921,
+        "excess_roi_ci95_event_date_cluster": [
+          -20.00334448160535,
+          7.577656518134312
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "by_date": [
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-11",
+            "rows": 2,
+            "cost": 0.44999999999999996,
+            "pnl": -4.5,
+            "roi": -10.000000000000002
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-07",
+            "rows": 2,
+            "cost": 0.445,
+            "pnl": -4.45,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-28",
+            "rows": 2,
+            "cost": 0.43999999999999995,
+            "pnl": -4.3999999999999995,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-27",
+            "rows": 1,
+            "cost": 0.236,
+            "pnl": -2.36,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-14",
+            "rows": 1,
+            "cost": 0.23,
+            "pnl": -2.3000000000000003,
+            "roi": -10.0
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-30",
+            "rows": 3,
+            "cost": 0.665,
+            "pnl": 13.350000000000001,
+            "roi": 20.075187969924812
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-26",
+            "rows": 3,
+            "cost": 0.7050000000000001,
+            "pnl": 12.95,
+            "roi": 18.368794326241133
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.21,
+            "pnl": 7.9,
+            "roi": 37.61904761904762
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-06-04",
+            "rows": 1,
+            "cost": 0.2,
+            "pnl": -2.0,
+            "roi": -10.0
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-06-05",
+            "rows": 1,
+            "cost": 0.215,
+            "pnl": -2.15,
+            "roi": -10.0
+          }
+        ],
+        "by_city": [
+          {
+            "bucket": "worst",
+            "city": "BuenosAires",
+            "rows": 2,
+            "cost": 0.41,
+            "pnl": -4.1,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "Chicago",
+            "rows": 1,
+            "cost": 0.24,
+            "pnl": -2.4,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "Houston",
+            "rows": 1,
+            "cost": 0.235,
+            "pnl": -2.3499999999999996,
+            "roi": -9.999999999999998
+          },
+          {
+            "bucket": "worst",
+            "city": "Amsterdam",
+            "rows": 1,
+            "cost": 0.23,
+            "pnl": -2.3000000000000003,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "Atlanta",
+            "rows": 1,
+            "cost": 0.225,
+            "pnl": -2.25,
+            "roi": -10.0
+          },
+          {
+            "bucket": "best",
+            "city": "Miami",
+            "rows": 4,
+            "cost": 0.89,
+            "pnl": 11.1,
+            "roi": 12.47191011235955
+          },
+          {
+            "bucket": "best",
+            "city": "Warsaw",
+            "rows": 1,
+            "cost": 0.235,
+            "pnl": 7.65,
+            "roi": 32.55319148936171
+          },
+          {
+            "bucket": "best",
+            "city": "London",
+            "rows": 3,
+            "cost": 0.62,
+            "pnl": 3.8000000000000007,
+            "roi": 6.129032258064517
+          },
+          {
+            "bucket": "best",
+            "city": "NYC",
+            "rows": 4,
+            "cost": 0.931,
+            "pnl": 0.6899999999999995,
+            "roi": 0.7411385606874323
+          },
+          {
+            "bucket": "best",
+            "city": "LA",
+            "rows": 1,
+            "cost": 0.225,
+            "pnl": -2.25,
+            "roi": -10.0
+          }
+        ],
+        "by_side": [
+          {
+            "bucket": "worst",
+            "side": "BUY_YES",
+            "rows": 19,
+            "cost": 4.241,
+            "pnl": 7.590000000000002,
+            "roi": 1.7896722471115307
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_YES",
+            "rows": 19,
+            "cost": 4.241,
+            "pnl": 7.590000000000002,
+            "roi": 1.7896722471115307
+          }
+        ],
+        "top_rows": [
+          {
+            "candidate_id": "0x1b29a0e92477478b53e0e5ec944f15a1319e7670f716fa69e2055df2bc5c58f4|BUY_YES|2026-06-01",
+            "city": "London",
+            "event_date": "2026-06-01",
+            "side": "BUY_YES",
+            "bracket": "23",
+            "decision_entry_price": 0.21,
+            "counterfactual_pnl": 7.9,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xeb1df1dbd34ca9154673ff80ae05b7bad94ec1e7bf9eef997295acf9d23f7474|BUY_YES|2026-05-30",
+            "city": "Miami",
+            "event_date": "2026-05-30",
+            "side": "BUY_YES",
+            "bracket": "86-87",
+            "decision_entry_price": 0.225,
+            "counterfactual_pnl": 7.75,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0x46e877c67adadd62e738382704a39c8eaa2692b7167ccb56a6a8a167834bd638|BUY_YES|2026-05-26",
+            "city": "Miami",
+            "event_date": "2026-05-26",
+            "side": "BUY_YES",
+            "bracket": "86-87",
+            "decision_entry_price": 0.23,
+            "counterfactual_pnl": 7.7,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0x946a4694ebab87b0d4c0381db220b3062a0e68f38a868f56763e85a1d23e421c|BUY_YES|2026-05-30",
+            "city": "Warsaw",
+            "event_date": "2026-05-30",
+            "side": "BUY_YES",
+            "bracket": "22",
+            "decision_entry_price": 0.235,
+            "counterfactual_pnl": 7.65,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xa3d50a9afff75c9130a1908de07928c090411e007a5873af20db0048214944d4|BUY_YES|2026-05-26",
+            "city": "NYC",
+            "event_date": "2026-05-26",
+            "side": "BUY_YES",
+            "bracket": "80-81",
+            "decision_entry_price": 0.25,
+            "counterfactual_pnl": 7.5,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0x91314467ac3d855f001bfa92aa36154a35c5d30b04f917ded5053e48af289b23|BUY_YES|2026-06-04",
+            "city": "London",
+            "event_date": "2026-06-04",
+            "side": "BUY_YES",
+            "bracket": "17",
+            "decision_entry_price": 0.2,
+            "counterfactual_pnl": -2.0,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0x9b47650d6388b3033773f8cda1fc4e7898d321f4c70d42c78b51b86915401986|BUY_YES|2026-05-30",
+            "city": "BuenosAires",
+            "event_date": "2026-05-30",
+            "side": "BUY_YES",
+            "bracket": "17",
+            "decision_entry_price": 0.205,
+            "counterfactual_pnl": -2.05,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xecc55b2648621e4e15076d616477af76cae163557dac89c2039bdb11057d9023|BUY_YES|2026-05-28",
+            "city": "BuenosAires",
+            "event_date": "2026-05-28",
+            "side": "BUY_YES",
+            "bracket": "17",
+            "decision_entry_price": 0.205,
+            "counterfactual_pnl": -2.05,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0x99f69ded97db07bb5566f335f962ce801933313bbed9e11577ddbded9c262210|BUY_YES|2026-05-11",
+            "city": "London",
+            "event_date": "2026-05-11",
+            "side": "BUY_YES",
+            "bracket": "14",
+            "decision_entry_price": 0.21,
+            "counterfactual_pnl": -2.1,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0x97878d1236fba4fee74ad5375e246a5eb344c1a4a528f274da3a9d8ab7e777cc|BUY_YES|2026-06-05",
+            "city": "NYC",
+            "event_date": "2026-06-05",
+            "side": "BUY_YES",
+            "bracket": "92-93",
+            "decision_entry_price": 0.215,
+            "counterfactual_pnl": -2.15,
+            "forecast_regime": "high_uncertainty_no_trade"
+          }
+        ]
+      }
+    },
+    {
+      "name": "yes_mid_leg",
+      "idea": "BUY_YES 0.25-0.45 中低价腿，剔除最彩票区后看 YES 是否仍有 alpha。",
+      "baseline": "same_side_hour_price",
+      "train": {
+        "rows": 17,
+        "active_dates": 12,
+        "cities": 10,
+        "cost_usd_1share": 5.4435,
+        "counterfactual_pnl_usd_1share": 35.565,
+        "roi": 6.533480297602645,
+        "top5_removed_roi": 0.4766893661602936,
+        "worst_day_pnl": -2.685,
+        "low_price_buy_yes_rows": 0,
+        "baseline_rows": 76,
+        "baseline_roi": 2.5735145001014,
+        "excess_roi": 3.9599657975012446,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.25405846215714134,
+          7.608335978447273
+        ]
+      },
+      "holdout": {
+        "rows": 9,
+        "active_dates": 4,
+        "cities": 6,
+        "cost_usd_1share": 2.754,
+        "counterfactual_pnl_usd_1share": 12.46,
+        "roi": 4.5243282498184465,
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.9,
+        "low_price_buy_yes_rows": 0,
+        "baseline_rows": 21,
+        "baseline_roi": 2.9680661371373,
+        "excess_roi": 1.5562621126811464,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.3113564349873736,
+          8.423636070295412
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "by_date": [
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-30",
+            "rows": 2,
+            "cost": 0.59,
+            "pnl": -5.9,
+            "roi": -10.000000000000002
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-06-04",
+            "rows": 2,
+            "cost": 0.529,
+            "pnl": -5.290000000000001,
+            "roi": -10.000000000000002
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-25",
+            "rows": 1,
+            "cost": 0.26,
+            "pnl": -2.6,
+            "roi": -10.0
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-29",
+            "rows": 4,
+            "cost": 1.2,
+            "pnl": 28.0,
+            "roi": 23.333333333333336
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-27",
+            "rows": 3,
+            "cost": 0.905,
+            "pnl": 10.950000000000001,
+            "roi": 12.099447513812155
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-07",
+            "rows": 1,
+            "cost": 0.375,
+            "pnl": 6.25,
+            "roi": 16.666666666666668
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-16",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": 5.6499999999999995,
+            "roi": 12.988505747126435
+          }
+        ],
+        "by_city": [
+          {
+            "bucket": "worst",
+            "city": "Miami",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "Madrid",
+            "rows": 1,
+            "cost": 0.265,
+            "pnl": -2.6500000000000004,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "HongKong",
+            "rows": 1,
+            "cost": 0.26,
+            "pnl": -2.6,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "Atlanta",
+            "rows": 4,
+            "cost": 1.24,
+            "pnl": -2.3999999999999995,
+            "roi": -1.9354838709677415
+          },
+          {
+            "bucket": "worst",
+            "city": "Austin",
+            "rows": 2,
+            "cost": 0.6950000000000001,
+            "pnl": 3.0499999999999994,
+            "roi": 4.388489208633092
+          },
+          {
+            "bucket": "best",
+            "city": "LA",
+            "rows": 6,
+            "cost": 1.7825,
+            "pnl": 22.175,
+            "roi": 12.440392706872371
+          },
+          {
+            "bucket": "best",
+            "city": "Houston",
+            "rows": 1,
+            "cost": 0.285,
+            "pnl": 7.15,
+            "roi": 25.087719298245617
+          },
+          {
+            "bucket": "best",
+            "city": "Karachi",
+            "rows": 4,
+            "cost": 1.31,
+            "pnl": 6.900000000000002,
+            "roi": 5.267175572519085
+          },
+          {
+            "bucket": "best",
+            "city": "Chengdu",
+            "rows": 1,
+            "cost": 0.355,
+            "pnl": 6.45,
+            "roi": 18.169014084507044
+          },
+          {
+            "bucket": "best",
+            "city": "PanamaCity",
+            "rows": 1,
+            "cost": 0.445,
+            "pnl": 5.549999999999999,
+            "roi": 12.471910112359549
+          }
+        ],
+        "by_side": [
+          {
+            "bucket": "worst",
+            "side": "BUY_YES",
+            "rows": 26,
+            "cost": 8.1975,
+            "pnl": 48.025,
+            "roi": 5.858493443122903
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_YES",
+            "rows": 26,
+            "cost": 8.1975,
+            "pnl": 48.025,
+            "roi": 5.858493443122903
+          }
+        ],
+        "top_rows": [
+          {
+            "candidate_id": "0xa3d50a9afff75c9130a1908de07928c090411e007a5873af20db0048214944d4|BUY_YES|2026-05-26",
+            "city": "NYC",
+            "event_date": "2026-05-26",
+            "side": "BUY_YES",
+            "bracket": "80-81",
+            "decision_entry_price": 0.25,
+            "counterfactual_pnl": 7.5,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xa703bfffdee0c1f4736594fd4f63a57a08ec8c43c9438f0eef75884f71ea6302|BUY_YES|2026-05-27",
+            "city": "LA",
+            "event_date": "2026-05-27",
+            "side": "BUY_YES",
+            "bracket": "64-65",
+            "decision_entry_price": 0.255,
+            "counterfactual_pnl": 7.45,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xd56f9586b361d18e097fea3770badbbb2d37f5955186a21bc7f18131ad4d251b|BUY_YES|2026-05-29",
+            "city": "Atlanta",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "82-83",
+            "decision_entry_price": 0.255,
+            "counterfactual_pnl": 7.45,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xd461e7eb8d3889c2cd201650c235979b6ead6c73231fc638efa37603813d0940|BUY_YES|2026-05-27",
+            "city": "Houston",
+            "event_date": "2026-05-27",
+            "side": "BUY_YES",
+            "bracket": "78-79",
+            "decision_entry_price": 0.285,
+            "counterfactual_pnl": 7.15,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xfbbb833d53dd45e45ebc9d91f37e0c5d910a113a8f786f286ce8c9ac2b6dc6a8|BUY_YES|2026-05-29",
+            "city": "LA",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "66-67",
+            "decision_entry_price": 0.285,
+            "counterfactual_pnl": 7.15,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xc7a801c915021e0fe09a3fe927d71456df8f2ce0e57e9d06c6f5aabb323ebf87|BUY_YES|2026-05-29",
+            "city": "Chicago",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "84+",
+            "decision_entry_price": 0.315,
+            "counterfactual_pnl": 6.8500000000000005,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0x5aa85785e79a5e7c902db80dd8cee137c57a98d79707aff0298e745d144de32c|BUY_YES|2026-05-09",
+            "city": "LA",
+            "event_date": "2026-05-09",
+            "side": "BUY_YES",
+            "bracket": "68-69",
+            "decision_entry_price": 0.33,
+            "counterfactual_pnl": 6.699999999999999,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0x15438384f4d6d16841909f2148c4ffc2165e293f5144e8a5fc22e59f06a0f7f5|BUY_YES|2026-05-29",
+            "city": "Karachi",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "37+",
+            "decision_entry_price": 0.345,
+            "counterfactual_pnl": 6.550000000000001,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0x917670f785ea9bb3373dce3fe4f0c79f31c22e61bb513eab2ae05737b74b5e6a|BUY_YES|2026-05-28",
+            "city": "Chengdu",
+            "event_date": "2026-05-28",
+            "side": "BUY_YES",
+            "bracket": "29+",
+            "decision_entry_price": 0.355,
+            "counterfactual_pnl": 6.45,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xb0b4083b8e0a7b67bed53c35c5293e76a07cb9ff24e02e700367c832d30d0ad4|BUY_YES|2026-05-07",
+            "city": "LA",
+            "event_date": "2026-05-07",
+            "side": "BUY_YES",
+            "bracket": "68-69",
+            "decision_entry_price": 0.375,
+            "counterfactual_pnl": 6.25,
+            "forecast_regime": "low_uncertainty_allowed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "no_mid_high_leg",
+      "idea": "BUY_NO 0.35-0.65 中高价腿，检查收益是否只是 BUY_NO base-rate。",
+      "baseline": "same_side_hour_price",
+      "train": {
+        "rows": 120,
+        "active_dates": 20,
+        "cities": 41,
+        "cost_usd_1share": 67.46,
+        "counterfactual_pnl_usd_1share": 5.4,
+        "roi": 0.08004743551734363,
+        "top5_removed_roi": -1.534918461346944,
+        "worst_day_pnl": -29.200000000000003,
+        "low_price_buy_yes_rows": 0,
+        "baseline_rows": 214,
+        "baseline_roi": -0.28348892706398143,
+        "excess_roi": 0.36353636258132505,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.35954706706195644,
+          1.0057948393134672
+        ]
+      },
+      "holdout": {
+        "rows": 37,
+        "active_dates": 6,
+        "cities": 23,
+        "cost_usd_1share": 21.085,
+        "counterfactual_pnl_usd_1share": -0.8499999999999979,
+        "roi": -0.04031301873369684,
+        "top5_removed_roi": -2.2928709055876686,
+        "worst_day_pnl": -11.899999999999999,
+        "low_price_buy_yes_rows": 0,
+        "baseline_rows": 48,
+        "baseline_roi": -0.9354604786076867,
+        "excess_roi": 0.8951474598739898,
+        "excess_roi_ci95_event_date_cluster": [
+          0.24218756798309019,
+          2.2208626923736174
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "PASS",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "by_date": [
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-28",
+            "rows": 15,
+            "cost": 8.92,
+            "pnl": -29.200000000000003,
+            "roi": -3.273542600896861
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-30",
+            "rows": 9,
+            "cost": 5.1899999999999995,
+            "pnl": -11.899999999999999,
+            "roi": -2.2928709055876686
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-09",
+            "rows": 6,
+            "cost": 3.1799999999999997,
+            "pnl": -11.8,
+            "roi": -3.7106918238993716
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-12",
+            "rows": 6,
+            "cost": 3.005,
+            "pnl": -10.05,
+            "roi": -3.344425956738769
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-10",
+            "rows": 3,
+            "cost": 1.605,
+            "pnl": -6.05,
+            "roi": -3.7694704049844234
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-11",
+            "rows": 11,
+            "cost": 6.56,
+            "pnl": 24.4,
+            "roi": 3.7195121951219514
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-14",
+            "rows": 15,
+            "cost": 8.335,
+            "pnl": 16.65,
+            "roi": 1.9976004799040188
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-26",
+            "rows": 2,
+            "cost": 0.895,
+            "pnl": 11.05,
+            "roi": 12.3463687150838
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-13",
+            "rows": 9,
+            "cost": 5.1,
+            "pnl": 9.000000000000004,
+            "roi": 1.764705882352942
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-06-03",
+            "rows": 2,
+            "cost": 1.15,
+            "pnl": 8.5,
+            "roi": 7.391304347826088
+          }
+        ],
+        "by_city": [
+          {
+            "bucket": "worst",
+            "city": "NYC",
+            "rows": 10,
+            "cost": 5.6899999999999995,
+            "pnl": -26.9,
+            "roi": -4.727592267135325
+          },
+          {
+            "bucket": "worst",
+            "city": "Paris",
+            "rows": 9,
+            "cost": 4.955,
+            "pnl": -19.55,
+            "roi": -3.9455095862764886
+          },
+          {
+            "bucket": "worst",
+            "city": "Ankara",
+            "rows": 3,
+            "cost": 1.785,
+            "pnl": -17.849999999999998,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "BuenosAires",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "SaoPaulo",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "bucket": "best",
+            "city": "Warsaw",
+            "rows": 6,
+            "cost": 3.275,
+            "pnl": 17.25,
+            "roi": 5.2671755725190845
+          },
+          {
+            "bucket": "best",
+            "city": "LA",
+            "rows": 7,
+            "cost": 3.535,
+            "pnl": 14.649999999999999,
+            "roi": 4.144271570014144
+          },
+          {
+            "bucket": "best",
+            "city": "Milan",
+            "rows": 5,
+            "cost": 2.66,
+            "pnl": 13.4,
+            "roi": 5.037593984962406
+          },
+          {
+            "bucket": "best",
+            "city": "Tokyo",
+            "rows": 7,
+            "cost": 3.915,
+            "pnl": 10.850000000000001,
+            "roi": 2.7713920817369098
+          },
+          {
+            "bucket": "best",
+            "city": "Madrid",
+            "rows": 2,
+            "cost": 1.025,
+            "pnl": 9.75,
+            "roi": 9.51219512195122
+          }
+        ],
+        "by_side": [
+          {
+            "bucket": "worst",
+            "side": "BUY_NO",
+            "rows": 157,
+            "cost": 88.545,
+            "pnl": 4.5500000000000025,
+            "roi": 0.051386300751030574
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_NO",
+            "rows": 157,
+            "cost": 88.545,
+            "pnl": 4.5500000000000025,
+            "roi": 0.051386300751030574
+          }
+        ],
+        "top_rows": [
+          {
+            "candidate_id": "0xa19b97956cf5ddc30b1cc852e39e9b0f5a87452e190872df508d12fd5ab1815a|BUY_NO|2026-05-12",
+            "city": "London",
+            "event_date": "2026-05-12",
+            "side": "BUY_NO",
+            "bracket": "16",
+            "decision_entry_price": 0.395,
+            "counterfactual_pnl": 6.05,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xb4c10190bb477ce705eeb53112066f8f5fdcf2dd8362e57533a4e2b6016b6b32|BUY_NO|2026-05-26",
+            "city": "LA",
+            "event_date": "2026-05-26",
+            "side": "BUY_NO",
+            "bracket": "66-67",
+            "decision_entry_price": 0.415,
+            "counterfactual_pnl": 5.85,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0x67d09a53e04ce93edc04cdf8ae9ae21064768327679ffc7501be9180c028d8a5|BUY_NO|2026-05-13",
+            "city": "Milan",
+            "event_date": "2026-05-13",
+            "side": "BUY_NO",
+            "bracket": "20+",
+            "decision_entry_price": 0.43,
+            "counterfactual_pnl": 5.700000000000001,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xdbfaa9a2e85ae596a6392c4738eb81cca7d5684814ead102698d9feaf12e06d9|BUY_NO|2026-05-27",
+            "city": "LA",
+            "event_date": "2026-05-27",
+            "side": "BUY_NO",
+            "bracket": "66-67",
+            "decision_entry_price": 0.435,
+            "counterfactual_pnl": 5.6499999999999995,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xacb336e4bf1b76685760101ec5f7512c0f9c1eaec7067e4d4b147fe40f950616|BUY_NO|2026-05-20",
+            "city": "Seattle",
+            "event_date": "2026-05-20",
+            "side": "BUY_NO",
+            "bracket": "68+",
+            "decision_entry_price": 0.475,
+            "counterfactual_pnl": 5.25,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0x3c0a6023affdb11a0865fc097c7f01b79a1750bce1fbaaecf7ed29d26b7c8913|BUY_NO|2026-05-26",
+            "city": "Miami",
+            "event_date": "2026-05-26",
+            "side": "BUY_NO",
+            "bracket": "88-89",
+            "decision_entry_price": 0.48,
+            "counterfactual_pnl": 5.2,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0x777ac7832664e8cf113d08b4d56ca4ea28ca8a917464d83b194f144dda896947|BUY_NO|2026-05-29",
+            "city": "LA",
+            "event_date": "2026-05-29",
+            "side": "BUY_NO",
+            "bracket": "68-69",
+            "decision_entry_price": 0.485,
+            "counterfactual_pnl": 5.15,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xf406bc552db57c4a1d4f592babec1d1a9c7a8b2aa2b62a0fbb48e0228458a2c8|BUY_NO|2026-05-20",
+            "city": "Chengdu",
+            "event_date": "2026-05-20",
+            "side": "BUY_NO",
+            "bracket": "32",
+            "decision_entry_price": 0.5,
+            "counterfactual_pnl": 5.0,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0x74709f6c4a14e9097d33170c61685efe5eaab151a5c94101fee0b4c81afba82a|BUY_NO|2026-05-14",
+            "city": "Manila",
+            "event_date": "2026-05-14",
+            "side": "BUY_NO",
+            "bracket": "35",
+            "decision_entry_price": 0.5,
+            "counterfactual_pnl": 5.0,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0x0d300982be219d6fd52ac1918da7c2b939cc602e2f5ff38d1eaa314454410330|BUY_NO|2026-05-20",
+            "city": "Karachi",
+            "event_date": "2026-05-20",
+            "side": "BUY_NO",
+            "bracket": "36",
+            "decision_entry_price": 0.5,
+            "counterfactual_pnl": 5.0,
+            "forecast_regime": "high_uncertainty_no_trade"
+          }
+        ]
+      }
+    },
+    {
+      "name": "entry_25_75_control",
+      "idea": "传统 0.25-0.75 入场控制组，帮助分离 entry band 本身。",
+      "baseline": "same_side_hour_price",
+      "train": {
+        "rows": 287,
+        "active_dates": 21,
+        "cities": 47,
+        "cost_usd_1share": 165.265,
+        "counterfactual_pnl_usd_1share": 67.35000000000001,
+        "roi": 0.4075273046319548,
+        "top5_removed_roi": -0.2971497877501518,
+        "worst_day_pnl": -50.60000000000001,
+        "low_price_buy_yes_rows": 0,
+        "baseline_rows": 409,
+        "baseline_roi": 0.17978751251698366,
+        "excess_roi": 0.22773979211497114,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.3369845397315477,
+          0.8398770163834604
+        ]
+      },
+      "holdout": {
+        "rows": 98,
+        "active_dates": 8,
+        "cities": 32,
+        "cost_usd_1share": 56.818999999999996,
+        "counterfactual_pnl_usd_1share": -8.190000000000001,
+        "roi": -0.1441419243562893,
+        "top5_removed_roi": -1.4021637887798237,
+        "worst_day_pnl": -18.45,
+        "low_price_buy_yes_rows": 0,
+        "baseline_rows": 144,
+        "baseline_roi": -0.16704456064041473,
+        "excess_roi": 0.02290263628412542,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.8200064254859537,
+          0.7590154721646967
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "by_date": [
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-28",
+            "rows": 34,
+            "cost": 21.060000000000002,
+            "pnl": -50.60000000000001,
+            "roi": -2.402659069325736
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-30",
+            "rows": 35,
+            "cost": 21.845,
+            "pnl": -18.45,
+            "roi": -0.8445868619821469
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-12",
+            "rows": 11,
+            "cost": 5.5855,
+            "pnl": -15.855,
+            "roi": -2.8385999462895
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-06-05",
+            "rows": 2,
+            "cost": 1.1800000000000002,
+            "pnl": -11.8,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-06",
+            "rows": 10,
+            "cost": 6.16,
+            "pnl": -11.6,
+            "roi": -1.883116883116883
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-29",
+            "rows": 38,
+            "cost": 20.935,
+            "pnl": 40.650000000000006,
+            "roi": 1.9417243850011945
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-13",
+            "rows": 25,
+            "cost": 14.917,
+            "pnl": 20.830000000000005,
+            "roi": 1.3963933766843202
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-27",
+            "rows": 29,
+            "cost": 15.945,
+            "pnl": 20.550000000000004,
+            "roi": 1.2888052681091253
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-20",
+            "rows": 20,
+            "cost": 11.0275,
+            "pnl": 19.725,
+            "roi": 1.788710043074133
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-14",
+            "rows": 30,
+            "cost": 18.143,
+            "pnl": 18.57,
+            "roi": 1.0235352477539548
+          }
+        ],
+        "by_city": [
+          {
+            "bucket": "worst",
+            "city": "Paris",
+            "rows": 15,
+            "cost": 9.1085,
+            "pnl": -21.085,
+            "roi": -2.3148707251468412
+          },
+          {
+            "bucket": "worst",
+            "city": "Seoul",
+            "rows": 14,
+            "cost": 8.8025,
+            "pnl": -18.025,
+            "roi": -2.0477137176938367
+          },
+          {
+            "bucket": "worst",
+            "city": "Shenzhen",
+            "rows": 6,
+            "cost": 3.61,
+            "pnl": -16.1,
+            "roi": -4.459833795013851
+          },
+          {
+            "bucket": "worst",
+            "city": "Chongqing",
+            "rows": 5,
+            "cost": 3.54,
+            "pnl": -15.4,
+            "roi": -4.350282485875706
+          },
+          {
+            "bucket": "worst",
+            "city": "Munich",
+            "rows": 6,
+            "cost": 3.365,
+            "pnl": -13.650000000000002,
+            "roi": -4.056463595839525
+          },
+          {
+            "bucket": "best",
+            "city": "LA",
+            "rows": 17,
+            "cost": 7.8525,
+            "pnl": 51.475,
+            "roi": 6.555237185609679
+          },
+          {
+            "bucket": "best",
+            "city": "Warsaw",
+            "rows": 15,
+            "cost": 7.3125,
+            "pnl": 26.875,
+            "roi": 3.675213675213675
+          },
+          {
+            "bucket": "best",
+            "city": "Chengdu",
+            "rows": 8,
+            "cost": 4.825,
+            "pnl": 21.75,
+            "roi": 4.507772020725389
+          },
+          {
+            "bucket": "best",
+            "city": "Amsterdam",
+            "rows": 7,
+            "cost": 3.915,
+            "pnl": 20.85,
+            "roi": 5.325670498084292
+          },
+          {
+            "bucket": "best",
+            "city": "Madrid",
+            "rows": 8,
+            "cost": 4.3205,
+            "pnl": 16.795,
+            "roi": 3.8872815646337235
+          }
+        ],
+        "by_side": [
+          {
+            "bucket": "worst",
+            "side": "BUY_NO",
+            "rows": 316,
+            "cost": 199.7965,
+            "pnl": -7.964999999999991,
+            "roi": -0.0398655632105667
+          },
+          {
+            "bucket": "worst",
+            "side": "BUY_YES",
+            "rows": 69,
+            "cost": 22.2875,
+            "pnl": 67.125,
+            "roi": 3.0117779024116653
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_YES",
+            "rows": 69,
+            "cost": 22.2875,
+            "pnl": 67.125,
+            "roi": 3.0117779024116653
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_NO",
+            "rows": 316,
+            "cost": 199.7965,
+            "pnl": -7.964999999999991,
+            "roi": -0.0398655632105667
+          }
+        ],
+        "top_rows": [
+          {
+            "candidate_id": "0x15fc20013eb02be70b8c0c1752700b4510b1976857ffbc8db7f151a0d0e44a5f|BUY_YES|2026-05-29",
+            "city": "Istanbul",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "19",
+            "decision_entry_price": 0.25,
+            "counterfactual_pnl": 7.5,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xa3d50a9afff75c9130a1908de07928c090411e007a5873af20db0048214944d4|BUY_YES|2026-05-26",
+            "city": "NYC",
+            "event_date": "2026-05-26",
+            "side": "BUY_YES",
+            "bracket": "80-81",
+            "decision_entry_price": 0.25,
+            "counterfactual_pnl": 7.5,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xa703bfffdee0c1f4736594fd4f63a57a08ec8c43c9438f0eef75884f71ea6302|BUY_YES|2026-05-27",
+            "city": "LA",
+            "event_date": "2026-05-27",
+            "side": "BUY_YES",
+            "bracket": "64-65",
+            "decision_entry_price": 0.255,
+            "counterfactual_pnl": 7.45,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xd56f9586b361d18e097fea3770badbbb2d37f5955186a21bc7f18131ad4d251b|BUY_YES|2026-05-29",
+            "city": "Atlanta",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "82-83",
+            "decision_entry_price": 0.255,
+            "counterfactual_pnl": 7.45,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0x80ad164a1a310db7d236b381563cbaf695c56a11c9ee3a672549e8d7ecb36cc0|BUY_YES|2026-05-10",
+            "city": "Warsaw",
+            "event_date": "2026-05-10",
+            "side": "BUY_YES",
+            "bracket": "20",
+            "decision_entry_price": 0.265,
+            "counterfactual_pnl": 7.35,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0x5323bb3187257aea0e58526173cb16d396a0bf7a2204cb057cfd276429772b1e|BUY_YES|2026-05-15",
+            "city": "Manila",
+            "event_date": "2026-05-15",
+            "side": "BUY_YES",
+            "bracket": "36",
+            "decision_entry_price": 0.275,
+            "counterfactual_pnl": 7.25,
+            "forecast_regime": "high_uncertainty_no_trade"
+          },
+          {
+            "candidate_id": "0xa27e6c4a8acdbdb652d7babd963571df12651ed27b7bf5be5d0199943b2f0982|BUY_YES|2026-05-29",
+            "city": "Seattle",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "58-59",
+            "decision_entry_price": 0.285,
+            "counterfactual_pnl": 7.15,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0x56b7e2c1259a1c5d053afa078535ca4c8b486c0312a34afa12d43f6f73a63d03|BUY_YES|2026-05-11",
+            "city": "Warsaw",
+            "event_date": "2026-05-11",
+            "side": "BUY_YES",
+            "bracket": "23",
+            "decision_entry_price": 0.285,
+            "counterfactual_pnl": 7.15,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0xfbbb833d53dd45e45ebc9d91f37e0c5d910a113a8f786f286ce8c9ac2b6dc6a8|BUY_YES|2026-05-29",
+            "city": "LA",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "66-67",
+            "decision_entry_price": 0.285,
+            "counterfactual_pnl": 7.15,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xd461e7eb8d3889c2cd201650c235979b6ead6c73231fc638efa37603813d0940|BUY_YES|2026-05-27",
+            "city": "Houston",
+            "event_date": "2026-05-27",
+            "side": "BUY_YES",
+            "bracket": "78-79",
+            "decision_entry_price": 0.285,
+            "counterfactual_pnl": 7.15,
+            "forecast_regime": "high_uncertainty_no_trade"
+          }
+        ]
+      }
+    },
+    {
+      "name": "old_side_band_low_uncertainty",
+      "idea": "旧 side_band 只保留 low_uncertainty_allowed，看 forecast regime 是否提供额外筛选。",
+      "baseline": "same_side_hour_price",
+      "train": {
+        "rows": 16,
+        "active_dates": 8,
+        "cities": 5,
+        "cost_usd_1share": 6.75,
+        "counterfactual_pnl_usd_1share": 22.499999999999996,
+        "roi": 3.3333333333333326,
+        "top5_removed_roi": -10.0,
+        "worst_day_pnl": -14.8,
+        "low_price_buy_yes_rows": 3,
+        "baseline_rows": 250,
+        "baseline_roi": 0.3724615655201338,
+        "excess_roi": 2.960871767813199,
+        "excess_roi_ci95_event_date_cluster": [
+          -5.026330153948379,
+          10.506469272809875
+        ]
+      },
+      "holdout": {
+        "rows": 14,
+        "active_dates": 4,
+        "cities": 6,
+        "cost_usd_1share": 5.979,
+        "counterfactual_pnl_usd_1share": 30.210000000000004,
+        "roi": 5.052684395383844,
+        "top5_removed_roi": null,
+        "worst_day_pnl": -7.94,
+        "low_price_buy_yes_rows": 1,
+        "baseline_rows": 78,
+        "baseline_roi": 1.3317657724014844,
+        "excess_roi": 3.7209186229823596,
+        "excess_roi_ci95_event_date_cluster": [
+          -5.310757064433978,
+          6.477535641648135
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "by_date": [
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-28",
+            "rows": 3,
+            "cost": 1.48,
+            "pnl": -14.8,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-06-04",
+            "rows": 2,
+            "cost": 0.794,
+            "pnl": -7.94,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-16",
+            "rows": 2,
+            "cost": 0.765,
+            "pnl": -7.65,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-09",
+            "rows": 1,
+            "cost": 0.46,
+            "pnl": -4.6000000000000005,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-06-03",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-29",
+            "rows": 7,
+            "cost": 3.17,
+            "pnl": 28.3,
+            "roi": 8.927444794952681
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-26",
+            "rows": 4,
+            "cost": 1.35,
+            "pnl": 16.5,
+            "roi": 12.222222222222221
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-27",
+            "rows": 2,
+            "cost": 0.69,
+            "pnl": 13.1,
+            "roi": 18.985507246376812
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-07",
+            "rows": 2,
+            "cost": 0.99,
+            "pnl": 10.1,
+            "roi": 10.202020202020202
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          }
+        ],
+        "by_city": [
+          {
+            "bucket": "worst",
+            "city": "Atlanta",
+            "rows": 2,
+            "cost": 0.925,
+            "pnl": -9.25,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "Paris",
+            "rows": 2,
+            "cost": 1.15,
+            "pnl": -1.5,
+            "roi": -1.3043478260869565
+          },
+          {
+            "bucket": "worst",
+            "city": "Moscow",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "bucket": "worst",
+            "city": "Chicago",
+            "rows": 3,
+            "cost": 1.22,
+            "pnl": 7.800000000000001,
+            "roi": 6.39344262295082
+          },
+          {
+            "bucket": "worst",
+            "city": "Karachi",
+            "rows": 5,
+            "cost": 2.19,
+            "pnl": 8.100000000000001,
+            "roi": 3.698630136986302
+          },
+          {
+            "bucket": "best",
+            "city": "LA",
+            "rows": 10,
+            "cost": 3.884,
+            "pnl": 31.16,
+            "roi": 8.022657054582904
+          },
+          {
+            "bucket": "best",
+            "city": "Miami",
+            "rows": 7,
+            "cost": 2.765,
+            "pnl": 12.35,
+            "roi": 4.466546112115732
+          },
+          {
+            "bucket": "best",
+            "city": "Karachi",
+            "rows": 5,
+            "cost": 2.19,
+            "pnl": 8.100000000000001,
+            "roi": 3.698630136986302
+          },
+          {
+            "bucket": "best",
+            "city": "Chicago",
+            "rows": 3,
+            "cost": 1.22,
+            "pnl": 7.800000000000001,
+            "roi": 6.39344262295082
+          },
+          {
+            "bucket": "best",
+            "city": "Moscow",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "by_side": [
+          {
+            "bucket": "worst",
+            "side": "BUY_NO",
+            "rows": 16,
+            "cost": 8.67,
+            "pnl": 13.3,
+            "roi": 1.5340253748558248
+          },
+          {
+            "bucket": "worst",
+            "side": "BUY_YES",
+            "rows": 14,
+            "cost": 4.059,
+            "pnl": 39.410000000000004,
+            "roi": 9.70928800197093
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_YES",
+            "rows": 14,
+            "cost": 4.059,
+            "pnl": 39.410000000000004,
+            "roi": 9.70928800197093
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_NO",
+            "rows": 16,
+            "cost": 8.67,
+            "pnl": 13.3,
+            "roi": 1.5340253748558248
+          }
+        ],
+        "top_rows": [
+          {
+            "candidate_id": "0xeb1df1dbd34ca9154673ff80ae05b7bad94ec1e7bf9eef997295acf9d23f7474|BUY_YES|2026-05-30",
+            "city": "Miami",
+            "event_date": "2026-05-30",
+            "side": "BUY_YES",
+            "bracket": "86-87",
+            "decision_entry_price": 0.225,
+            "counterfactual_pnl": 7.75,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0x46e877c67adadd62e738382704a39c8eaa2692b7167ccb56a6a8a167834bd638|BUY_YES|2026-05-26",
+            "city": "Miami",
+            "event_date": "2026-05-26",
+            "side": "BUY_YES",
+            "bracket": "86-87",
+            "decision_entry_price": 0.23,
+            "counterfactual_pnl": 7.7,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xa703bfffdee0c1f4736594fd4f63a57a08ec8c43c9438f0eef75884f71ea6302|BUY_YES|2026-05-27",
+            "city": "LA",
+            "event_date": "2026-05-27",
+            "side": "BUY_YES",
+            "bracket": "64-65",
+            "decision_entry_price": 0.255,
+            "counterfactual_pnl": 7.45,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xfbbb833d53dd45e45ebc9d91f37e0c5d910a113a8f786f286ce8c9ac2b6dc6a8|BUY_YES|2026-05-29",
+            "city": "LA",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "66-67",
+            "decision_entry_price": 0.285,
+            "counterfactual_pnl": 7.15,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xc7a801c915021e0fe09a3fe927d71456df8f2ce0e57e9d06c6f5aabb323ebf87|BUY_YES|2026-05-29",
+            "city": "Chicago",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "84+",
+            "decision_entry_price": 0.315,
+            "counterfactual_pnl": 6.8500000000000005,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0x15438384f4d6d16841909f2148c4ffc2165e293f5144e8a5fc22e59f06a0f7f5|BUY_YES|2026-05-29",
+            "city": "Karachi",
+            "event_date": "2026-05-29",
+            "side": "BUY_YES",
+            "bracket": "37+",
+            "decision_entry_price": 0.345,
+            "counterfactual_pnl": 6.550000000000001,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xb0b4083b8e0a7b67bed53c35c5293e76a07cb9ff24e02e700367c832d30d0ad4|BUY_YES|2026-05-07",
+            "city": "LA",
+            "event_date": "2026-05-07",
+            "side": "BUY_YES",
+            "bracket": "68-69",
+            "decision_entry_price": 0.375,
+            "counterfactual_pnl": 6.25,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xb4c10190bb477ce705eeb53112066f8f5fdcf2dd8362e57533a4e2b6016b6b32|BUY_NO|2026-05-26",
+            "city": "LA",
+            "event_date": "2026-05-26",
+            "side": "BUY_NO",
+            "bracket": "66-67",
+            "decision_entry_price": 0.415,
+            "counterfactual_pnl": 5.85,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xc5faddf4810e0c14659dbdf170599dcb8304ef42afcccb84992b4d8fcb0f44ae|BUY_YES|2026-05-17",
+            "city": "Karachi",
+            "event_date": "2026-05-17",
+            "side": "BUY_YES",
+            "bracket": "37+",
+            "decision_entry_price": 0.42,
+            "counterfactual_pnl": 5.800000000000001,
+            "forecast_regime": "low_uncertainty_allowed"
+          },
+          {
+            "candidate_id": "0xdbfaa9a2e85ae596a6392c4738eb81cca7d5684814ead102698d9feaf12e06d9|BUY_NO|2026-05-27",
+            "city": "LA",
+            "event_date": "2026-05-27",
+            "side": "BUY_NO",
+            "bracket": "66-67",
+            "decision_entry_price": 0.435,
+            "counterfactual_pnl": 5.6499999999999995,
+            "forecast_regime": "low_uncertainty_allowed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "old_side_band_medium_uncertainty",
+      "idea": "旧 side_band 只保留 medium_uncertainty_price_sensitive，复核 clean-test 里 train 好看的区域。",
+      "baseline": "same_side_hour_price",
+      "train": {
+        "rows": 9,
+        "active_dates": 7,
+        "cities": 6,
+        "cost_usd_1share": 3.8834999999999997,
+        "counterfactual_pnl_usd_1share": 1.1649999999999996,
+        "roi": 0.29998712501609365,
+        "top5_removed_roi": -10.0,
+        "worst_day_pnl": -6.1,
+        "low_price_buy_yes_rows": 1,
+        "baseline_rows": 188,
+        "baseline_roi": 0.0389785029528231,
+        "excess_roi": 0.2610086220632705,
+        "excess_roi_ci95_event_date_cluster": [
+          -9.710893463447745,
+          7.458462302053762
+        ]
+      },
+      "holdout": {
+        "rows": 1,
+        "active_dates": 1,
+        "cities": 1,
+        "cost_usd_1share": 0.435,
+        "counterfactual_pnl_usd_1share": -4.35,
+        "roi": -10.0,
+        "top5_removed_roi": null,
+        "worst_day_pnl": -4.35,
+        "low_price_buy_yes_rows": 0,
+        "baseline_rows": 2,
+        "baseline_roi": -10.0,
+        "excess_roi": 0.0,
+        "excess_roi_ci95_event_date_cluster": [
+          0.0,
+          0.0
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "by_date": [
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-14",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-26",
+            "rows": 1,
+            "cost": 0.315,
+            "pnl": -3.15,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "event_date": "2026-05-25",
+            "rows": 1,
+            "cost": 0.225,
+            "pnl": -2.25,
+            "roi": -10.0
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-11",
+            "rows": 2,
+            "cost": 1.1749999999999998,
+            "pnl": 8.25,
+            "roi": 7.021276595744682
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-09",
+            "rows": 1,
+            "cost": 0.33,
+            "pnl": 6.699999999999999,
+            "roi": 20.3030303030303
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-27",
+            "rows": 2,
+            "cost": 0.96,
+            "pnl": 0.4000000000000008,
+            "roi": 0.4166666666666675
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-25",
+            "rows": 1,
+            "cost": 0.225,
+            "pnl": -2.25,
+            "roi": -10.0
+          },
+          {
+            "bucket": "best",
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          }
+        ],
+        "by_city": [
+          {
+            "bucket": "worst",
+            "city": "Atlanta",
+            "rows": 3,
+            "cost": 0.905,
+            "pnl": -9.05,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "London",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "bucket": "worst",
+            "city": "Miami",
+            "rows": 2,
+            "cost": 1.035,
+            "pnl": -0.34999999999999964,
+            "roi": -0.33816425120772914
+          },
+          {
+            "bucket": "worst",
+            "city": "LA",
+            "rows": 2,
+            "cost": 0.5985,
+            "pnl": 4.014999999999999,
+            "roi": 6.708437761069337
+          },
+          {
+            "bucket": "worst",
+            "city": "Amsterdam",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "bucket": "best",
+            "city": "Warsaw",
+            "rows": 1,
+            "cost": 0.575,
+            "pnl": 4.25,
+            "roi": 7.391304347826088
+          },
+          {
+            "bucket": "best",
+            "city": "Amsterdam",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "bucket": "best",
+            "city": "LA",
+            "rows": 2,
+            "cost": 0.5985,
+            "pnl": 4.014999999999999,
+            "roi": 6.708437761069337
+          },
+          {
+            "bucket": "best",
+            "city": "Miami",
+            "rows": 2,
+            "cost": 1.035,
+            "pnl": -0.34999999999999964,
+            "roi": -0.33816425120772914
+          },
+          {
+            "bucket": "best",
+            "city": "London",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          }
+        ],
+        "by_side": [
+          {
+            "bucket": "worst",
+            "side": "BUY_YES",
+            "rows": 6,
+            "cost": 1.9385000000000001,
+            "pnl": -9.385,
+            "roi": -4.841372194996131
+          },
+          {
+            "bucket": "worst",
+            "side": "BUY_NO",
+            "rows": 4,
+            "cost": 2.38,
+            "pnl": 6.200000000000001,
+            "roi": 2.605042016806723
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_NO",
+            "rows": 4,
+            "cost": 2.38,
+            "pnl": 6.200000000000001,
+            "roi": 2.605042016806723
+          },
+          {
+            "bucket": "best",
+            "side": "BUY_YES",
+            "rows": 6,
+            "cost": 1.9385000000000001,
+            "pnl": -9.385,
+            "roi": -4.841372194996131
+          }
+        ],
+        "top_rows": [
+          {
+            "candidate_id": "0x5aa85785e79a5e7c902db80dd8cee137c57a98d79707aff0298e745d144de32c|BUY_YES|2026-05-09",
+            "city": "LA",
+            "event_date": "2026-05-09",
+            "side": "BUY_YES",
+            "bracket": "68-69",
+            "decision_entry_price": 0.33,
+            "counterfactual_pnl": 6.699999999999999,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0xcfb3402c6a447d40c973c2724729e96d115be4b33eea86f3f2a415350ef00b17|BUY_NO|2026-05-11",
+            "city": "Warsaw",
+            "event_date": "2026-05-11",
+            "side": "BUY_NO",
+            "bracket": "22",
+            "decision_entry_price": 0.575,
+            "counterfactual_pnl": 4.25,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0xbc243415ded3b3aa02f03ff59c2db805327a35e6a1a9acfcf04cf41e1522e899|BUY_NO|2026-05-27",
+            "city": "Amsterdam",
+            "event_date": "2026-05-27",
+            "side": "BUY_NO",
+            "bracket": "22",
+            "decision_entry_price": 0.595,
+            "counterfactual_pnl": 4.050000000000001,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0x14c33b0eaa98027f2ead98e42b4a78dcfc1500f98e9d23f30b975fa1e3c8e2bc|BUY_NO|2026-05-11",
+            "city": "Miami",
+            "event_date": "2026-05-11",
+            "side": "BUY_NO",
+            "bracket": "90-91",
+            "decision_entry_price": 0.6,
+            "counterfactual_pnl": 4.0,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0x50080429ce9e2779a11e7a3dc307d5194f84252640be8ce3747c5e3a49b4c903|BUY_YES|2026-05-25",
+            "city": "Atlanta",
+            "event_date": "2026-05-25",
+            "side": "BUY_YES",
+            "bracket": "80-81",
+            "decision_entry_price": 0.225,
+            "counterfactual_pnl": -2.25,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0x238183d80d6d84e44bd50185210594d81d34f759ffaf46fdfa165f8736e60d4b|BUY_YES|2026-05-12",
+            "city": "LA",
+            "event_date": "2026-05-12",
+            "side": "BUY_YES",
+            "bracket": "64-65",
+            "decision_entry_price": 0.2685,
+            "counterfactual_pnl": -2.685,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0x11891a9b68f4f34d8b75b970661368ab60032fb16bc874b068982dd95fd61b7c|BUY_YES|2026-05-26",
+            "city": "Atlanta",
+            "event_date": "2026-05-26",
+            "side": "BUY_YES",
+            "bracket": "78-79",
+            "decision_entry_price": 0.315,
+            "counterfactual_pnl": -3.15,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0xaf4ed6ade022f94ebbbf69c3884ce081786b1e0581d156543d6f30f37ac818d9|BUY_YES|2026-05-27",
+            "city": "Atlanta",
+            "event_date": "2026-05-27",
+            "side": "BUY_YES",
+            "bracket": "82-83",
+            "decision_entry_price": 0.365,
+            "counterfactual_pnl": -3.65,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0x63cffe0ce3f271dad8fd9f9e1a876d6bec67720ac80bdf4ffb99cb6991ac6cbb|BUY_YES|2026-06-01",
+            "city": "Miami",
+            "event_date": "2026-06-01",
+            "side": "BUY_YES",
+            "bracket": "90-91",
+            "decision_entry_price": 0.435,
+            "counterfactual_pnl": -4.35,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          },
+          {
+            "candidate_id": "0x63e37ccb1e9c8e8e37aaf2bbb2aab628e13596d61e616b9126c7e2c15fbff1cf|BUY_NO|2026-05-14",
+            "city": "London",
+            "event_date": "2026-05-14",
+            "side": "BUY_NO",
+            "bracket": "12",
+            "decision_entry_price": 0.61,
+            "counterfactual_pnl": -6.1,
+            "forecast_regime": "medium_uncertainty_price_sensitive"
+          }
+        ]
+      }
+    },
+    {
+      "name": "old_side_band_tail_blocked",
+      "idea": "旧 side_band 挡掉 tail_risk_block，测试尾部风险过滤是否能降低样本运气依赖。",
+      "baseline": "same_side_hour_price",
+      "train": {
+        "rows": 0,
+        "active_dates": 0,
+        "cities": 0,
+        "cost_usd_1share": 0.0,
+        "counterfactual_pnl_usd_1share": 0.0,
+        "roi": null,
+        "top5_removed_roi": null,
+        "worst_day_pnl": null,
+        "low_price_buy_yes_rows": 0,
+        "baseline_rows": 0,
+        "baseline_roi": null,
+        "excess_roi": null,
+        "excess_roi_ci95_event_date_cluster": [
+          null,
+          null
+        ]
+      },
+      "holdout": {
+        "rows": 0,
+        "active_dates": 0,
+        "cities": 0,
+        "cost_usd_1share": 0.0,
+        "counterfactual_pnl_usd_1share": 0.0,
+        "roi": null,
+        "top5_removed_roi": null,
+        "worst_day_pnl": null,
+        "low_price_buy_yes_rows": 0,
+        "baseline_rows": 0,
+        "baseline_roi": null,
+        "excess_roi": null,
+        "excess_roi_ci95_event_date_cluster": [
+          null,
+          null
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "by_date": [],
+        "by_city": [],
+        "by_side": [],
+        "top_rows": []
+      }
+    }
+  ],
+  "out_json": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-10-side-band-mechanism-attribution-v1.json",
+  "out_md": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-10-side-band-mechanism-attribution-v1.md"
+}

@@ -1,0 +1,5 @@
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha/test_storage_p0_02.py tests/polymarket_alpha/test_rule_gates_p0_07.py::test_rule_hash_and_corpus_hash_revision_independently_and_persist --junitxml=docs/design/polymarket_alpha_p0/P0_02_RULE_CORPUS_REVISION-evidence-seal/junit.xml
+RESULT: 6 passed in 0.14s
+
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha
+RESULT: 109 passed in 0.39s

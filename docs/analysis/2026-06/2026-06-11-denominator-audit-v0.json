@@ -1,0 +1,3876 @@
+{
+  "generated_at_utc": "2026-06-11T08:28:05.515834+00:00",
+  "target_metric": "weather_research_denominator_integrity_audit_v0",
+  "db_path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+  "data_self_check": {
+    "max_fact_built_at_utc": "2026-06-11T05:19:34.417822+00:00",
+    "trade_class_distribution": [
+      {
+        "trade_class": "live_real",
+        "rows": 853
+      },
+      {
+        "trade_class": "live_simulated",
+        "rows": 624
+      },
+      {
+        "trade_class": "paper",
+        "rows": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "rows": 636
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "settlement_status": "",
+        "rows": 216
+      },
+      {
+        "settlement_status": "settled",
+        "rows": 4182
+      }
+    ],
+    "candidate_coverage": {
+      "rows": 26572,
+      "eligible": 8903,
+      "paper_ordered": 3339,
+      "live_filled": 345
+    },
+    "order_fill_coverage": [
+      {
+        "status": "error",
+        "orders": 33,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 962,
+        "with_fill": 853
+      }
+    ],
+    "fact_signal_candidates_max_built_at_utc": "2026-06-11T05:19:42.922086+00:00"
+  },
+  "dynamic_audit": {
+    "base_rows": 14915,
+    "side_distribution": [
+      {
+        "side": "BUY_NO",
+        "rows": 14434,
+        "final_rows": 1825,
+        "eligible_rows": 5026
+      },
+      {
+        "side": "BUY_YES",
+        "rows": 11687,
+        "final_rows": 1742,
+        "eligible_rows": 3877
+      },
+      {
+        "side": "NO_SIGNAL",
+        "rows": 451,
+        "final_rows": 57,
+        "eligible_rows": 0
+      }
+    ],
+    "funnels": [
+      {
+        "name": "buy_yes_only",
+        "decision_sets": 1213,
+        "bracket_count_distribution": {
+          "3": 380,
+          "4": 386,
+          "5": 277,
+          "6": 119,
+          "7": 41,
+          "8": 8,
+          "9": 2
+        },
+        "min_5_brackets": 447,
+        "min_7_brackets": 51,
+        "min_9_brackets": 2,
+        "min_11_brackets": 0,
+        "mode_adj3_selected_legs_settled": 38,
+        "mode_adj3_selected_event_dates": 14,
+        "mode_adj3_selected_cities": 22,
+        "all_brackets_settled": 13
+      },
+      {
+        "name": "buy_no_only",
+        "decision_sets": 1357,
+        "bracket_count_distribution": {
+          "3": 157,
+          "4": 231,
+          "5": 270,
+          "6": 281,
+          "7": 222,
+          "8": 122,
+          "9": 52,
+          "10": 20,
+          "11": 2
+        },
+        "min_5_brackets": 969,
+        "min_7_brackets": 418,
+        "min_9_brackets": 74,
+        "min_11_brackets": 2,
+        "mode_adj3_selected_legs_settled": 53,
+        "mode_adj3_selected_event_dates": 16,
+        "mode_adj3_selected_cities": 32,
+        "all_brackets_settled": 13
+      },
+      {
+        "name": "union_buy_yes_buy_no",
+        "decision_sets": 1568,
+        "bracket_count_distribution": {
+          "3": 98,
+          "4": 57,
+          "5": 50,
+          "6": 72,
+          "7": 117,
+          "8": 182,
+          "9": 245,
+          "10": 259,
+          "11": 488
+        },
+        "min_5_brackets": 1413,
+        "min_7_brackets": 1291,
+        "min_9_brackets": 992,
+        "min_11_brackets": 488,
+        "mode_adj3_selected_legs_settled": 185,
+        "mode_adj3_selected_event_dates": 25,
+        "mode_adj3_selected_cities": 46,
+        "all_brackets_settled": 4
+      },
+      {
+        "name": "union_eligible_only",
+        "decision_sets": 534,
+        "bracket_count_distribution": {
+          "3": 33,
+          "4": 24,
+          "5": 14,
+          "6": 25,
+          "7": 42,
+          "8": 61,
+          "9": 90,
+          "10": 96,
+          "11": 149
+        },
+        "min_5_brackets": 477,
+        "min_7_brackets": 438,
+        "min_9_brackets": 335,
+        "min_11_brackets": 149,
+        "mode_adj3_selected_legs_settled": 56,
+        "mode_adj3_selected_event_dates": 17,
+        "mode_adj3_selected_cities": 20,
+        "all_brackets_settled": 2
+      },
+      {
+        "name": "union_settled_prefilter",
+        "decision_sets": 291,
+        "bracket_count_distribution": {
+          "3": 127,
+          "4": 90,
+          "5": 40,
+          "6": 19,
+          "7": 8,
+          "9": 1,
+          "10": 3,
+          "11": 3
+        },
+        "min_5_brackets": 74,
+        "min_7_brackets": 15,
+        "min_9_brackets": 7,
+        "min_11_brackets": 3,
+        "mode_adj3_selected_legs_settled": 291,
+        "mode_adj3_selected_event_dates": 30,
+        "mode_adj3_selected_cities": 48,
+        "all_brackets_settled": 291
+      },
+      {
+        "name": "union_eligible_and_settled_prefilter",
+        "decision_sets": 93,
+        "bracket_count_distribution": {
+          "3": 50,
+          "4": 24,
+          "5": 11,
+          "6": 5,
+          "7": 2,
+          "11": 1
+        },
+        "min_5_brackets": 19,
+        "min_7_brackets": 3,
+        "min_9_brackets": 1,
+        "min_11_brackets": 1,
+        "mode_adj3_selected_legs_settled": 93,
+        "mode_adj3_selected_event_dates": 24,
+        "mode_adj3_selected_cities": 24,
+        "all_brackets_settled": 93
+      }
+    ]
+  },
+  "static_scan": [
+    {
+      "path": "scripts/analysis/market_structure_edge/research_denominator_audit_v0.py",
+      "risk_score": 35,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 191,
+              "text": "funnel_summary(\"buy_yes_only\", decision_sets(base, side=\"BUY_YES\")),"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 37,
+              "text": "\"eligible_hard_gate\": (r\"eligible\\s*=\\s*1|all_legs_eligible|require_eligible\\s*[:=]\\s*True|int\\([^\\n]*eligible\", 3, \"可能把旧单腿 planner 过滤器误当成市场机会全集\"),"
+            },
+            {
+              "line": 95,
+              "text": "if int(prev.get(\"eligible\") or 0) == 0 and int(row.get(\"eligible\") or 0) == 1:"
+            },
+            {
+              "line": 129,
+              "text": "if eligible_only and int(row.get(\"eligible\") or 0) != 1:"
+            },
+            {
+              "line": 189,
+              "text": "\"side_distribution\": rows(conn, \"SELECT side, COUNT(*) AS rows, SUM(CASE WHEN final_yes IS NOT NULL THEN 1 ELSE 0 END) AS final_rows, SUM(CASE WHEN eligible=1 THEN 1 ELSE 0 END) AS"
+            },
+            {
+              "line": 316,
+              "text": "\"4. `research_forecast_first_adjacent_range_rv.py`: `all_legs_eligible` / all legs price/spread 属于执行覆盖过滤，不能当主机会分母。\","
+            },
+            {
+              "line": 317,
+              "text": "\"5. `research_range_rv_market_shape_v05.py`: `require_eligible=True` 默认值需要复核，避免旧 planner 过滤器进入新策略研究。\","
+            }
+          ],
+          "match_count": 7
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 189,
+              "text": "\"side_distribution\": rows(conn, \"SELECT side, COUNT(*) AS rows, SUM(CASE WHEN final_yes IS NOT NULL THEN 1 ELSE 0 END) AS final_rows, SUM(CASE WHEN eligible=1 THEN 1 ELSE 0 END) AS"
+            },
+            {
+              "line": 314,
+              "text": "\"2. `research_range_rv_scanner.py`: 先 `settlement_status='settled'` / `final_yes IS NOT NULL` 再 group，容易把未结算 bracket 从分布删掉。\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "all_legs_settled",
+          "weight": 4,
+          "reason": "若要求全 universe settled，会把样本卡死；应只要求被选腿可评估",
+          "matches": [
+            {
+              "line": 39,
+              "text": "\"all_legs_settled\": (r\"all\\([^\\n]*(settlement_status|final_yes)|legs_ready\", 4, \"若要求全 universe settled，会把样本卡死；应只要求被选腿可评估\"),"
+            },
+            {
+              "line": 163,
+              "text": "if all(row.get(\"settlement_status\") == \"settled\" and row.get(\"final_yes\") is not None for row in items):"
+            },
+            {
+              "line": 166,
+              "text": "if all(row.get(\"settlement_status\") == \"settled\" and row.get(\"final_yes\") is not None for row in selected):"
+            }
+          ],
+          "match_count": 3
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 40,
+              "text": "\"full_orderbook_match_only\": (r\"fully_matched|all_legs_have_price|all_legs_have_spread|orderbook.*matched\", 2, \"适合执行压力测试，但不应作为机会全集主分母\"),"
+            },
+            {
+              "line": 323,
+              "text": "\"- `eligible=1`、`all_legs_eligible`、`fully_matched_orderbook` 只能作为子分析或执行压力测试，不能默认替代机会全集。\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 41,
+              "text": "\"posthoc_best_or_top\": (r\"best_.*holdout|rank_key|sorted\\([^\\n]*holdout|top_or_none\", 2, \"需要确认不是看 holdout 后挑规则\"),"
+            }
+          ],
+          "match_count": 1
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_adjacent3_union_flexible_v02.py",
+      "risk_score": 32,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 203,
+              "text": "legs=[dict(high, side=\"BUY_YES\"), dict(low, side=\"BUY_NO\")],"
+            },
+            {
+              "line": 222,
+              "text": "legs = [dict(left, side=\"BUY_YES\"), dict(right, side=\"BUY_YES\"), dict(center, side=\"BUY_NO\")]"
+            },
+            {
+              "line": 225,
+              "text": "legs = [dict(center, side=\"BUY_YES\"), dict(left, side=\"BUY_NO\"), dict(right, side=\"BUY_NO\")]"
+            },
+            {
+              "line": 251,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in inside] + [dict(row, side=\"BUY_NO\") for row in neighbors]"
+            },
+            {
+              "line": 307,
+              "text": "legs=[dict(leg, side=\"BUY_YES\") for leg in cluster],"
+            },
+            {
+              "line": 352,
+              "text": "legs.append(dict(row, side=\"BUY_YES\", _score=edge))"
+            }
+          ],
+          "match_count": 6
+        },
+        {
+          "pattern": "all_legs_settled",
+          "weight": 4,
+          "reason": "若要求全 universe settled，会把样本卡死；应只要求被选腿可评估",
+          "matches": [
+            {
+              "line": 164,
+              "text": "def legs_ready(legs: list[dict[str, Any]]) -> bool:"
+            },
+            {
+              "line": 165,
+              "text": "return bool(legs) and all(leg.get(\"final_yes\") is not None and leg.get(\"settlement_status\") == \"settled\" for leg in legs)"
+            },
+            {
+              "line": 177,
+              "text": "if not legs_ready(legs):"
+            },
+            {
+              "line": 582,
+              "text": "if all(row.get(\"final_yes\") is not None and row.get(\"settlement_status\") == \"settled\" for row in items)"
+            }
+          ],
+          "match_count": 4
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 529,
+              "text": "f\"- Fully matched strategy rows：`{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`。\","
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 210,
+              "text": "return variants.top_or_none(candidates)"
+            },
+            {
+              "line": 236,
+              "text": "return variants.top_or_none(candidates)"
+            },
+            {
+              "line": 262,
+              "text": "return variants.top_or_none(candidates)"
+            },
+            {
+              "line": 293,
+              "text": "return variants.top_or_none(candidates)"
+            }
+          ],
+          "match_count": 4
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_variant_lab_v03.py",
+      "risk_score": 30,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 195,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in legs_raw]"
+            },
+            {
+              "line": 220,
+              "text": "legs = [dict(high, side=\"BUY_YES\"), dict(low, side=\"BUY_NO\")]"
+            },
+            {
+              "line": 243,
+              "text": "legs = [dict(left, side=\"BUY_YES\"), dict(right, side=\"BUY_YES\"), dict(center, side=\"BUY_NO\")]"
+            },
+            {
+              "line": 246,
+              "text": "legs = [dict(center, side=\"BUY_YES\"), dict(left, side=\"BUY_NO\"), dict(right, side=\"BUY_NO\")]"
+            },
+            {
+              "line": 272,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in inside] + [dict(row, side=\"BUY_NO\") for row in neighbors]"
+            },
+            {
+              "line": 330,
+              "text": "legs=[dict(leg, side=\"BUY_YES\") for leg in cluster],"
+            }
+          ],
+          "match_count": 6
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 157,
+              "text": "\"all_legs_eligible\": int(all(int(leg.get(\"eligible\") or 0) for leg in legs)),"
+            },
+            {
+              "line": 342,
+              "text": "items = [row for row in raw_items if int(row.get(\"eligible\") or 0) == 1]"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 414,
+              "text": "coverage[\"fully_matched_strategy_rows\"] = full"
+            },
+            {
+              "line": 415,
+              "text": "coverage[\"fully_matched_strategy_rate\"] = scanner.safe_div(full, len(rows))"
+            },
+            {
+              "line": 577,
+              "text": "\"Orderbook prices use latest `snapshot_ts_utc <= decision_snapshot_ts_utc`; rows require all legs matched.\","
+            },
+            {
+              "line": 579,
+              "text": "f\"- Fully matched strategy rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            }
+          ],
+          "match_count": 4
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 177,
+              "text": "def top_or_none(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:"
+            },
+            {
+              "line": 206,
+              "text": "return top_or_none(candidates)"
+            },
+            {
+              "line": 231,
+              "text": "return top_or_none(candidates)"
+            },
+            {
+              "line": 257,
+              "text": "return top_or_none(candidates)"
+            },
+            {
+              "line": 283,
+              "text": "return top_or_none(candidates)"
+            },
+            {
+              "line": 314,
+              "text": "return top_or_none(candidates)"
+            }
+          ],
+          "match_count": 9
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_center_shoulders_butterfly_range_rv.py",
+      "risk_score": 30,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 459,
+              "text": "legs=[dict(center, side=\"BUY_YES\"), dict(left, side=\"BUY_NO\"), dict(right, side=\"BUY_NO\")],"
+            },
+            {
+              "line": 471,
+              "text": "legs=[dict(left, side=\"BUY_YES\"), dict(right, side=\"BUY_YES\"), dict(center, side=\"BUY_NO\")],"
+            },
+            {
+              "line": 485,
+              "text": "legs=[dict(row, side=\"BUY_YES\") for row in state[\"adjacent3\"]]"
+            },
+            {
+              "line": 502,
+              "text": "legs=[dict(row, side=\"BUY_YES\") for row in state[\"adjacent3\"]]"
+            }
+          ],
+          "match_count": 4
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 416,
+              "text": "\"all_legs_eligible\": int(all(int(leg.get(\"eligible\") or 0) for leg in legs)),"
+            },
+            {
+              "line": 800,
+              "text": "\"- 不使用旧单腿策略 `eligible` 作为 Range RV 硬门；仅在 JSON 中保留 `all_legs_eligible` 诊断字段。\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 816,
+              "text": "f\"| orderbook fully matched selected rows | {report['filter_funnel']['orderbook_fully_matched_selected_rows']} |\","
+            },
+            {
+              "line": 882,
+              "text": "f\"- Leg matched: `{report['orderbook_coverage'].get('matched_candidate_rows')}` / `{report['orderbook_coverage'].get('candidate_rows')}`.\","
+            },
+            {
+              "line": 883,
+              "text": "f\"- Fully matched family rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            },
+            {
+              "line": 884,
+              "text": "f\"- Fully matched selected rows: `{report['filter_funnel']['orderbook_fully_matched_selected_rows']}` / `{report['filter_funnel']['selected_strategy_rows']}`.\","
+            },
+            {
+              "line": 959,
+              "text": "coverage: dict[str, Any] = {\"status\": \"skipped\", \"fully_matched_strategy_rows\": 0, \"strategy_rows\": len(strategy_rows)}"
+            },
+            {
+              "line": 1029,
+              "text": "\"orderbook_fully_matched_selected_rows\": len(orderbook_selected_rows),"
+            }
+          ],
+          "match_count": 6
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 673,
+              "text": "def rank_key(item: dict[str, Any]) -> tuple[float, float, float]:"
+            },
+            {
+              "line": 1058,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=rank_key, reverse=True),"
+            },
+            {
+              "line": 1059,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 3
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_scanner.py",
+      "risk_score": 25,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 281,
+              "text": "leg_side = \"BUY_YES\" if direction == \"long_range\" else \"BUY_NO\""
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 325,
+              "text": "\"eligible_legs\": sum(int(row.get(\"eligible\") or 0) for row in legs),"
+            },
+            {
+              "line": 326,
+              "text": "\"all_legs_eligible\": int(all(int(row.get(\"eligible\") or 0) for row in legs)),"
+            },
+            {
+              "line": 832,
+              "text": "f\"- scanner input candidates: `{report['input']['candidate_rows']}` seen-complete rows; decision sets `{report['input']['decision_sets']}`; range rows `{report['input']['range_rows"
+            },
+            {
+              "line": 1027,
+              "text": "proxy_eligible_rows = [row for row in proxy_rows if int(row.get(\"all_legs_eligible\") or 0) == 1]"
+            },
+            {
+              "line": 1028,
+              "text": "ob_eligible_rows = [row for row in ob_rows if int(row.get(\"all_legs_eligible\") or 0) == 1]"
+            },
+            {
+              "line": 1103,
+              "text": "\"all_legs_eligible_range_rows\": sum(int(row.get(\"all_legs_eligible\") or 0) for row in clean_rows),"
+            }
+          ],
+          "match_count": 6
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 169,
+              "text": "WHERE final_yes IS NOT NULL"
+            },
+            {
+              "line": 170,
+              "text": "AND settlement_status='settled'"
+            },
+            {
+              "line": 833,
+              "text": "f\"- unsettled used in scanner: `0` (filter `settlement_status='settled'` and `final_yes IS NOT NULL`).\","
+            }
+          ],
+          "match_count": 3
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 10,
+              "text": "range probability after execution cost. Raw orderbook prices are matched only"
+            },
+            {
+              "line": 411,
+              "text": "coverage[\"fully_matched_range_rows\"] = matched_ranges"
+            },
+            {
+              "line": 413,
+              "text": "coverage[\"fully_matched_range_rate\"] = safe_div(matched_ranges, len(range_rows))"
+            },
+            {
+              "line": 958,
+              "text": "\"Orderbook prices are matched with the same constraint used by executable-edge research: latest `snapshot_ts_utc <= decision_snapshot_ts_utc`. This subset is a capacity/execution c"
+            },
+            {
+              "line": 960,
+              "text": "f\"- Leg coverage: `{orderbook['coverage'].get('matched_candidate_rows')}` / `{orderbook['coverage'].get('candidate_rows')}`.\","
+            },
+            {
+              "line": 961,
+              "text": "f\"- Fully matched ranges: `{orderbook['coverage'].get('fully_matched_range_rows')}` / `{orderbook['coverage'].get('range_rows')}`.\","
+            }
+          ],
+          "match_count": 6
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_market_shape_v05.py",
+      "risk_score": 25,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 133,
+              "text": "legs=[dict(center, side=\"BUY_YES\"), dict(left, side=\"BUY_NO\"), dict(right, side=\"BUY_NO\")],"
+            },
+            {
+              "line": 164,
+              "text": "legs=[dict(center, side=\"BUY_NO\"), dict(left, side=\"BUY_YES\"), dict(right, side=\"BUY_YES\")],"
+            },
+            {
+              "line": 199,
+              "text": "legs=[dict(cheap, side=\"BUY_YES\"), dict(rich, side=\"BUY_NO\")],"
+            },
+            {
+              "line": 234,
+              "text": "legs=[dict(tail, side=\"BUY_NO\"), dict(inner, side=\"BUY_YES\")],"
+            },
+            {
+              "line": 264,
+              "text": "legs=[dict(center, side=\"BUY_YES\")],"
+            }
+          ],
+          "match_count": 5
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 98,
+              "text": "if require_eligible and not all(int(leg.get(\"eligible\") or 0) for leg in legs):"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 440,
+              "text": "\"Orderbook prices use latest `snapshot_ts_utc <= decision_snapshot_ts_utc`; rows require all legs matched.\","
+            },
+            {
+              "line": 442,
+              "text": "f\"- Fully matched strategy rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 362,
+              "text": "def rank_key(item: dict[str, Any]) -> tuple[float, float, float]:"
+            },
+            {
+              "line": 529,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=rank_key, reverse=True),"
+            },
+            {
+              "line": 530,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 3
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_forecast_first_adjacent_range_rv.py",
+      "risk_score": 25,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 213,
+              "text": "WHERE side='BUY_YES'"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 304,
+              "text": "\"all_legs_eligible\": int(all(int(row.get(\"eligible\") or 0) for row in legs)),"
+            },
+            {
+              "line": 862,
+              "text": "old_proxy_rows = [row for row in proxy_rows if row[\"all_legs_eligible\"]]"
+            },
+            {
+              "line": 863,
+              "text": "old_orderbook_rows = [row for row in orderbook_rows if row[\"all_legs_eligible\"]]"
+            }
+          ],
+          "match_count": 3
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 185,
+              "text": "\"WHERE settlement_status='settled' AND decision_window_missing=0 \""
+            },
+            {
+              "line": 214,
+              "text": "AND settlement_status='settled'"
+            },
+            {
+              "line": 222,
+              "text": "AND final_yes IS NOT NULL"
+            }
+          ],
+          "match_count": 3
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 299,
+              "text": "\"all_legs_have_price\": int(all(row[\"market_yes_price\"] is not None for row in legs)),"
+            },
+            {
+              "line": 303,
+              "text": "\"all_legs_have_spread\": int(all(value is not None for value in spreads)),"
+            },
+            {
+              "line": 364,
+              "text": "\"fully_matched_strategy_rows\": full,"
+            },
+            {
+              "line": 366,
+              "text": "\"fully_matched_strategy_rate\": safe_div(full, len(rows_in)),"
+            },
+            {
+              "line": 378,
+              "text": "and row[\"all_legs_have_price\"]"
+            },
+            {
+              "line": 379,
+              "text": "and row[\"all_legs_have_spread\"]"
+            }
+          ],
+          "match_count": 15
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_temporal_reversion_v06.py",
+      "risk_score": 23,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 158,
+              "text": "legs=[dict(cheap, side=\"BUY_YES\"), dict(rich, side=\"BUY_NO\")],"
+            },
+            {
+              "line": 201,
+              "text": "legs = [dict(tail, side=\"BUY_NO\"), dict(inner, side=\"BUY_YES\")]"
+            },
+            {
+              "line": 203,
+              "text": "legs = [dict(tail, side=\"BUY_YES\"), dict(inner, side=\"BUY_NO\")]"
+            }
+          ],
+          "match_count": 3
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 79,
+              "text": "if not all(int(leg.get(\"eligible\") or 0) for leg in legs):"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 313,
+              "text": "\"Orderbook prices use latest `snapshot_ts_utc <= decision_snapshot_ts_utc`; rows require all legs matched.\","
+            },
+            {
+              "line": 315,
+              "text": "f\"- Fully matched strategy rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 400,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=shape.rank_key, reverse=True),"
+            },
+            {
+              "line": 401,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=shape.rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/side_alpha/weather_side_band_alpha_summary.py",
+      "risk_score": 21,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 253,
+              "text": "SUM(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS buy_yes_fills,"
+            },
+            {
+              "line": 280,
+              "text": "SUM(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS buy_yes_fills,"
+            },
+            {
+              "line": 305,
+              "text": "SUM(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS buy_yes_fills,"
+            },
+            {
+              "line": 360,
+              "text": "WHEN side='BUY_YES'"
+            }
+          ],
+          "match_count": 4
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 371,
+              "text": "WHERE eligible=1"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 152,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled_rows,"
+            },
+            {
+              "line": 163,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled"
+            },
+            {
+              "line": 200,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled_fills,"
+            },
+            {
+              "line": 204,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN cost_usd ELSE 0 END) AS settled_cost,"
+            },
+            {
+              "line": 205,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END) AS pnl,"
+            },
+            {
+              "line": 206,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END)"
+            }
+          ],
+          "match_count": 38
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_tail_fade_uncertainty_v11.py",
+      "risk_score": 20,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 141,
+              "text": "legs = [dict(row, side=\"BUY_NO\") for row in tail_rows] + [dict(row, side=\"BUY_YES\") for row in inner_rows]"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 717,
+              "text": "WHERE settlement_status='settled'"
+            },
+            {
+              "line": 719,
+              "text": "AND final_yes IS NOT NULL"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 633,
+              "text": "f\"- Fully matched base rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            },
+            {
+              "line": 634,
+              "text": "f\"- Matched expanded rows: `{report['filter_funnel']['top_level']['orderbook_matched_generated_rows']}`.\","
+            },
+            {
+              "line": 797,
+              "text": "\"orderbook_matched_base_rows\": coverage.get(\"fully_matched_strategy_rows\"),"
+            },
+            {
+              "line": 798,
+              "text": "\"orderbook_matched_generated_rows\": len(orderbook_rows),"
+            },
+            {
+              "line": 860,
+              "text": "print(f\"orderbook_matched={coverage.get('fully_matched_strategy_rows')}/{coverage.get('strategy_rows')}\")"
+            }
+          ],
+          "match_count": 5
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 458,
+              "text": "def rank_key(item: dict[str, Any]) -> tuple[float, float, float, float]:"
+            },
+            {
+              "line": 545,
+              "text": "best_proxy = report.get(\"best_decision_proxy_by_holdout_excess\")"
+            },
+            {
+              "line": 546,
+              "text": "best_orderbook = report.get(\"best_orderbook_by_holdout_excess\")"
+            },
+            {
+              "line": 759,
+              "text": "proxy_results_sorted = sorted(proxy_results, key=rank_key, reverse=True)"
+            },
+            {
+              "line": 760,
+              "text": "orderbook_results_sorted = sorted(orderbook_results, key=rank_key, reverse=True)"
+            },
+            {
+              "line": 849,
+              "text": "\"best_decision_proxy_by_holdout_excess\": proxy_results_sorted[0] if proxy_results_sorted else None,"
+            }
+          ],
+          "match_count": 7
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_regime_v08.py",
+      "risk_score": 20,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 146,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in f[\"model_mode_window\"]]"
+            },
+            {
+              "line": 189,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in f[\"model_mode_window\"]]"
+            },
+            {
+              "line": 224,
+              "text": "legs=[dict(tail, side=\"BUY_NO\"), dict(inner, side=\"BUY_YES\")],"
+            },
+            {
+              "line": 251,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in center] + [dict(row, side=\"BUY_NO\") for row in tails]"
+            },
+            {
+              "line": 278,
+              "text": "legs=[dict(mode, side=\"BUY_YES\")],"
+            }
+          ],
+          "match_count": 5
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 381,
+              "text": "\"Orderbook prices use latest `snapshot_ts_utc <= decision_snapshot_ts_utc`; rows require all legs matched.\","
+            },
+            {
+              "line": 383,
+              "text": "f\"- Fully matched strategy rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 471,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=shape.rank_key, reverse=True),"
+            },
+            {
+              "line": 472,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=shape.rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_noarb_v09.py",
+      "risk_score": 20,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 96,
+              "text": "legs=[dict(row, side=\"BUY_YES\") for row in ordered],"
+            },
+            {
+              "line": 145,
+              "text": "legs=[dict(row, side=\"BUY_YES\") for row in center] + [dict(row, side=\"BUY_NO\") for row in tails],"
+            },
+            {
+              "line": 162,
+              "text": "legs=[dict(row, side=\"BUY_YES\") for row in tails] + [dict(row, side=\"BUY_NO\") for row in center],"
+            }
+          ],
+          "match_count": 3
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 257,
+              "text": "\"Orderbook prices use latest `snapshot_ts_utc <= decision_snapshot_ts_utc`; rows require all legs matched.\","
+            },
+            {
+              "line": 259,
+              "text": "f\"- Fully matched strategy rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 346,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=shape.rank_key, reverse=True),"
+            },
+            {
+              "line": 347,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=shape.rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_side_band_forecast_regime_v0.py",
+      "risk_score": 17,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 323,
+              "text": "(side='BUY_YES' AND yes_spread IS NOT NULL)"
+            },
+            {
+              "line": 758,
+              "text": "SUM(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS buy_yes_fills,"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 513,
+              "text": "and (rule[\"eligible_mode\"] == \"no_filter\" or int(row.get(\"eligible\") or 0) == 1)"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 267,
+              "text": "\"WHERE settlement_status='settled' AND decision_window_missing=0 \""
+            },
+            {
+              "line": 274,
+              "text": "WHERE settlement_status='settled'"
+            },
+            {
+              "line": 288,
+              "text": "AND final_yes IS NOT NULL"
+            },
+            {
+              "line": 296,
+              "text": "WHERE settlement_status='settled'"
+            },
+            {
+              "line": 304,
+              "text": "AND final_yes IS NOT NULL"
+            },
+            {
+              "line": 312,
+              "text": "WHERE settlement_status='settled'"
+            }
+          ],
+          "match_count": 15
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/execution_quality/research_executable_edge.py",
+      "risk_score": 16,
+      "hits": [
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 333,
+              "text": "WHERE eligible=1"
+            },
+            {
+              "line": 402,
+              "text": "WHERE eligible=1"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 334,
+              "text": "AND final_yes IS NOT NULL"
+            },
+            {
+              "line": 403,
+              "text": "AND final_yes IS NOT NULL"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 611,
+              "text": "overall = summarize_orderbook_rows(matched, bootstrap_iters=bootstrap_iters, seed=seed) if matched else {}"
+            },
+            {
+              "line": 621,
+              "text": "\"by_side\": grouped_orderbook_summaries(matched, \"side\", bootstrap_iters=bootstrap_iters, seed=seed + 1000) if matched else {},"
+            },
+            {
+              "line": 622,
+              "text": "\"by_price_bucket\": grouped_orderbook_summaries(matched, \"price_bucket\", bootstrap_iters=bootstrap_iters, seed=seed + 2000) if matched else {},"
+            }
+          ],
+          "match_count": 3
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_adjacent3_quality_matched_baseline_v0.py",
+      "risk_score": 15,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 198,
+              "text": "WHERE side='BUY_YES'"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 209,
+              "text": "AND eligible=1"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "all_legs_settled",
+          "weight": 4,
+          "reason": "若要求全 universe settled，会把样本卡死；应只要求被选腿可评估",
+          "matches": [
+            {
+              "line": 335,
+              "text": "if not all(row.get(\"settlement_status\") == \"settled\" and row.get(\"final_yes\") is not None for row in legs):"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 499,
+              "text": "coverage[\"eval_rows_orderbook_matched\"] = matched"
+            },
+            {
+              "line": 500,
+              "text": "coverage[\"eval_rows_orderbook_matched_rate\"] = safe_div(matched, len(eval_rows))"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/side_alpha/weather_side_band_timing_impact.py",
+      "risk_score": 14,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 144,
+              "text": "SUM(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS buy_yes,"
+            },
+            {
+              "line": 193,
+              "text": "SUM(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS buy_yes,"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 83,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled_rows,"
+            },
+            {
+              "line": 94,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled,"
+            },
+            {
+              "line": 98,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN cost_usd ELSE 0 END) AS settled_cost,"
+            },
+            {
+              "line": 99,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END) AS pnl,"
+            },
+            {
+              "line": 100,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END)"
+            },
+            {
+              "line": 101,
+              "text": "/ NULLIF(SUM(CASE WHEN settlement_status='settled' THEN cost_usd ELSE 0 END), 0) AS roi,"
+            }
+          ],
+          "match_count": 31
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_market_structural_edge.py",
+      "risk_score": 14,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 119,
+              "text": "MAX(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS has_buy_yes_candidate"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 121,
+              "text": "WHERE eligible=1"
+            },
+            {
+              "line": 372,
+              "text": "WHERE eligible=1"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 122,
+              "text": "AND final_yes IS NOT NULL"
+            },
+            {
+              "line": 373,
+              "text": "AND final_yes IS NOT NULL"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_hybrid_adjacent3_single_v0.py",
+      "risk_score": 14,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 216,
+              "text": "WHERE side='BUY_YES'"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "all_legs_settled",
+          "weight": 4,
+          "reason": "若要求全 universe settled，会把样本卡死；应只要求被选腿可评估",
+          "matches": [
+            {
+              "line": 361,
+              "text": "if not all(row.get(\"settlement_status\") == \"settled\" and row.get(\"final_yes\") is not None for row in legs):"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 565,
+              "text": "coverage[\"eval_rows_orderbook_matched\"] = matched"
+            },
+            {
+              "line": 566,
+              "text": "coverage[\"eval_rows_orderbook_matched_rate\"] = safe_div(matched, len(eval_rows))"
+            },
+            {
+              "line": 787,
+              "text": "[\"orderbook matched eval rows\", report[\"orderbook_coverage\"].get(\"eval_rows_orderbook_matched\")],"
+            },
+            {
+              "line": 820,
+              "text": "\"- 当前 fixed hybrid 点估计没有形成可 live 的证据：orderbook matched 行数太少，baseline 还没有做成 matched no-trade/random 对照，三门不可能过。\","
+            }
+          ],
+          "match_count": 4
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/side_alpha/weather_side_band_entry_analysis.py",
+      "risk_score": 13,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 506,
+              "text": "WHEN side='BUY_YES' AND decision_entry_price BETWEEN 0.20 AND 0.45 AND abs_edge >= 0.20"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 376,
+              "text": "SUM(CASE WHEN eligible=1 THEN 1 ELSE 0 END) AS eligible_rows,"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 341,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled_rows,"
+            },
+            {
+              "line": 344,
+              "text": "SUM(CASE WHEN settlement_status='settled' AND pnl_usd_at_fill IS NULL THEN 1 ELSE 0 END) AS settled_null_pnl,"
+            },
+            {
+              "line": 353,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled_rows"
+            },
+            {
+              "line": 395,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled,"
+            },
+            {
+              "line": 400,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN cost_usd ELSE 0 END) AS cost,"
+            },
+            {
+              "line": 401,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END) AS pnl,"
+            }
+          ],
+          "match_count": 27
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/side_alpha/research_side_band_forecast_regime_clean_test_v0.py",
+      "risk_score": 12,
+      "hits": [
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 860,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled_fills,"
+            },
+            {
+              "line": 862,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN cost_usd ELSE 0 END) AS cost_usd,"
+            },
+            {
+              "line": 863,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END) AS pnl_usd,"
+            },
+            {
+              "line": 864,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END)"
+            },
+            {
+              "line": 865,
+              "text": "/ NULLIF(SUM(CASE WHEN settlement_status='settled' THEN cost_usd ELSE 0 END), 0) AS roi,"
+            }
+          ],
+          "match_count": 5
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 681,
+              "text": "\"orderbook_matched_rows\": int(len(matched)),"
+            },
+            {
+              "line": 904,
+              "text": "executable = regime_layered & (df[\"orderbook_matched\"].fillna(0).astype(int) == 1)"
+            },
+            {
+              "line": 905,
+              "text": "add(\"executable orderbook matched rows\", executable, \"raw orderbook latest snapshot_ts <= decision_snapshot_ts_utc 且有 best ask。\")"
+            },
+            {
+              "line": 966,
+              "text": "\"ob_rows\": hold[\"orderbook_matched_rows\"],"
+            },
+            {
+              "line": 1091,
+              "text": "\"- 5 执行微结构: partial，raw orderbook `snapshot_ts <= decision_snapshot_ts` matched rows 和 taker ROI 只作复核。\","
+            },
+            {
+              "line": 1163,
+              "text": "enriched[\"orderbook_matched\"] = enriched[\"candidate_id\"].isin(set(orderbook[\"candidate_id\"]) if not orderbook.empty else set()).astype(int)"
+            }
+          ],
+          "match_count": 6
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_underround_robust_v10.py",
+      "risk_score": 12,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 73,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in items]"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 174,
+              "text": "f\"- Base all-YES rows: `{report['input']['base_rows']}`; orderbook matched base rows `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_cover"
+            },
+            {
+              "line": 204,
+              "text": "\"Executable thresholds use `1 - orderbook_taker_cost` and only rows with all legs matched by `snapshot_ts <= decision_ts`.\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 299,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=shape.rank_key, reverse=True),"
+            },
+            {
+              "line": 300,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=shape.rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_positive_v02.py",
+      "risk_score": 11,
+      "hits": [
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 70,
+              "text": "int(row.get(\"all_legs_eligible\") or 0) == 1"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 282,
+              "text": "f\"- Fully matched ranges: `{report['orderbook_coverage'].get('fully_matched_range_rows')}` / `{report['orderbook_coverage'].get('range_rows')}`.\","
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 202,
+              "text": "def best_rank_key(item: dict[str, Any]) -> tuple[float, float, float]:"
+            },
+            {
+              "line": 378,
+              "text": "\"best_decision_proxy_by_holdout_excess\": sorted(proxy_profiles, key=best_rank_key, reverse=True)[0],"
+            },
+            {
+              "line": 379,
+              "text": "\"best_orderbook_by_holdout_excess\": sorted(orderbook_profiles, key=best_rank_key, reverse=True)[0]"
+            }
+          ],
+          "match_count": 3
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_live_test_readiness_scoreboard_v0.py",
+      "risk_score": 11,
+      "hits": [
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 146,
+              "text": "\"WHERE eligible=1 AND final_yes IS NOT NULL AND decision_window_missing=0\","
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 146,
+              "text": "\"WHERE eligible=1 AND final_yes IS NOT NULL AND decision_window_missing=0\","
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 202,
+              "text": "f\"fully_matched_strategy_rows={under.get('orderbook_coverage', {}).get('fully_matched_strategy_rows')}\""
+            },
+            {
+              "line": 223,
+              "text": "f\"eligible matched-baseline orderbook ROI={pct(matched_holdout.get('roi'))}; \""
+            },
+            {
+              "line": 233,
+              "text": "\"next_evidence_needed\": \"固定规则跑 forward shadow：>=30 event_dates、>=100 settled decisions、>=50 full orderbook matched decisions、same-cost random baseline excess CI 下界 >0。\","
+            },
+            {
+              "line": 338,
+              "text": "\"full_orderbook_matched_decisions_min\": 50,"
+            }
+          ],
+          "match_count": 4
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_adjacent3_quality_shadow_journal_v0.py",
+      "risk_score": 10,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 189,
+              "text": "WHERE side='BUY_YES'"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 437,
+              "text": "coverage[\"shadow_rows_fully_matched\"] = matched"
+            },
+            {
+              "line": 438,
+              "text": "coverage[\"shadow_rows_fully_matched_rate\"] = safe_div(matched, len(shadow_rows))"
+            },
+            {
+              "line": 585,
+              "text": "[\"orderbook fully matched shadow rows\", report[\"orderbook_coverage\"].get(\"shadow_rows_fully_matched\")],"
+            }
+          ],
+          "match_count": 3
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/execution_quality/backtest_blended_paper_fill_estimate.py",
+      "risk_score": 9,
+      "hits": [
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 221,
+              "text": "\"eligible\": _to_int(r.eligible),"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 115,
+              "text": "WHERE settlement_status = 'settled'"
+            },
+            {
+              "line": 120,
+              "text": "AND final_yes IS NOT NULL"
+            },
+            {
+              "line": 141,
+              "text": "WHERE settlement_status = 'settled'"
+            },
+            {
+              "line": 146,
+              "text": "AND final_yes IS NOT NULL"
+            },
+            {
+              "line": 157,
+              "text": "AND settlement_status='settled'"
+            },
+            {
+              "line": 466,
+              "text": "AND settlement_status='settled'"
+            }
+          ],
+          "match_count": 9
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/entry_timing/research_entry_timing_effect.py",
+      "risk_score": 9,
+      "hits": [
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 267,
+              "text": "WHERE final_yes IS NOT NULL AND decision_window_missing=0 AND eligible=1"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 219,
+              "text": "WHERE final_yes IS NOT NULL AND decision_window_missing=0"
+            },
+            {
+              "line": 267,
+              "text": "WHERE final_yes IS NOT NULL AND decision_window_missing=0 AND eligible=1"
+            },
+            {
+              "line": 505,
+              "text": "WHERE trade_class='live_real' AND settlement_status='settled'"
+            }
+          ],
+          "match_count": 3
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/research_forecast_quality_range_rv_city_model.py",
+      "risk_score": 6,
+      "hits": [
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 268,
+              "text": "f\"| no_filter adjacent3 cost<=0.85 | {exe_base['coverage'].get('fully_matched_strategy_rows')} / {exe_base['coverage'].get('strategy_rows')} | {exe_base['train']['rows']} | {pct(ex"
+            },
+            {
+              "line": 269,
+              "text": "f\"| medium_quality adjacent3 cost<=0.85 | {exe_cand['coverage'].get('fully_matched_strategy_rows')} / {exe_cand['coverage'].get('strategy_rows')} | {exe_cand['train']['rows']} | {p"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 90,
+              "text": "return sorted(out, key=lambda x: (x[\"holdout_pnl\"], x[\"holdout_rows\"]), reverse=True)"
+            }
+          ],
+          "match_count": 1
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/entry_timing/research_v1_removed_ecmwf_t28_blender_overlay.py",
+      "risk_score": 6,
+      "hits": [
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 91,
+              "text": "AND settlement_status='settled'"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "all_legs_settled",
+          "weight": 4,
+          "reason": "若要求全 universe settled，会把样本卡死；应只要求被选腿可评估",
+          "matches": [
+            {
+              "line": 284,
+              "text": "\"settlement_status\": fetchall(conn, \"SELECT COALESCE(settlement_status, '[NULL]') settlement_status, COUNT(*) rows FROM fact_trades GROUP BY settlement_status ORDER BY settlement_s"
+            }
+          ],
+          "match_count": 1
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_opportunity_fact_expansion_coverage_audit_v0.py",
+      "risk_score": 5,
+      "hits": [
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 170,
+              "text": "\"WHERE eligible=1 AND final_yes IS NOT NULL AND decision_window_missing=0\","
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 170,
+              "text": "\"WHERE eligible=1 AND final_yes IS NOT NULL AND decision_window_missing=0\","
+            }
+          ],
+          "match_count": 1
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_market_shape_fullop_v07.py",
+      "risk_score": 4,
+      "hits": [
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 108,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=shape.rank_key, reverse=True),"
+            },
+            {
+              "line": 109,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=shape.rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/research_forecast_quality_range_rv_overlay.py",
+      "risk_score": 4,
+      "hits": [
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 131,
+              "text": "WHERE settlement_status='settled'"
+            },
+            {
+              "line": 136,
+              "text": "AND final_yes IS NOT NULL"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/side_alpha/research_side_band_bad_day_risk_v2.py",
+      "risk_score": 2,
+      "hits": [
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 372,
+              "text": "ranked = sorted(payload[\"results\"], key=lambda r: ((r[\"holdout\"][\"top5_removed_roi\"] if r[\"holdout\"][\"top5_removed_roi\"] is not None else -999), (r[\"holdout\"][\"excess_roi\"] if r[\"h"
+            }
+          ],
+          "match_count": 1
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_shadow_paper_queue_v0.py",
+      "risk_score": 2,
+      "hits": [
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 132,
+              "text": "\">=50 full orderbook matched decisions\","
+            }
+          ],
+          "match_count": 1
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_walkforward_v04.py",
+      "risk_score": 2,
+      "hits": [
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 253,
+              "text": "f\"- Variant rows: `{report['input']['variant_rows']}`; orderbook matched rows `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].g"
+            }
+          ],
+          "match_count": 1
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/entry_timing/research_city_timing_effect.py",
+      "risk_score": 2,
+      "hits": [
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 160,
+              "text": "AND settlement_status='settled'"
+            }
+          ],
+          "match_count": 1
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/entry_timing/backtest_v1_ecmwf_blocked_side_band_overlay.py",
+      "risk_score": 2,
+      "hits": [
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 98,
+              "text": "AND settlement_status='settled'"
+            }
+          ],
+          "match_count": 1
+        }
+      ]
+    }
+  ],
+  "priority_findings": [
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_variant_lab_v03.py",
+      "risk_score": 30,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 195,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in legs_raw]"
+            },
+            {
+              "line": 220,
+              "text": "legs = [dict(high, side=\"BUY_YES\"), dict(low, side=\"BUY_NO\")]"
+            },
+            {
+              "line": 243,
+              "text": "legs = [dict(left, side=\"BUY_YES\"), dict(right, side=\"BUY_YES\"), dict(center, side=\"BUY_NO\")]"
+            },
+            {
+              "line": 246,
+              "text": "legs = [dict(center, side=\"BUY_YES\"), dict(left, side=\"BUY_NO\"), dict(right, side=\"BUY_NO\")]"
+            },
+            {
+              "line": 272,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in inside] + [dict(row, side=\"BUY_NO\") for row in neighbors]"
+            },
+            {
+              "line": 330,
+              "text": "legs=[dict(leg, side=\"BUY_YES\") for leg in cluster],"
+            }
+          ],
+          "match_count": 6
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 157,
+              "text": "\"all_legs_eligible\": int(all(int(leg.get(\"eligible\") or 0) for leg in legs)),"
+            },
+            {
+              "line": 342,
+              "text": "items = [row for row in raw_items if int(row.get(\"eligible\") or 0) == 1]"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 414,
+              "text": "coverage[\"fully_matched_strategy_rows\"] = full"
+            },
+            {
+              "line": 415,
+              "text": "coverage[\"fully_matched_strategy_rate\"] = scanner.safe_div(full, len(rows))"
+            },
+            {
+              "line": 577,
+              "text": "\"Orderbook prices use latest `snapshot_ts_utc <= decision_snapshot_ts_utc`; rows require all legs matched.\","
+            },
+            {
+              "line": 579,
+              "text": "f\"- Fully matched strategy rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            }
+          ],
+          "match_count": 4
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 177,
+              "text": "def top_or_none(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:"
+            },
+            {
+              "line": 206,
+              "text": "return top_or_none(candidates)"
+            },
+            {
+              "line": 231,
+              "text": "return top_or_none(candidates)"
+            },
+            {
+              "line": 257,
+              "text": "return top_or_none(candidates)"
+            },
+            {
+              "line": 283,
+              "text": "return top_or_none(candidates)"
+            },
+            {
+              "line": 314,
+              "text": "return top_or_none(candidates)"
+            }
+          ],
+          "match_count": 9
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_center_shoulders_butterfly_range_rv.py",
+      "risk_score": 30,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 459,
+              "text": "legs=[dict(center, side=\"BUY_YES\"), dict(left, side=\"BUY_NO\"), dict(right, side=\"BUY_NO\")],"
+            },
+            {
+              "line": 471,
+              "text": "legs=[dict(left, side=\"BUY_YES\"), dict(right, side=\"BUY_YES\"), dict(center, side=\"BUY_NO\")],"
+            },
+            {
+              "line": 485,
+              "text": "legs=[dict(row, side=\"BUY_YES\") for row in state[\"adjacent3\"]]"
+            },
+            {
+              "line": 502,
+              "text": "legs=[dict(row, side=\"BUY_YES\") for row in state[\"adjacent3\"]]"
+            }
+          ],
+          "match_count": 4
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 416,
+              "text": "\"all_legs_eligible\": int(all(int(leg.get(\"eligible\") or 0) for leg in legs)),"
+            },
+            {
+              "line": 800,
+              "text": "\"- 不使用旧单腿策略 `eligible` 作为 Range RV 硬门；仅在 JSON 中保留 `all_legs_eligible` 诊断字段。\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 816,
+              "text": "f\"| orderbook fully matched selected rows | {report['filter_funnel']['orderbook_fully_matched_selected_rows']} |\","
+            },
+            {
+              "line": 882,
+              "text": "f\"- Leg matched: `{report['orderbook_coverage'].get('matched_candidate_rows')}` / `{report['orderbook_coverage'].get('candidate_rows')}`.\","
+            },
+            {
+              "line": 883,
+              "text": "f\"- Fully matched family rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            },
+            {
+              "line": 884,
+              "text": "f\"- Fully matched selected rows: `{report['filter_funnel']['orderbook_fully_matched_selected_rows']}` / `{report['filter_funnel']['selected_strategy_rows']}`.\","
+            },
+            {
+              "line": 959,
+              "text": "coverage: dict[str, Any] = {\"status\": \"skipped\", \"fully_matched_strategy_rows\": 0, \"strategy_rows\": len(strategy_rows)}"
+            },
+            {
+              "line": 1029,
+              "text": "\"orderbook_fully_matched_selected_rows\": len(orderbook_selected_rows),"
+            }
+          ],
+          "match_count": 6
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 673,
+              "text": "def rank_key(item: dict[str, Any]) -> tuple[float, float, float]:"
+            },
+            {
+              "line": 1058,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=rank_key, reverse=True),"
+            },
+            {
+              "line": 1059,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 3
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_scanner.py",
+      "risk_score": 25,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 281,
+              "text": "leg_side = \"BUY_YES\" if direction == \"long_range\" else \"BUY_NO\""
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 325,
+              "text": "\"eligible_legs\": sum(int(row.get(\"eligible\") or 0) for row in legs),"
+            },
+            {
+              "line": 326,
+              "text": "\"all_legs_eligible\": int(all(int(row.get(\"eligible\") or 0) for row in legs)),"
+            },
+            {
+              "line": 832,
+              "text": "f\"- scanner input candidates: `{report['input']['candidate_rows']}` seen-complete rows; decision sets `{report['input']['decision_sets']}`; range rows `{report['input']['range_rows"
+            },
+            {
+              "line": 1027,
+              "text": "proxy_eligible_rows = [row for row in proxy_rows if int(row.get(\"all_legs_eligible\") or 0) == 1]"
+            },
+            {
+              "line": 1028,
+              "text": "ob_eligible_rows = [row for row in ob_rows if int(row.get(\"all_legs_eligible\") or 0) == 1]"
+            },
+            {
+              "line": 1103,
+              "text": "\"all_legs_eligible_range_rows\": sum(int(row.get(\"all_legs_eligible\") or 0) for row in clean_rows),"
+            }
+          ],
+          "match_count": 6
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 169,
+              "text": "WHERE final_yes IS NOT NULL"
+            },
+            {
+              "line": 170,
+              "text": "AND settlement_status='settled'"
+            },
+            {
+              "line": 833,
+              "text": "f\"- unsettled used in scanner: `0` (filter `settlement_status='settled'` and `final_yes IS NOT NULL`).\","
+            }
+          ],
+          "match_count": 3
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 10,
+              "text": "range probability after execution cost. Raw orderbook prices are matched only"
+            },
+            {
+              "line": 411,
+              "text": "coverage[\"fully_matched_range_rows\"] = matched_ranges"
+            },
+            {
+              "line": 413,
+              "text": "coverage[\"fully_matched_range_rate\"] = safe_div(matched_ranges, len(range_rows))"
+            },
+            {
+              "line": 958,
+              "text": "\"Orderbook prices are matched with the same constraint used by executable-edge research: latest `snapshot_ts_utc <= decision_snapshot_ts_utc`. This subset is a capacity/execution c"
+            },
+            {
+              "line": 960,
+              "text": "f\"- Leg coverage: `{orderbook['coverage'].get('matched_candidate_rows')}` / `{orderbook['coverage'].get('candidate_rows')}`.\","
+            },
+            {
+              "line": 961,
+              "text": "f\"- Fully matched ranges: `{orderbook['coverage'].get('fully_matched_range_rows')}` / `{orderbook['coverage'].get('range_rows')}`.\","
+            }
+          ],
+          "match_count": 6
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_market_shape_v05.py",
+      "risk_score": 25,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 133,
+              "text": "legs=[dict(center, side=\"BUY_YES\"), dict(left, side=\"BUY_NO\"), dict(right, side=\"BUY_NO\")],"
+            },
+            {
+              "line": 164,
+              "text": "legs=[dict(center, side=\"BUY_NO\"), dict(left, side=\"BUY_YES\"), dict(right, side=\"BUY_YES\")],"
+            },
+            {
+              "line": 199,
+              "text": "legs=[dict(cheap, side=\"BUY_YES\"), dict(rich, side=\"BUY_NO\")],"
+            },
+            {
+              "line": 234,
+              "text": "legs=[dict(tail, side=\"BUY_NO\"), dict(inner, side=\"BUY_YES\")],"
+            },
+            {
+              "line": 264,
+              "text": "legs=[dict(center, side=\"BUY_YES\")],"
+            }
+          ],
+          "match_count": 5
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 98,
+              "text": "if require_eligible and not all(int(leg.get(\"eligible\") or 0) for leg in legs):"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 440,
+              "text": "\"Orderbook prices use latest `snapshot_ts_utc <= decision_snapshot_ts_utc`; rows require all legs matched.\","
+            },
+            {
+              "line": 442,
+              "text": "f\"- Fully matched strategy rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 362,
+              "text": "def rank_key(item: dict[str, Any]) -> tuple[float, float, float]:"
+            },
+            {
+              "line": 529,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=rank_key, reverse=True),"
+            },
+            {
+              "line": 530,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 3
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_forecast_first_adjacent_range_rv.py",
+      "risk_score": 25,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 213,
+              "text": "WHERE side='BUY_YES'"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 304,
+              "text": "\"all_legs_eligible\": int(all(int(row.get(\"eligible\") or 0) for row in legs)),"
+            },
+            {
+              "line": 862,
+              "text": "old_proxy_rows = [row for row in proxy_rows if row[\"all_legs_eligible\"]]"
+            },
+            {
+              "line": 863,
+              "text": "old_orderbook_rows = [row for row in orderbook_rows if row[\"all_legs_eligible\"]]"
+            }
+          ],
+          "match_count": 3
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 185,
+              "text": "\"WHERE settlement_status='settled' AND decision_window_missing=0 \""
+            },
+            {
+              "line": 214,
+              "text": "AND settlement_status='settled'"
+            },
+            {
+              "line": 222,
+              "text": "AND final_yes IS NOT NULL"
+            }
+          ],
+          "match_count": 3
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 299,
+              "text": "\"all_legs_have_price\": int(all(row[\"market_yes_price\"] is not None for row in legs)),"
+            },
+            {
+              "line": 303,
+              "text": "\"all_legs_have_spread\": int(all(value is not None for value in spreads)),"
+            },
+            {
+              "line": 364,
+              "text": "\"fully_matched_strategy_rows\": full,"
+            },
+            {
+              "line": 366,
+              "text": "\"fully_matched_strategy_rate\": safe_div(full, len(rows_in)),"
+            },
+            {
+              "line": 378,
+              "text": "and row[\"all_legs_have_price\"]"
+            },
+            {
+              "line": 379,
+              "text": "and row[\"all_legs_have_spread\"]"
+            }
+          ],
+          "match_count": 15
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_temporal_reversion_v06.py",
+      "risk_score": 23,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 158,
+              "text": "legs=[dict(cheap, side=\"BUY_YES\"), dict(rich, side=\"BUY_NO\")],"
+            },
+            {
+              "line": 201,
+              "text": "legs = [dict(tail, side=\"BUY_NO\"), dict(inner, side=\"BUY_YES\")]"
+            },
+            {
+              "line": 203,
+              "text": "legs = [dict(tail, side=\"BUY_YES\"), dict(inner, side=\"BUY_NO\")]"
+            }
+          ],
+          "match_count": 3
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 79,
+              "text": "if not all(int(leg.get(\"eligible\") or 0) for leg in legs):"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 313,
+              "text": "\"Orderbook prices use latest `snapshot_ts_utc <= decision_snapshot_ts_utc`; rows require all legs matched.\","
+            },
+            {
+              "line": 315,
+              "text": "f\"- Fully matched strategy rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 400,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=shape.rank_key, reverse=True),"
+            },
+            {
+              "line": 401,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=shape.rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/side_alpha/weather_side_band_alpha_summary.py",
+      "risk_score": 21,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 253,
+              "text": "SUM(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS buy_yes_fills,"
+            },
+            {
+              "line": 280,
+              "text": "SUM(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS buy_yes_fills,"
+            },
+            {
+              "line": 305,
+              "text": "SUM(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS buy_yes_fills,"
+            },
+            {
+              "line": 360,
+              "text": "WHEN side='BUY_YES'"
+            }
+          ],
+          "match_count": 4
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 371,
+              "text": "WHERE eligible=1"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 152,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled_rows,"
+            },
+            {
+              "line": 163,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled"
+            },
+            {
+              "line": 200,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled_fills,"
+            },
+            {
+              "line": 204,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN cost_usd ELSE 0 END) AS settled_cost,"
+            },
+            {
+              "line": 205,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END) AS pnl,"
+            },
+            {
+              "line": 206,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END)"
+            }
+          ],
+          "match_count": 38
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_tail_fade_uncertainty_v11.py",
+      "risk_score": 20,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 141,
+              "text": "legs = [dict(row, side=\"BUY_NO\") for row in tail_rows] + [dict(row, side=\"BUY_YES\") for row in inner_rows]"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 717,
+              "text": "WHERE settlement_status='settled'"
+            },
+            {
+              "line": 719,
+              "text": "AND final_yes IS NOT NULL"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 633,
+              "text": "f\"- Fully matched base rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            },
+            {
+              "line": 634,
+              "text": "f\"- Matched expanded rows: `{report['filter_funnel']['top_level']['orderbook_matched_generated_rows']}`.\","
+            },
+            {
+              "line": 797,
+              "text": "\"orderbook_matched_base_rows\": coverage.get(\"fully_matched_strategy_rows\"),"
+            },
+            {
+              "line": 798,
+              "text": "\"orderbook_matched_generated_rows\": len(orderbook_rows),"
+            },
+            {
+              "line": 860,
+              "text": "print(f\"orderbook_matched={coverage.get('fully_matched_strategy_rows')}/{coverage.get('strategy_rows')}\")"
+            }
+          ],
+          "match_count": 5
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 458,
+              "text": "def rank_key(item: dict[str, Any]) -> tuple[float, float, float, float]:"
+            },
+            {
+              "line": 545,
+              "text": "best_proxy = report.get(\"best_decision_proxy_by_holdout_excess\")"
+            },
+            {
+              "line": 546,
+              "text": "best_orderbook = report.get(\"best_orderbook_by_holdout_excess\")"
+            },
+            {
+              "line": 759,
+              "text": "proxy_results_sorted = sorted(proxy_results, key=rank_key, reverse=True)"
+            },
+            {
+              "line": 760,
+              "text": "orderbook_results_sorted = sorted(orderbook_results, key=rank_key, reverse=True)"
+            },
+            {
+              "line": 849,
+              "text": "\"best_decision_proxy_by_holdout_excess\": proxy_results_sorted[0] if proxy_results_sorted else None,"
+            }
+          ],
+          "match_count": 7
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_regime_v08.py",
+      "risk_score": 20,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 146,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in f[\"model_mode_window\"]]"
+            },
+            {
+              "line": 189,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in f[\"model_mode_window\"]]"
+            },
+            {
+              "line": 224,
+              "text": "legs=[dict(tail, side=\"BUY_NO\"), dict(inner, side=\"BUY_YES\")],"
+            },
+            {
+              "line": 251,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in center] + [dict(row, side=\"BUY_NO\") for row in tails]"
+            },
+            {
+              "line": 278,
+              "text": "legs=[dict(mode, side=\"BUY_YES\")],"
+            }
+          ],
+          "match_count": 5
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 381,
+              "text": "\"Orderbook prices use latest `snapshot_ts_utc <= decision_snapshot_ts_utc`; rows require all legs matched.\","
+            },
+            {
+              "line": 383,
+              "text": "f\"- Fully matched strategy rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 471,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=shape.rank_key, reverse=True),"
+            },
+            {
+              "line": 472,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=shape.rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_noarb_v09.py",
+      "risk_score": 20,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 96,
+              "text": "legs=[dict(row, side=\"BUY_YES\") for row in ordered],"
+            },
+            {
+              "line": 145,
+              "text": "legs=[dict(row, side=\"BUY_YES\") for row in center] + [dict(row, side=\"BUY_NO\") for row in tails],"
+            },
+            {
+              "line": 162,
+              "text": "legs=[dict(row, side=\"BUY_YES\") for row in tails] + [dict(row, side=\"BUY_NO\") for row in center],"
+            }
+          ],
+          "match_count": 3
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 257,
+              "text": "\"Orderbook prices use latest `snapshot_ts_utc <= decision_snapshot_ts_utc`; rows require all legs matched.\","
+            },
+            {
+              "line": 259,
+              "text": "f\"- Fully matched strategy rows: `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_coverage'].get('strategy_rows')}`.\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 346,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=shape.rank_key, reverse=True),"
+            },
+            {
+              "line": 347,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=shape.rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_side_band_forecast_regime_v0.py",
+      "risk_score": 17,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 323,
+              "text": "(side='BUY_YES' AND yes_spread IS NOT NULL)"
+            },
+            {
+              "line": 758,
+              "text": "SUM(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS buy_yes_fills,"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 513,
+              "text": "and (rule[\"eligible_mode\"] == \"no_filter\" or int(row.get(\"eligible\") or 0) == 1)"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 267,
+              "text": "\"WHERE settlement_status='settled' AND decision_window_missing=0 \""
+            },
+            {
+              "line": 274,
+              "text": "WHERE settlement_status='settled'"
+            },
+            {
+              "line": 288,
+              "text": "AND final_yes IS NOT NULL"
+            },
+            {
+              "line": 296,
+              "text": "WHERE settlement_status='settled'"
+            },
+            {
+              "line": 304,
+              "text": "AND final_yes IS NOT NULL"
+            },
+            {
+              "line": 312,
+              "text": "WHERE settlement_status='settled'"
+            }
+          ],
+          "match_count": 15
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/execution_quality/research_executable_edge.py",
+      "risk_score": 16,
+      "hits": [
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 333,
+              "text": "WHERE eligible=1"
+            },
+            {
+              "line": 402,
+              "text": "WHERE eligible=1"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 334,
+              "text": "AND final_yes IS NOT NULL"
+            },
+            {
+              "line": 403,
+              "text": "AND final_yes IS NOT NULL"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 611,
+              "text": "overall = summarize_orderbook_rows(matched, bootstrap_iters=bootstrap_iters, seed=seed) if matched else {}"
+            },
+            {
+              "line": 621,
+              "text": "\"by_side\": grouped_orderbook_summaries(matched, \"side\", bootstrap_iters=bootstrap_iters, seed=seed + 1000) if matched else {},"
+            },
+            {
+              "line": 622,
+              "text": "\"by_price_bucket\": grouped_orderbook_summaries(matched, \"price_bucket\", bootstrap_iters=bootstrap_iters, seed=seed + 2000) if matched else {},"
+            }
+          ],
+          "match_count": 3
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_adjacent3_quality_matched_baseline_v0.py",
+      "risk_score": 15,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 198,
+              "text": "WHERE side='BUY_YES'"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 209,
+              "text": "AND eligible=1"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "all_legs_settled",
+          "weight": 4,
+          "reason": "若要求全 universe settled，会把样本卡死；应只要求被选腿可评估",
+          "matches": [
+            {
+              "line": 335,
+              "text": "if not all(row.get(\"settlement_status\") == \"settled\" and row.get(\"final_yes\") is not None for row in legs):"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 499,
+              "text": "coverage[\"eval_rows_orderbook_matched\"] = matched"
+            },
+            {
+              "line": 500,
+              "text": "coverage[\"eval_rows_orderbook_matched_rate\"] = safe_div(matched, len(eval_rows))"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/side_alpha/weather_side_band_timing_impact.py",
+      "risk_score": 14,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 144,
+              "text": "SUM(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS buy_yes,"
+            },
+            {
+              "line": 193,
+              "text": "SUM(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS buy_yes,"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 83,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled_rows,"
+            },
+            {
+              "line": 94,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled,"
+            },
+            {
+              "line": 98,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN cost_usd ELSE 0 END) AS settled_cost,"
+            },
+            {
+              "line": 99,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END) AS pnl,"
+            },
+            {
+              "line": 100,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END)"
+            },
+            {
+              "line": 101,
+              "text": "/ NULLIF(SUM(CASE WHEN settlement_status='settled' THEN cost_usd ELSE 0 END), 0) AS roi,"
+            }
+          ],
+          "match_count": 31
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_market_structural_edge.py",
+      "risk_score": 14,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 119,
+              "text": "MAX(CASE WHEN side='BUY_YES' THEN 1 ELSE 0 END) AS has_buy_yes_candidate"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 121,
+              "text": "WHERE eligible=1"
+            },
+            {
+              "line": 372,
+              "text": "WHERE eligible=1"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 122,
+              "text": "AND final_yes IS NOT NULL"
+            },
+            {
+              "line": 373,
+              "text": "AND final_yes IS NOT NULL"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_hybrid_adjacent3_single_v0.py",
+      "risk_score": 14,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 216,
+              "text": "WHERE side='BUY_YES'"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "all_legs_settled",
+          "weight": 4,
+          "reason": "若要求全 universe settled，会把样本卡死；应只要求被选腿可评估",
+          "matches": [
+            {
+              "line": 361,
+              "text": "if not all(row.get(\"settlement_status\") == \"settled\" and row.get(\"final_yes\") is not None for row in legs):"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 565,
+              "text": "coverage[\"eval_rows_orderbook_matched\"] = matched"
+            },
+            {
+              "line": 566,
+              "text": "coverage[\"eval_rows_orderbook_matched_rate\"] = safe_div(matched, len(eval_rows))"
+            },
+            {
+              "line": 787,
+              "text": "[\"orderbook matched eval rows\", report[\"orderbook_coverage\"].get(\"eval_rows_orderbook_matched\")],"
+            },
+            {
+              "line": 820,
+              "text": "\"- 当前 fixed hybrid 点估计没有形成可 live 的证据：orderbook matched 行数太少，baseline 还没有做成 matched no-trade/random 对照，三门不可能过。\","
+            }
+          ],
+          "match_count": 4
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/side_alpha/weather_side_band_entry_analysis.py",
+      "risk_score": 13,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 506,
+              "text": "WHEN side='BUY_YES' AND decision_entry_price BETWEEN 0.20 AND 0.45 AND abs_edge >= 0.20"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 376,
+              "text": "SUM(CASE WHEN eligible=1 THEN 1 ELSE 0 END) AS eligible_rows,"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 341,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled_rows,"
+            },
+            {
+              "line": 344,
+              "text": "SUM(CASE WHEN settlement_status='settled' AND pnl_usd_at_fill IS NULL THEN 1 ELSE 0 END) AS settled_null_pnl,"
+            },
+            {
+              "line": 353,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled_rows"
+            },
+            {
+              "line": 395,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled,"
+            },
+            {
+              "line": 400,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN cost_usd ELSE 0 END) AS cost,"
+            },
+            {
+              "line": 401,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END) AS pnl,"
+            }
+          ],
+          "match_count": 27
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/side_alpha/research_side_band_forecast_regime_clean_test_v0.py",
+      "risk_score": 12,
+      "hits": [
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 860,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled_fills,"
+            },
+            {
+              "line": 862,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN cost_usd ELSE 0 END) AS cost_usd,"
+            },
+            {
+              "line": 863,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END) AS pnl_usd,"
+            },
+            {
+              "line": 864,
+              "text": "SUM(CASE WHEN settlement_status='settled' THEN pnl_usd_at_fill ELSE 0 END)"
+            },
+            {
+              "line": 865,
+              "text": "/ NULLIF(SUM(CASE WHEN settlement_status='settled' THEN cost_usd ELSE 0 END), 0) AS roi,"
+            }
+          ],
+          "match_count": 5
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 681,
+              "text": "\"orderbook_matched_rows\": int(len(matched)),"
+            },
+            {
+              "line": 904,
+              "text": "executable = regime_layered & (df[\"orderbook_matched\"].fillna(0).astype(int) == 1)"
+            },
+            {
+              "line": 905,
+              "text": "add(\"executable orderbook matched rows\", executable, \"raw orderbook latest snapshot_ts <= decision_snapshot_ts_utc 且有 best ask。\")"
+            },
+            {
+              "line": 966,
+              "text": "\"ob_rows\": hold[\"orderbook_matched_rows\"],"
+            },
+            {
+              "line": 1091,
+              "text": "\"- 5 执行微结构: partial，raw orderbook `snapshot_ts <= decision_snapshot_ts` matched rows 和 taker ROI 只作复核。\","
+            },
+            {
+              "line": 1163,
+              "text": "enriched[\"orderbook_matched\"] = enriched[\"candidate_id\"].isin(set(orderbook[\"candidate_id\"]) if not orderbook.empty else set()).astype(int)"
+            }
+          ],
+          "match_count": 6
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_underround_robust_v10.py",
+      "risk_score": 12,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 73,
+              "text": "legs = [dict(row, side=\"BUY_YES\") for row in items]"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 174,
+              "text": "f\"- Base all-YES rows: `{report['input']['base_rows']}`; orderbook matched base rows `{report['orderbook_coverage'].get('fully_matched_strategy_rows')}` / `{report['orderbook_cover"
+            },
+            {
+              "line": 204,
+              "text": "\"Executable thresholds use `1 - orderbook_taker_cost` and only rows with all legs matched by `snapshot_ts <= decision_ts`.\","
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 299,
+              "text": "\"decision_proxy_results\": sorted(proxy_results, key=shape.rank_key, reverse=True),"
+            },
+            {
+              "line": 300,
+              "text": "\"orderbook_results\": sorted(orderbook_results, key=shape.rank_key, reverse=True),"
+            }
+          ],
+          "match_count": 2
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_range_rv_positive_v02.py",
+      "risk_score": 11,
+      "hits": [
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 70,
+              "text": "int(row.get(\"all_legs_eligible\") or 0) == 1"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 282,
+              "text": "f\"- Fully matched ranges: `{report['orderbook_coverage'].get('fully_matched_range_rows')}` / `{report['orderbook_coverage'].get('range_rows')}`.\","
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 202,
+              "text": "def best_rank_key(item: dict[str, Any]) -> tuple[float, float, float]:"
+            },
+            {
+              "line": 378,
+              "text": "\"best_decision_proxy_by_holdout_excess\": sorted(proxy_profiles, key=best_rank_key, reverse=True)[0],"
+            },
+            {
+              "line": 379,
+              "text": "\"best_orderbook_by_holdout_excess\": sorted(orderbook_profiles, key=best_rank_key, reverse=True)[0]"
+            }
+          ],
+          "match_count": 3
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_live_test_readiness_scoreboard_v0.py",
+      "risk_score": 11,
+      "hits": [
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 146,
+              "text": "\"WHERE eligible=1 AND final_yes IS NOT NULL AND decision_window_missing=0\","
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 146,
+              "text": "\"WHERE eligible=1 AND final_yes IS NOT NULL AND decision_window_missing=0\","
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 202,
+              "text": "f\"fully_matched_strategy_rows={under.get('orderbook_coverage', {}).get('fully_matched_strategy_rows')}\""
+            },
+            {
+              "line": 223,
+              "text": "f\"eligible matched-baseline orderbook ROI={pct(matched_holdout.get('roi'))}; \""
+            },
+            {
+              "line": 233,
+              "text": "\"next_evidence_needed\": \"固定规则跑 forward shadow：>=30 event_dates、>=100 settled decisions、>=50 full orderbook matched decisions、same-cost random baseline excess CI 下界 >0。\","
+            },
+            {
+              "line": 338,
+              "text": "\"full_orderbook_matched_decisions_min\": 50,"
+            }
+          ],
+          "match_count": 4
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/market_structure_edge/research_adjacent3_quality_shadow_journal_v0.py",
+      "risk_score": 10,
+      "hits": [
+        {
+          "pattern": "buy_yes_only_universe",
+          "weight": 4,
+          "reason": "可能把 BUY_NO-only bracket 从 city-day universe 删除",
+          "matches": [
+            {
+              "line": 189,
+              "text": "WHERE side='BUY_YES'"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 437,
+              "text": "coverage[\"shadow_rows_fully_matched\"] = matched"
+            },
+            {
+              "line": 438,
+              "text": "coverage[\"shadow_rows_fully_matched_rate\"] = safe_div(matched, len(shadow_rows))"
+            },
+            {
+              "line": 585,
+              "text": "[\"orderbook fully matched shadow rows\", report[\"orderbook_coverage\"].get(\"shadow_rows_fully_matched\")],"
+            }
+          ],
+          "match_count": 3
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/execution_quality/backtest_blended_paper_fill_estimate.py",
+      "risk_score": 9,
+      "hits": [
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 221,
+              "text": "\"eligible\": _to_int(r.eligible),"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 115,
+              "text": "WHERE settlement_status = 'settled'"
+            },
+            {
+              "line": 120,
+              "text": "AND final_yes IS NOT NULL"
+            },
+            {
+              "line": 141,
+              "text": "WHERE settlement_status = 'settled'"
+            },
+            {
+              "line": 146,
+              "text": "AND final_yes IS NOT NULL"
+            },
+            {
+              "line": 157,
+              "text": "AND settlement_status='settled'"
+            },
+            {
+              "line": 466,
+              "text": "AND settlement_status='settled'"
+            }
+          ],
+          "match_count": 9
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/entry_timing/research_entry_timing_effect.py",
+      "risk_score": 9,
+      "hits": [
+        {
+          "pattern": "eligible_hard_gate",
+          "weight": 3,
+          "reason": "可能把旧单腿 planner 过滤器误当成市场机会全集",
+          "matches": [
+            {
+              "line": 267,
+              "text": "WHERE final_yes IS NOT NULL AND decision_window_missing=0 AND eligible=1"
+            }
+          ],
+          "match_count": 1
+        },
+        {
+          "pattern": "settled_prefilter",
+          "weight": 2,
+          "reason": "若在 group decision-set 前使用，会把未结算 bracket 从分布删除",
+          "matches": [
+            {
+              "line": 219,
+              "text": "WHERE final_yes IS NOT NULL AND decision_window_missing=0"
+            },
+            {
+              "line": 267,
+              "text": "WHERE final_yes IS NOT NULL AND decision_window_missing=0 AND eligible=1"
+            },
+            {
+              "line": 505,
+              "text": "WHERE trade_class='live_real' AND settlement_status='settled'"
+            }
+          ],
+          "match_count": 3
+        }
+      ]
+    },
+    {
+      "path": "scripts/analysis/forecast_quality/research_forecast_quality_range_rv_city_model.py",
+      "risk_score": 6,
+      "hits": [
+        {
+          "pattern": "full_orderbook_match_only",
+          "weight": 2,
+          "reason": "适合执行压力测试，但不应作为机会全集主分母",
+          "matches": [
+            {
+              "line": 268,
+              "text": "f\"| no_filter adjacent3 cost<=0.85 | {exe_base['coverage'].get('fully_matched_strategy_rows')} / {exe_base['coverage'].get('strategy_rows')} | {exe_base['train']['rows']} | {pct(ex"
+            },
+            {
+              "line": 269,
+              "text": "f\"| medium_quality adjacent3 cost<=0.85 | {exe_cand['coverage'].get('fully_matched_strategy_rows')} / {exe_cand['coverage'].get('strategy_rows')} | {exe_cand['train']['rows']} | {p"
+            }
+          ],
+          "match_count": 2
+        },
+        {
+          "pattern": "posthoc_best_or_top",
+          "weight": 2,
+          "reason": "需要确认不是看 holdout 后挑规则",
+          "matches": [
+            {
+              "line": 90,
+              "text": "return sorted(out, key=lambda x: (x[\"holdout_pnl\"], x[\"holdout_rows\"]), reverse=True)"
+            }
+          ],
+          "match_count": 1
+        }
+      ]
+    }
+  ],
+  "verdict": "audit_only",
+  "live_action": "none"
+}

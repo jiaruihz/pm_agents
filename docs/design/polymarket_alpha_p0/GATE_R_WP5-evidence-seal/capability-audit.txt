@@ -1,0 +1,20 @@
+Gate R WP5 capability audit
+
+Scope:
+  src/polymarket_alpha/research/market_comparison.py
+  src/polymarket_alpha/decision/ledger.py
+
+Forbidden import/capability pattern scan:
+  requests|httpx|aiohttp|urllib|socket|websocket|subprocess|importlib|
+  py_clob_client|private-key|signing|create_order|post_order
+
+Result: 0 matches in the WP5 comparison/compiler and ledger integration scope.
+
+NETWORK_USE=NONE
+PROVIDER_CALLS=NONE
+BROWSER_USE=NONE
+MARKET_DATA_REQUESTS=NONE
+DATABASE_MIGRATION=NONE
+ORDER_CAPABILITY=NONE
+SIGNING_CAPABILITY=NONE
+PRIVATE_KEY_ACCESS=NONE

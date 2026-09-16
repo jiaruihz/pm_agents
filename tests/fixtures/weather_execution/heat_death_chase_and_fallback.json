@@ -1,0 +1,30 @@
+{
+  "fixture_version": "weather_execution_phase0_v1",
+  "source": "deterministic old-runner inputs from test_weather_current_yes_heat_death_tiny_live_v1.py",
+  "case": "heat-death H1 maker chase then bounded taker fallback",
+  "input": {
+    "head": "h1_late_carry",
+    "taker_shares": 5.0,
+    "maker_shares": 5.0,
+    "initial_ask_cap": 0.97,
+    "maker_quote": 0.961,
+    "maker_deadline_passed": true,
+    "fresh_bid": 0.96,
+    "fresh_ask": 0.965
+  },
+  "expected": {
+    "maker_child": {
+      "execution_profile": "split_taker_maker_chase_v1",
+      "execution_policy": "current_yes_heat_death_maker_probe_v1",
+      "order_lifecycle_policy": "maker_chase_then_taker_fallback_v1",
+      "maker_only": true,
+      "maker_price_cap": 0.97
+    },
+    "fallback": {
+      "action": "h1_maker_taker_fallback",
+      "maker_only": false,
+      "limit_price": 0.965,
+      "cancel_before_order_id": "fixture-maker-order"
+    }
+  }
+}

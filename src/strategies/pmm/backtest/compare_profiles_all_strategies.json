@@ -1,0 +1,49 @@
+[
+  {
+    "name": "single_baseline",
+    "description": "Single-level baseline profile",
+    "strategy_overrides": {
+      "strategy_key": "single_level_v1"
+    }
+  },
+  {
+    "name": "single_tight",
+    "description": "Single-level tighter spread profile",
+    "strategy_overrides": {
+      "strategy_key": "single_level_v1",
+      "base_spread": 0.03,
+      "deadband": 0.005,
+      "skew_factor": 0.04
+    }
+  },
+  {
+    "name": "single_conservative",
+    "description": "Single-level wider spread and stronger inventory control",
+    "strategy_overrides": {
+      "strategy_key": "single_level_v1",
+      "base_spread": 0.05,
+      "deadband": 0.01,
+      "skew_factor": 0.06
+    }
+  },
+  {
+    "name": "multi_l3_balanced",
+    "description": "Multi-level v1 with 3 levels and balanced ladder",
+    "strategy_overrides": {
+      "strategy_key": "multi_level_v1",
+      "quote_levels": 3,
+      "level_spread_step": 0.005,
+      "level_size_decay": 0.7
+    }
+  },
+  {
+    "name": "multi_l5_wide",
+    "description": "Multi-level v1 with 5 levels and wider ladder spacing",
+    "strategy_overrides": {
+      "strategy_key": "multi_level_v1",
+      "quote_levels": 5,
+      "level_spread_step": 0.01,
+      "level_size_decay": 0.6
+    }
+  }
+]

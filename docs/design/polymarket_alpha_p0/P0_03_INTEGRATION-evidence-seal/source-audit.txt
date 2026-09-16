@@ -1,0 +1,7 @@
+profile=OFFLINE_IMPLEMENTATION_ONLY
+source_commit=fe5598ca4a3bcd13b538dfb6e2cd550def2659dd
+src/polymarket_alpha/adapters: passed=True violations=0
+src/polymarket_alpha/census: passed=True violations=0
+src/polymarket_alpha/storage: passed=True violations=0
+src/polymarket_alpha/rules: passed=True violations=0
+overall=PASS

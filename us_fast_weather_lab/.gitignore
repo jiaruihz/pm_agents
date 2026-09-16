@@ -1,0 +1,9 @@
+manual/swift/service_catalog_capture/
+manual/swift/jumpstart_kits/
+manual/swift/.env.local
+manual/madis/application_copy.*
+manual/madis/reply_and_credentials/
+manual/idd/replies/
+manual/target_product/*.har
+manual/target_product/*.json
+

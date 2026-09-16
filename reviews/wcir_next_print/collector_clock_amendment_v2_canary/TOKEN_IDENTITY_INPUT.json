@@ -1,0 +1,23 @@
+{
+  "authentication_used": false,
+  "city": "Amsterdam",
+  "city_target_date_semantics": "OPERATOR_FROZEN_CANARY_METADATA; NOT A FORMAL FORWARD UNIVERSE CLAIM",
+  "condition_match": true,
+  "endpoint": "https://clob.polymarket.com/book?token_id=<redacted-in-contract>",
+  "exchange_book_hash": "46fbb87cd446f116254d3499e6ad023625c8c954",
+  "exchange_book_timestamp": "1787883021042",
+  "expected_condition_id": "0x231926c4b587719ebcd64581de6d11bd251d80e2517a6736bd6b4444413a9d94",
+  "expected_token_id": "31093818460558427786061634221576512916351494782561764883465144588283506331292",
+  "neighbor_brackets": [
+    "20",
+    "21"
+  ],
+  "observed_asset_id": "31093818460558427786061634221576512916351494782561764883465144588283506331292",
+  "observed_condition_id": "0x231926c4b587719ebcd64581de6d11bd251d80e2517a6736bd6b4444413a9d94",
+  "public_read_only": true,
+  "response_sha256": "ec1178f2b0682a84dabf63dfb8a882c5bce1f2be8b074c840f2733fbd532452d",
+  "status": "PASS",
+  "target_date": "2026-08-28",
+  "token_match": true,
+  "verified_at_utc": "2026-08-28T02:10:27.235167Z"
+}

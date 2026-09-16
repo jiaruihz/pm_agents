@@ -1,0 +1,120 @@
+{
+  "schema_version": "weather_city_probability_shadow_config_v2",
+  "output_schema_version": "weather_city_probability_shadow_v2",
+  "output_schema_fingerprint": "51a9b5a10229d7bfa522bc5d69e78ad544433867a419f9adda8a16415c6dbb1f",
+  "execution_mode": "zero_notional_shadow",
+  "orders_submitted": 0,
+  "lifecycle_status": "deprecated_read_only",
+  "require_producer_contracts": true,
+  "producer_contracts": [
+    {
+      "journal_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations",
+      "latest_path": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/latest.json",
+      "schema_version": "weather_high_frequency_observations_payload_v2",
+      "schema_fingerprint": "789563c9c429f760b1578897c7086563cb876956e9d4d69a191abc185d5b1bf1"
+    }
+  ],
+  "output_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2",
+  "journal_catalog": {
+    "evaluations": [
+      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/evaluations.jsonl"
+    ],
+    "paper_intents": [
+      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/paper_intents.jsonl"
+    ],
+    "checkpoints": [
+      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/checkpoints.jsonl"
+    ],
+    "errors": [
+      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/errors.jsonl"
+    ]
+  },
+  "profiles": [
+    {
+      "enabled": true,
+      "city": "Helsinki",
+      "adapter": "helsinki_remaining_heat_v1",
+      "profile_id": "helsinki_bounded_market_residual_c015_symmetric_v1",
+      "forward_start_utc": "2026-08-12T03:30:00Z",
+      "max_book_age_seconds": 900,
+      "max_source_to_book_lag_seconds": 120,
+      "selection_shares": 5.0,
+      "edge_threshold": 0.0,
+      "position_scope": "city_date_bracket_model",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations",
+      "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/helsinki_pre_cross_active_ladder_shadow/active_bracket_books",
+      "forecast_curve_dir": "/Volumes/jrs/weather_data_feed_service_runtime/forecast/forecast_hourly_curves",
+      "expression_models": ["bounded"],
+      "artifacts": {
+        "weather": {
+          "path": "docs/analysis/2026-07/generated/helsinki_remaining_heat_probability_v5/helsinki_remaining_heat_v5_composite_hazard_challenger.joblib",
+          "sha256": "8d94a959dbcf0e5a2e752c1cc7dd133808a06ebae7194b8a07cd3f699a293dd5"
+        },
+        "fade": {
+          "path": "docs/analysis/2026-07/generated/helsinki_fade_morphology_v1/helsinki_fade_morphology_v1.joblib",
+          "sha256": "4a34089bab953c4e1e7ae95560222b812f553138409b57e301b779721942f7e2"
+        },
+        "bounded": {
+          "path": "docs/analysis/2026-08/generated/helsinki_bounded_market_residual_v1/helsinki_bounded_market_residual_c015_symmetric_v1.json",
+          "sha256": "9f63dea09ce1a80d69d3f1c156704e4d199dafce1ea172168823e165b93c40f7"
+        }
+      }
+    },
+    {
+      "enabled": true,
+      "city": "Tokyo",
+      "adapter": "tokyo_market_anchor_v7",
+      "model_id": "tokyo_state_entry_routed_market_residual_v7",
+      "forward_start_utc": "2026-07-31T15:00:00Z",
+      "max_book_age_seconds": 180,
+      "edge_threshold": 0.02,
+      "position_scope": "city_date_model",
+      "emit_paper_intents": false,
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/active_bracket_books",
+      "evaluation_journals": [
+        "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/evaluations.jsonl"
+      ],
+      "artifacts": {
+        "weather": {
+          "path": "docs/analysis/2026-07/generated/tokyo_current_break_binary_v5/models/binary_multigrain_hgb_v5.joblib",
+          "sha256": "c329b133c35384c2ba04689e82d28f6e06efeae4db2a66a4c3fb7bcef98b3175",
+          "spec_path": "docs/analysis/2026-07/generated/tokyo_current_break_binary_v5/models/binary_multigrain_hgb_v5.spec.json",
+          "spec_sha256": "31eaed86215cc287d3e97f4699e07e34b3cb50a0d69de11d692336902da2dc81"
+        },
+        "offset": {
+          "path": "docs/analysis/2026-07/generated/tokyo_market_anchor_binary_v6/models/offset_physical_ridge1_v6.joblib",
+          "sha256": "c7ad6b9abff0433deb1fd4af21a17b1544ea482f46b96af7a49f5b97423b98df",
+          "spec_path": "docs/analysis/2026-07/generated/tokyo_market_anchor_binary_v6/models/offset_physical_ridge1_v6.spec.json",
+          "spec_sha256": "67f78b5f6d0f152e93d052404ca795c0c41e810a1b74c29dc9e995757adeaa83"
+        }
+      }
+    },
+    {
+      "enabled": true,
+      "city": "Tokyo",
+      "adapter": "tokyo_overshoot_market_residual_v2",
+      "profile_id": "tokyo_overshoot_market_residual_frozen_20260802_v2",
+      "model_id": "tokyo_overshoot_market_residual_v2",
+      "probability_policy": "overshoot_market_residual_v2",
+      "forward_start_utc": "2026-08-02T00:00:00Z",
+      "max_book_age_seconds": 180,
+      "edge_threshold": 0.02,
+      "position_scope": "city_date_bracket_model",
+      "emit_paper_intents": false,
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/active_bracket_books",
+      "artifacts": {
+        "overshoot": {
+          "path": "docs/analysis/2026-08/generated/tokyo_overshoot_market_residual_v2/tokyo_overshoot_market_residual_v2.joblib",
+          "sha256": "298b89ee629b7bf6e3fb6a074fa737de98e47156edba81b02c08ea20e784265e",
+          "spec_path": "docs/analysis/2026-08/generated/tokyo_overshoot_market_residual_v2/tokyo_overshoot_market_residual_v2.spec.json",
+          "spec_sha256": "59a7a7f1ee0a7defa1bf4405db27edbedddf6cdddb8825467b36d6037cbca2ab"
+        }
+      }
+    }
+  ]
+}

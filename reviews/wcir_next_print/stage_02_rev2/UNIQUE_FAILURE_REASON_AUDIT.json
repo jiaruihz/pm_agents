@@ -1,0 +1,25 @@
+{
+  "allowed_primary_statuses": [
+    "ARCHIVE_MISSING",
+    "CLOCK_UNCERTAINTY",
+    "IDENTITY_MISMATCH",
+    "NO_BASELINE",
+    "OPEN_GAP",
+    "STALE_BOOK",
+    "VALID_BUT_INSUFFICIENT_DEPTH",
+    "VALID_BUT_ONE_SIDED",
+    "VALID_TWO_SIDED_DEPTH"
+  ],
+  "exactly_one_primary_status_per_row": true,
+  "invalid_and_execution_infeasible_mutually_exclusive": true,
+  "source_t0_primary_status_counts": {
+    "ARCHIVE_MISSING": 278,
+    "NO_BASELINE": 44,
+    "OPEN_GAP": 34,
+    "STALE_BOOK": 419,
+    "VALID_BUT_INSUFFICIENT_DEPTH": 4,
+    "VALID_BUT_ONE_SIDED": 18,
+    "VALID_TWO_SIDED_DEPTH": 44
+  },
+  "unknown_count": 0
+}

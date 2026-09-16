@@ -1,0 +1,1772 @@
+{
+  "generated_at_utc": "2026-06-09T17:47:15.416573+00:00",
+  "target_metric": "side_band_forecast_regime_alpha",
+  "scope": "local counterfactual research only; no N100/live config changed",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "db_last_modified_utc": "2026-06-09T17:38:04.156943+00:00",
+  "mandatory_self_check": {
+    "max_fact_built_at_utc": "2026-06-09T17:37:40.513320+00:00",
+    "trade_class_distribution": [
+      {
+        "trade_class": "paper",
+        "n": 2285
+      },
+      {
+        "trade_class": "live_real",
+        "n": 1405
+      },
+      {
+        "trade_class": "live_simulated",
+        "n": 1147
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "n": 636
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "settlement_status": "settled",
+        "n": 5241
+      },
+      {
+        "settlement_status": null,
+        "n": 232
+      }
+    ],
+    "candidate_coverage": [
+      {
+        "rows": 25117,
+        "eligible": 8306,
+        "paper_ordered": 3139,
+        "live_filled": 554
+      }
+    ],
+    "order_fill_coverage": [
+      {
+        "status": "error",
+        "orders": 151,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 1635,
+        "with_fill": 1405
+      }
+    ]
+  },
+  "clob_gate": {
+    "cache_checks": {
+      "/home/rui/projects/pm_agent/runtime/weather_edge_v1/clob_fills.jsonl": {
+        "cost_usd": 3767.650378,
+        "distinct_executions": 847,
+        "distinct_fill_ids": 1405,
+        "missing_order_cost_usd": 0.0,
+        "missing_order_rows": 0,
+        "multi_fill_executions": 377,
+        "over_order_cost_usd": 0.0,
+        "over_order_excess_cost_usd": 0.0,
+        "over_order_keys": 0,
+        "rows": 1405,
+        "top_over_order": []
+      }
+    },
+    "db": "/home/rui/projects/pm_agent/runtime/weather.db",
+    "db_fill_cost_minus_fact_cost": 0.0,
+    "db_fills": {
+      "cost_usd": 3767.650378,
+      "distinct_executions": 847,
+      "distinct_fill_ids": 1405,
+      "missing_order_cost_usd": 0.0,
+      "missing_order_rows": 0,
+      "multi_fill_executions": 377,
+      "over_order_cost_usd": 0.0,
+      "over_order_excess_cost_usd": 0.0,
+      "over_order_keys": 0,
+      "rows": 1405,
+      "top_over_order": []
+    },
+    "db_vs_primary_cache": {
+      "cache_not_in_db": 0,
+      "db_cost_minus_cache_cost": 0.0,
+      "db_not_in_cache": 0,
+      "sample_cache_not_in_db": [],
+      "sample_db_not_in_cache": []
+    },
+    "fact_trades_live_real": {
+      "cost_usd": 3767.650378,
+      "executions": 847,
+      "fill_ids": 1405,
+      "rows": 1405
+    },
+    "fail_reasons": [],
+    "gate_pass": true,
+    "order_caps": 1077,
+    "returncode": 0
+  },
+  "split": {
+    "method": "event_date chronological 70/30 split",
+    "train_start": "2026-05-06",
+    "train_end": "2026-05-28",
+    "holdout_start": "2026-05-29",
+    "holdout_end": "2026-06-07",
+    "train_dates": 21,
+    "holdout_dates": 9
+  },
+  "regime_thresholds_train_only": {
+    "entropy_low_max": 0.7076763739132063,
+    "entropy_high_min": 0.8423549096219223,
+    "mode_prob_high_min": 0.5599337356525855,
+    "adj2_high_min": 0.9703901532745008,
+    "adj3_high_min": 1.0,
+    "hist_miss_low_max": 0.0,
+    "hist_miss_high_min": 0.062962962962963,
+    "tail_high_min": 0.0,
+    "l1_high_min": 1.1012017457685161
+  },
+  "filter_funnel": [
+    {
+      "step": "fact_signal_candidates rows",
+      "rows": 25117,
+      "active_dates": 37,
+      "drop_from_previous": null,
+      "note": "全机会候选表，不按 eligible 硬过滤。",
+      "drop_over_70pct": false
+    },
+    {
+      "step": "settled + decision_window present rows",
+      "rows": 2277,
+      "active_dates": 33,
+      "drop_from_previous": 0.9093442688219134,
+      "note": "只保留可评价 counterfactual 的 settled 决策窗。",
+      "drop_over_70pct": true
+    },
+    {
+      "step": "可识别 market/model/price/side rows",
+      "rows": 1092,
+      "active_dates": 30,
+      "drop_from_previous": 0.5204216073781291,
+      "note": "要求 condition/market/model/side/decision_entry_price/counterfactual_pnl 可用。",
+      "drop_over_70pct": false
+    },
+    {
+      "step": "side_band candidate rows",
+      "rows": 612,
+      "active_dates": 30,
+      "drop_from_previous": 0.43956043956043955,
+      "note": "预注册 grid 任一 price band/hour bucket 的 union。",
+      "drop_over_70pct": false
+    },
+    {
+      "step": "forecast regime 分层后 rows",
+      "rows": 612,
+      "active_dates": 30,
+      "drop_from_previous": 0.0,
+      "note": "已成功 merge distribution features 并分配 regime。",
+      "drop_over_70pct": false
+    },
+    {
+      "step": "executable orderbook matched rows",
+      "rows": 334,
+      "active_dates": 18,
+      "drop_from_previous": 0.45424836601307195,
+      "note": "raw orderbook latest snapshot_ts <= decision_snapshot_ts_utc 且有 best ask。",
+      "drop_over_70pct": false
+    },
+    {
+      "step": "train rows",
+      "rows": 456,
+      "active_dates": 21,
+      "drop_from_previous": null,
+      "note": "按 event_date chronological 70% split；不是上一行的过滤子集。",
+      "drop_over_70pct": false
+    },
+    {
+      "step": "holdout rows",
+      "rows": 156,
+      "active_dates": 9,
+      "drop_from_previous": null,
+      "note": "holdout 不参与调参；不是上一行的过滤子集。",
+      "drop_over_70pct": false
+    }
+  ],
+  "orderbook_coverage": {
+    "status": "ok",
+    "source": "raw orderbook snapshots, latest snapshot_ts_utc <= decision_snapshot_ts_utc",
+    "orderbook_glob": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/orderbook_snapshots/*/*.jsonl.gz",
+    "orderbook_files_found": 1053,
+    "candidate_rows": 1092,
+    "matched_candidate_rows": 579,
+    "matched_candidate_rate": 0.5302197802197802,
+    "scanned_files": 904,
+    "scanned_rows": 1120529,
+    "matched_book_rows_seen": 43675
+  },
+  "old_strategy_diagnostics": {
+    "source": "fact_trades live_real; historical diagnostic only, not main opportunity alpha",
+    "rows": [
+      {
+        "strategy_instance": "legacy_mid_price_core_v1_25_75",
+        "fills": 462,
+        "settled_fills": 437,
+        "active_dates": 16,
+        "cost_usd": 1229.710656,
+        "pnl_usd": 110.816806,
+        "roi": 0.0901161630659237,
+        "open_cost_usd": 81.595859
+      },
+      {
+        "strategy_instance": "legacy_mid_price_core_v1_side_band_window",
+        "fills": 4,
+        "settled_fills": 4,
+        "active_dates": 1,
+        "cost_usd": 9.992744,
+        "pnl_usd": 7.241699,
+        "roi": 0.724695739228384,
+        "open_cost_usd": 0
+      },
+      {
+        "strategy_instance": "legacy_mid_price_core_v2_25_75",
+        "fills": 89,
+        "settled_fills": 89,
+        "active_dates": 4,
+        "cost_usd": 209.59581,
+        "pnl_usd": -22.524852999999997,
+        "roi": -0.10746805005309981,
+        "open_cost_usd": 0
+      },
+      {
+        "strategy_instance": "mid_price_core_v1_25_75",
+        "fills": 482,
+        "settled_fills": 442,
+        "active_dates": 10,
+        "cost_usd": 1140.3319490000001,
+        "pnl_usd": -116.39110900000001,
+        "roi": -0.10206774360927776,
+        "open_cost_usd": 113.40292000000001
+      },
+      {
+        "strategy_instance": "mid_price_core_v1_side_band",
+        "fills": 145,
+        "settled_fills": 138,
+        "active_dates": 10,
+        "cost_usd": 336.30316,
+        "pnl_usd": 10.765915000000003,
+        "roi": 0.032012530004178384,
+        "open_cost_usd": 23.742411
+      },
+      {
+        "strategy_instance": "mid_price_core_v2_25_75",
+        "fills": 88,
+        "settled_fills": 88,
+        "active_dates": 6,
+        "cost_usd": 221.373486,
+        "pnl_usd": -53.61733,
+        "roi": -0.24220303419714861,
+        "open_cost_usd": 0
+      }
+    ]
+  },
+  "selection_info": {
+    "grid_rules_tested": 5760,
+    "train_selection_rule": "pre-registered grid; pick top train excess ROI lower CI among rows>=30 and active_dates>=5, then holdout frozen",
+    "eligible_rules_for_selection": 336,
+    "multiple_testing_note": "No Bonferroni/FDR correction applied to the displayed top train rules; this is why passing train alone is not a live action."
+  },
+  "candidate_rules": [
+    {
+      "rule": {
+        "price_band": "0.20-0.80",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.08,
+        "liquidity_filter": "none",
+        "eligible_filter": "no_filter",
+        "regime": "medium_uncertainty_price_sensitive",
+        "human_readable_idea": "全机会里，买双边，入场价0.20-0.80，T-18-24，abs_edge>=0.08，不过滤流动性，只要中等不确定性且价格敏感区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 31,
+        "active_dates": 14,
+        "cost_usd_1share": 14.9785,
+        "counterfactual_pnl_usd_1share": 40.214999999999996,
+        "roi": 2.6848482825383044,
+        "roi_ci95_event_date_cluster": [
+          -1.8273633248987269,
+          6.325454476610846
+        ],
+        "baseline_rows": 383,
+        "baseline_active_dates": 21,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.250823398538683,
+        "excess_roi": 2.4340248839996215,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.0933259790480223,
+          6.177599976869887
+        ],
+        "top5_removed_roi": -2.1910587622828137,
+        "worst_day_pnl": -10.1,
+        "live_fill_rate_diagnostic": 0.06451612903225806,
+        "low_price_buy_yes_rows": 4,
+        "orderbook_matched_rows": 12,
+        "orderbook_taker_roi": 0.12179487179487183
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 8,
+        "active_dates": 3,
+        "cost_usd_1share": 4.4799999999999995,
+        "counterfactual_pnl_usd_1share": -4.799999999999999,
+        "roi": -1.0714285714285714,
+        "roi_ci95_event_date_cluster": [
+          -9.999999999999998,
+          3.958125623130609
+        ],
+        "baseline_rows": 132,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.4686007406535024,
+        "excess_roi": -1.5400293120820738,
+        "excess_roi_ci95_event_date_cluster": [
+          -8.626047379696729,
+          7.32594970522743
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -11.399999999999999,
+        "live_fill_rate_diagnostic": 0.75,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 8,
+        "orderbook_taker_roi": -0.18200408997955006
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.20-0.80",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "none",
+        "eligible_filter": "no_filter",
+        "regime": "low_uncertainty_allowed",
+        "human_readable_idea": "全机会里，买双边，入场价0.20-0.80，T-18-24，abs_edge>=0.03，不过滤流动性，只要低不确定性 forecast。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 33,
+        "active_dates": 10,
+        "cost_usd_1share": 18.935000000000002,
+        "counterfactual_pnl_usd_1share": 30.650000000000002,
+        "roi": 1.6186955373646685,
+        "roi_ci95_event_date_cluster": [
+          -1.369533031440513,
+          5.236421704364284
+        ],
+        "baseline_rows": 428,
+        "baseline_active_dates": 21,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.15480902741798439,
+        "excess_roi": 1.4638865099466842,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.1375041657407896,
+          5.002314617159896
+        ],
+        "top5_removed_roi": -2.3591212989493795,
+        "worst_day_pnl": -15.8,
+        "live_fill_rate_diagnostic": 0.3333333333333333,
+        "low_price_buy_yes_rows": 3,
+        "orderbook_matched_rows": 19,
+        "orderbook_taker_roi": 0.0801080108010801
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 24,
+        "active_dates": 4,
+        "cost_usd_1share": 12.739,
+        "counterfactual_pnl_usd_1share": 22.610000000000007,
+        "roi": 1.7748645890572263,
+        "roi_ci95_event_date_cluster": [
+          -3.577392421323057,
+          5.959144589849984
+        ],
+        "baseline_rows": 151,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.17352801766494408,
+        "excess_roi": 1.6013365713922822,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.7882054049375977,
+          4.6538398383242265
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.949999999999999,
+        "live_fill_rate_diagnostic": 0.6666666666666666,
+        "low_price_buy_yes_rows": 1,
+        "orderbook_matched_rows": 24,
+        "orderbook_taker_roi": 0.1082379017362394
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "PASS"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.20-0.80",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.05,
+        "liquidity_filter": "none",
+        "eligible_filter": "no_filter",
+        "regime": "low_uncertainty_allowed",
+        "human_readable_idea": "全机会里，买双边，入场价0.20-0.80，T-18-24，abs_edge>=0.05，不过滤流动性，只要低不确定性 forecast。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 32,
+        "active_dates": 10,
+        "cost_usd_1share": 18.15,
+        "counterfactual_pnl_usd_1share": 28.5,
+        "roi": 1.5702479338842976,
+        "roi_ci95_event_date_cluster": [
+          -1.4974901250822907,
+          5.363665663944993
+        ],
+        "baseline_rows": 416,
+        "baseline_active_dates": 21,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.22762866037241347,
+        "excess_roi": 1.3426192735118843,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.5247501074808676,
+          4.751347940008987
+        ],
+        "top5_removed_roi": -2.7723283427981413,
+        "worst_day_pnl": -15.8,
+        "live_fill_rate_diagnostic": 0.34375,
+        "low_price_buy_yes_rows": 3,
+        "orderbook_matched_rows": 18,
+        "orderbook_taker_roi": 0.06589147286821705
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 24,
+        "active_dates": 4,
+        "cost_usd_1share": 12.739,
+        "counterfactual_pnl_usd_1share": 22.610000000000007,
+        "roi": 1.7748645890572263,
+        "roi_ci95_event_date_cluster": [
+          -3.6548223350253806,
+          5.959144589849982
+        ],
+        "baseline_rows": 146,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.29274481173851613,
+        "excess_roi": 1.4821197773187103,
+        "excess_roi_ci95_event_date_cluster": [
+          -3.17477168642212,
+          4.406810239341961
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.949999999999999,
+        "live_fill_rate_diagnostic": 0.6666666666666666,
+        "low_price_buy_yes_rows": 1,
+        "orderbook_matched_rows": 24,
+        "orderbook_taker_roi": 0.1082379017362394
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "PASS"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.20-0.80",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.08,
+        "liquidity_filter": "none",
+        "eligible_filter": "no_filter",
+        "regime": "low_uncertainty_allowed",
+        "human_readable_idea": "全机会里，买双边，入场价0.20-0.80，T-18-24，abs_edge>=0.08，不过滤流动性，只要低不确定性 forecast。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 32,
+        "active_dates": 10,
+        "cost_usd_1share": 18.15,
+        "counterfactual_pnl_usd_1share": 28.5,
+        "roi": 1.5702479338842976,
+        "roi_ci95_event_date_cluster": [
+          -1.536682430230701,
+          5.449186237458947
+        ],
+        "baseline_rows": 383,
+        "baseline_active_dates": 21,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.250823398538683,
+        "excess_roi": 1.3194245353456147,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.4390969919836638,
+          5.112710485375555
+        ],
+        "top5_removed_roi": -2.7723283427981413,
+        "worst_day_pnl": -15.8,
+        "live_fill_rate_diagnostic": 0.34375,
+        "low_price_buy_yes_rows": 3,
+        "orderbook_matched_rows": 18,
+        "orderbook_taker_roi": 0.06589147286821705
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 24,
+        "active_dates": 4,
+        "cost_usd_1share": 12.739,
+        "counterfactual_pnl_usd_1share": 22.610000000000007,
+        "roi": 1.7748645890572263,
+        "roi_ci95_event_date_cluster": [
+          -3.577392421323057,
+          5.959144589849982
+        ],
+        "baseline_rows": 132,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.4686007406535024,
+        "excess_roi": 1.306263848403724,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.4482493103212493,
+          4.565083398338223
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.949999999999999,
+        "live_fill_rate_diagnostic": 0.6666666666666666,
+        "low_price_buy_yes_rows": 1,
+        "orderbook_matched_rows": 24,
+        "orderbook_taker_roi": 0.1082379017362394
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "PASS"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.20-0.80",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.1,
+        "liquidity_filter": "none",
+        "eligible_filter": "no_filter",
+        "regime": "low_uncertainty_allowed",
+        "human_readable_idea": "全机会里，买双边，入场价0.20-0.80，T-18-24，abs_edge>=0.10，不过滤流动性，只要低不确定性 forecast。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 32,
+        "active_dates": 10,
+        "cost_usd_1share": 18.15,
+        "counterfactual_pnl_usd_1share": 28.5,
+        "roi": 1.5702479338842976,
+        "roi_ci95_event_date_cluster": [
+          -1.5454098822137612,
+          5.749707837615188
+        ],
+        "baseline_rows": 363,
+        "baseline_active_dates": 21,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.29658967371783496,
+        "excess_roi": 1.2736582601664628,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.5271866289416942,
+          4.956982222150232
+        ],
+        "top5_removed_roi": -2.7723283427981413,
+        "worst_day_pnl": -15.8,
+        "live_fill_rate_diagnostic": 0.34375,
+        "low_price_buy_yes_rows": 3,
+        "orderbook_matched_rows": 18,
+        "orderbook_taker_roi": 0.06589147286821705
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 24,
+        "active_dates": 4,
+        "cost_usd_1share": 12.739,
+        "counterfactual_pnl_usd_1share": 22.610000000000007,
+        "roi": 1.7748645890572263,
+        "roi_ci95_event_date_cluster": [
+          -3.577392421323057,
+          5.959144589849982
+        ],
+        "baseline_rows": 122,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.5182363476134977,
+        "excess_roi": 1.2566282414437286,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.6899716204392936,
+          4.634103934105973
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.949999999999999,
+        "live_fill_rate_diagnostic": 0.6666666666666666,
+        "low_price_buy_yes_rows": 1,
+        "orderbook_matched_rows": 24,
+        "orderbook_taker_roi": 0.1082379017362394
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "PASS"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.20-0.80",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.05,
+        "liquidity_filter": "none",
+        "eligible_filter": "no_filter",
+        "regime": "medium_uncertainty_price_sensitive",
+        "human_readable_idea": "全机会里，买双边，入场价0.20-0.80，T-18-24，abs_edge>=0.05，不过滤流动性，只要中等不确定性且价格敏感区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 36,
+        "active_dates": 14,
+        "cost_usd_1share": 17.4585,
+        "counterfactual_pnl_usd_1share": 25.415,
+        "roi": 1.4557378927170146,
+        "roi_ci95_event_date_cluster": [
+          -2.412508324605496,
+          5.020351279877645
+        ],
+        "baseline_rows": 416,
+        "baseline_active_dates": 21,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.22762866037241347,
+        "excess_roi": 1.2281092323446012,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.610847432504639,
+          4.992893318495686
+        ],
+        "top5_removed_roi": -2.625708623311979,
+        "worst_day_pnl": -10.1,
+        "live_fill_rate_diagnostic": 0.05555555555555555,
+        "low_price_buy_yes_rows": 5,
+        "orderbook_matched_rows": 16,
+        "orderbook_taker_roi": -0.15151515151515152
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 11,
+        "active_dates": 3,
+        "cost_usd_1share": 6.3549999999999995,
+        "counterfactual_pnl_usd_1share": -3.5500000000000007,
+        "roi": -0.5586152635719908,
+        "roi_ci95_event_date_cluster": [
+          -9.999999999999998,
+          4.9476831091180875
+        ],
+        "baseline_rows": 146,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.29274481173851613,
+        "excess_roi": -0.8513600753105068,
+        "excess_roi_ci95_event_date_cluster": [
+          -9.134957496536435,
+          7.344379973411542
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -14.4,
+        "live_fill_rate_diagnostic": 0.8181818181818182,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 11,
+        "orderbook_taker_roi": -0.12790697674418605
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.20-0.80",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "none",
+        "eligible_filter": "no_filter",
+        "regime": "medium_uncertainty_price_sensitive",
+        "human_readable_idea": "全机会里，买双边，入场价0.20-0.80，T-18-24，abs_edge>=0.03，不过滤流动性，只要中等不确定性且价格敏感区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 39,
+        "active_dates": 15,
+        "cost_usd_1share": 18.628499999999995,
+        "counterfactual_pnl_usd_1share": 13.715000000000003,
+        "roi": 0.7362374855731812,
+        "roi_ci95_event_date_cluster": [
+          -3.050078994397151,
+          4.20500055854803
+        ],
+        "baseline_rows": 428,
+        "baseline_active_dates": 21,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.15480902741798439,
+        "excess_roi": 0.5814284581551968,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.856466960081632,
+          4.0190958393310385
+        ],
+        "top5_removed_roi": -3.1819150296160568,
+        "worst_day_pnl": -12.385000000000002,
+        "live_fill_rate_diagnostic": 0.07692307692307693,
+        "low_price_buy_yes_rows": 5,
+        "orderbook_matched_rows": 17,
+        "orderbook_taker_roi": -0.18319719953325556
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 12,
+        "active_dates": 3,
+        "cost_usd_1share": 7.1499999999999995,
+        "counterfactual_pnl_usd_1share": -1.5000000000000009,
+        "roi": -0.20979020979020993,
+        "roi_ci95_event_date_cluster": [
+          -5.901639344262295,
+          8.018018018018019
+        ],
+        "baseline_rows": 151,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.17352801766494408,
+        "excess_roi": -0.383318227455154,
+        "excess_roi_ci95_event_date_cluster": [
+          -5.025050755717638,
+          7.320142130880226
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -14.4,
+        "live_fill_rate_diagnostic": 0.75,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 12,
+        "orderbook_taker_roi": -0.08972691807542264
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.30-0.70",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "none",
+        "eligible_filter": "eligible_control",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "旧 eligible 对照里，买双边，入场价0.30-0.70，T-18-24，abs_edge>=0.03，不过滤流动性，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 46,
+        "active_dates": 12,
+        "cost_usd_1share": 25.194999999999997,
+        "counterfactual_pnl_usd_1share": 8.049999999999999,
+        "roi": 0.319507838856916,
+        "roi_ci95_event_date_cluster": [
+          -2.083683346394224,
+          3.3210876636481985
+        ],
+        "baseline_rows": 65,
+        "baseline_active_dates": 15,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.1434990578344688,
+        "excess_roi": 0.46300689669138484,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.8397394309967705,
+          1.9501788142681742
+        ],
+        "top5_removed_roi": -1.7276487432389436,
+        "worst_day_pnl": -18.8,
+        "live_fill_rate_diagnostic": 0.45652173913043476,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 27,
+        "orderbook_taker_roi": -0.05341446923597024
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 45,
+        "active_dates": 9,
+        "cost_usd_1share": 27.23,
+        "counterfactual_pnl_usd_1share": -72.29999999999998,
+        "roi": -2.655159750275431,
+        "roi_ci95_event_date_cluster": [
+          -4.201215639620153,
+          -0.8669145575034511
+        ],
+        "baseline_rows": 58,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -1.4856136230182033,
+        "excess_roi": -1.1695461272572276,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.122748260322789,
+          0.6913799791211541
+        ],
+        "top5_removed_roi": -3.364928909952607,
+        "worst_day_pnl": -35.3,
+        "live_fill_rate_diagnostic": 0.8,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 45,
+        "orderbook_taker_roi": -0.28238249013275923
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.25-0.75",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "none",
+        "eligible_filter": "eligible_control",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "旧 eligible 对照里，买双边，入场价0.25-0.75，T-18-24，abs_edge>=0.03，不过滤流动性，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 64,
+        "active_dates": 12,
+        "cost_usd_1share": 35.578,
+        "counterfactual_pnl_usd_1share": 54.21999999999999,
+        "roi": 1.5239754904716394,
+        "roi_ci95_event_date_cluster": [
+          -0.5555666127923434,
+          4.3918470165632675
+        ],
+        "baseline_rows": 88,
+        "baseline_active_dates": 15,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 1.1317643846549679,
+        "excess_roi": 0.3922111058166715,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.6085260723521179,
+          1.5570202964884723
+        ],
+        "top5_removed_roi": -0.5882352941176471,
+        "worst_day_pnl": -16.05,
+        "live_fill_rate_diagnostic": 0.453125,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 37,
+        "orderbook_taker_roi": 0.07369448511469011
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 62,
+        "active_dates": 9,
+        "cost_usd_1share": 36.46499999999999,
+        "counterfactual_pnl_usd_1share": -54.65,
+        "roi": -1.4986973810503226,
+        "roi_ci95_event_date_cluster": [
+          -3.247540594343712,
+          -0.2337448194815313
+        ],
+        "baseline_rows": 87,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.7600835609834489,
+        "excess_roi": -0.7386138200668737,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.348955948561751,
+          1.545525897240745
+        ],
+        "top5_removed_roi": -2.0993227990970653,
+        "worst_day_pnl": -24.700000000000003,
+        "live_fill_rate_diagnostic": 0.8225806451612904,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 62,
+        "orderbook_taker_roi": -0.16890080428954418
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.35-0.65",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "none",
+        "eligible_filter": "eligible_control",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "旧 eligible 对照里，买双边，入场价0.35-0.65，T-18-24，abs_edge>=0.03，不过滤流动性，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 33,
+        "active_dates": 12,
+        "cost_usd_1share": 17.155,
+        "counterfactual_pnl_usd_1share": 8.450000000000001,
+        "roi": 0.4925677645001458,
+        "roi_ci95_event_date_cluster": [
+          -2.1834228683696675,
+          4.823696612643694
+        ],
+        "baseline_rows": 46,
+        "baseline_active_dates": 15,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.2586022654413336,
+        "excess_roi": 0.2339654990588122,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.39028926546335,
+          2.3164570989593587
+        ],
+        "top5_removed_roi": -2.087912087912088,
+        "worst_day_pnl": -12.0,
+        "live_fill_rate_diagnostic": 0.45454545454545453,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 21,
+        "orderbook_taker_roi": -0.09909909909909909
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 28,
+        "active_dates": 8,
+        "cost_usd_1share": 15.735000000000001,
+        "counterfactual_pnl_usd_1share": -47.35,
+        "roi": -3.0092151255163646,
+        "roi_ci95_event_date_cluster": [
+          -5.824082141217691,
+          0.26518391787852863
+        ],
+        "baseline_rows": 36,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -1.9597989949748742,
+        "excess_roi": -1.0494161305414904,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.144142737460369,
+          1.4316953729017545
+        ],
+        "top5_removed_roi": -4.0552016985138,
+        "worst_day_pnl": -27.75,
+        "live_fill_rate_diagnostic": 0.8214285714285714,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 28,
+        "orderbook_taker_roi": -0.311208515967439
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.30-0.70",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.05,
+        "liquidity_filter": "none",
+        "eligible_filter": "eligible_control",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "旧 eligible 对照里，买双边，入场价0.30-0.70，T-18-24，abs_edge>=0.05，不过滤流动性，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 45,
+        "active_dates": 12,
+        "cost_usd_1share": 24.869999999999997,
+        "counterfactual_pnl_usd_1share": 1.2999999999999963,
+        "roi": 0.052271813429835,
+        "roi_ci95_event_date_cluster": [
+          -2.626737051799954,
+          3.0472133622128763
+        ],
+        "baseline_rows": 62,
+        "baseline_active_dates": 15,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.09900990099009906,
+        "excess_roi": 0.15128171441993404,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.08103411130515,
+          1.8408370966883285
+        ],
+        "top5_removed_roi": -2.202729044834308,
+        "worst_day_pnl": -18.8,
+        "live_fill_rate_diagnostic": 0.4666666666666667,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 26,
+        "orderbook_taker_roi": -0.10034602076124564
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 41,
+        "active_dates": 9,
+        "cost_usd_1share": 25.08,
+        "counterfactual_pnl_usd_1share": -60.800000000000004,
+        "roi": -2.4242424242424248,
+        "roi_ci95_event_date_cluster": [
+          -3.8621419259238152,
+          -0.8207754114888097
+        ],
+        "baseline_rows": 54,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -1.2253212159197742,
+        "excess_roi": -1.1989212083226506,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.283889095315391,
+          0.7227289438656943
+        ],
+        "top5_removed_roi": -3.1398416886543528,
+        "worst_day_pnl": -25.4,
+        "live_fill_rate_diagnostic": 0.8536585365853658,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 41,
+        "orderbook_taker_roi": -0.2601246105919004
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.25-0.75",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.05,
+        "liquidity_filter": "none",
+        "eligible_filter": "eligible_control",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "旧 eligible 对照里，买双边，入场价0.25-0.75，T-18-24，abs_edge>=0.05，不过滤流动性，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 62,
+        "active_dates": 12,
+        "cost_usd_1share": 34.507999999999996,
+        "counterfactual_pnl_usd_1share": 44.92000000000001,
+        "roi": 1.3017271357366411,
+        "roi_ci95_event_date_cluster": [
+          -1.010233626335089,
+          4.194728750424244
+        ],
+        "baseline_rows": 84,
+        "baseline_active_dates": 15,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 1.1593711366147716,
+        "excess_roi": 0.14235599912186947,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.7915129626174359,
+          1.55381695924878
+        ],
+        "top5_removed_roi": -1.0802775024777005,
+        "worst_day_pnl": -16.05,
+        "live_fill_rate_diagnostic": 0.45161290322580644,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 35,
+        "orderbook_taker_roi": 0.031459515214027844
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 58,
+        "active_dates": 9,
+        "cost_usd_1share": 34.31499999999999,
+        "counterfactual_pnl_usd_1share": -43.150000000000006,
+        "roi": -1.2574675797756087,
+        "roi_ci95_event_date_cluster": [
+          -2.840579609106239,
+          0.03639396590994693
+        ],
+        "baseline_rows": 83,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.5529663685602723,
+        "excess_roi": -0.7045012112153365,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.5485862073864367,
+          1.6136892047177647
+        ],
+        "top5_removed_roi": -1.8133442488743348,
+        "worst_day_pnl": -14.8,
+        "live_fill_rate_diagnostic": 0.8620689655172413,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 58,
+        "orderbook_taker_roi": -0.14554258046140703
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.35-0.65",
+        "side": "BUY_NO",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "none",
+        "eligible_filter": "no_filter",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "全机会里，买BUY_NO，入场价0.35-0.65，T-18-24，abs_edge>=0.03，不过滤流动性，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 124,
+        "active_dates": 21,
+        "cost_usd_1share": 70.18,
+        "counterfactual_pnl_usd_1share": 18.200000000000003,
+        "roi": 0.2593331433456825,
+        "roi_ci95_event_date_cluster": [
+          -0.9398708568188805,
+          1.3629069154075244
+        ],
+        "baseline_rows": 139,
+        "baseline_active_dates": 21,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.19887812340642527,
+        "excess_roi": 0.060455019939257254,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.5634946172530075,
+          0.5804232107722835
+        ],
+        "top5_removed_roi": -1.239371296057717,
+        "worst_day_pnl": -17.450000000000003,
+        "live_fill_rate_diagnostic": 0.08064516129032258,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 41,
+        "orderbook_taker_roi": -0.12974683544303803
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 40,
+        "active_dates": 8,
+        "cost_usd_1share": 23.090000000000003,
+        "counterfactual_pnl_usd_1share": -40.9,
+        "roi": -1.7713295799047204,
+        "roi_ci95_event_date_cluster": [
+          -4.8073643721558215,
+          0.6493758925960382
+        ],
+        "baseline_rows": 47,
+        "baseline_active_dates": 8,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -1.1242603550295858,
+        "excess_roi": -0.6470692248751346,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.5805147279863612,
+          0.5453177756650681
+        ],
+        "top5_removed_roi": -5.101041028781384,
+        "worst_day_pnl": -29.95,
+        "live_fill_rate_diagnostic": 0.55,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 40,
+        "orderbook_taker_roi": -0.19491525423728814
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.25-0.75",
+        "side": "BUY_NO",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "none",
+        "eligible_filter": "eligible_control",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "旧 eligible 对照里，买BUY_NO，入场价0.25-0.75，T-18-24，abs_edge>=0.03，不过滤流动性，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 48,
+        "active_dates": 12,
+        "cost_usd_1share": 30.243000000000002,
+        "counterfactual_pnl_usd_1share": 27.569999999999993,
+        "roi": 0.9116159111199282,
+        "roi_ci95_event_date_cluster": [
+          -1.793690314221198,
+          3.3760302001520466
+        ],
+        "baseline_rows": 62,
+        "baseline_active_dates": 14,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.8574826151022413,
+        "excess_roi": 0.054133296017686905,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.9941620504993668,
+          0.9750929536630241
+        ],
+        "top5_removed_roi": -2.337164750957854,
+        "worst_day_pnl": -18.650000000000002,
+        "live_fill_rate_diagnostic": 0.4583333333333333,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 26,
+        "orderbook_taker_roi": -0.03439951719975859
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 53,
+        "active_dates": 9,
+        "cost_usd_1share": 33.82499999999999,
+        "counterfactual_pnl_usd_1share": -38.25,
+        "roi": -1.1308203991130825,
+        "roi_ci95_event_date_cluster": [
+          -2.5289458212002387,
+          0.3332450505781952
+        ],
+        "baseline_rows": 68,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.6178489702517163,
+        "excess_roi": -0.5129714288613663,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.3200837162532248,
+          1.2983416330886388
+        ],
+        "top5_removed_roi": -1.9191919191919191,
+        "worst_day_pnl": -15.0,
+        "live_fill_rate_diagnostic": 0.8301886792452831,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 53,
+        "orderbook_taker_roi": -0.13294797687861276
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.25-0.75",
+        "side": "BUY_NO",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "none",
+        "eligible_filter": "no_filter",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "全机会里，买BUY_NO，入场价0.25-0.75，T-18-24，abs_edge>=0.03，不过滤流动性，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 235,
+        "active_dates": 21,
+        "cost_usd_1share": 147.858,
+        "counterfactual_pnl_usd_1share": -8.579999999999998,
+        "roi": -0.05802864910928051,
+        "roi_ci95_event_date_cluster": [
+          -0.9018398319659232,
+          0.7269540355969856
+        ],
+        "baseline_rows": 268,
+        "baseline_active_dates": 21,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.1076899382767241,
+        "excess_roi": 0.04966128916744359,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.18258089768113683,
+          0.23924060988467383
+        ],
+        "top5_removed_roi": -1.0699651276486315,
+        "worst_day_pnl": -37.650000000000006,
+        "live_fill_rate_diagnostic": 0.09361702127659574,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 81,
+        "orderbook_taker_roi": -0.09582451762238017
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 79,
+        "active_dates": 9,
+        "cost_usd_1share": 50.23999999999999,
+        "counterfactual_pnl_usd_1share": -52.400000000000006,
+        "roi": -1.0429936305732488,
+        "roi_ci95_event_date_cluster": [
+          -2.3219565975660843,
+          0.1364355680282335
+        ],
+        "baseline_rows": 98,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.7532881626145875,
+        "excess_roi": -0.28970546795866126,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.7959055186986075,
+          0.9990838427206183
+        ],
+        "top5_removed_roi": -1.4976314830559938,
+        "worst_day_pnl": -22.15,
+        "live_fill_rate_diagnostic": 0.5569620253164557,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 79,
+        "orderbook_taker_roi": -0.1260438920178675
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.20-0.80",
+        "side": "BUY_NO",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.05,
+        "liquidity_filter": "mild",
+        "eligible_filter": "no_filter",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "全机会里，买BUY_NO，入场价0.20-0.80，T-18-24，abs_edge>=0.05，温和点差过滤，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 80,
+        "active_dates": 8,
+        "cost_usd_1share": 53.0655,
+        "counterfactual_pnl_usd_1share": -20.655,
+        "roi": -0.3892359442575685,
+        "roi_ci95_event_date_cluster": [
+          -1.142562853244584,
+          0.8997849218525772
+        ],
+        "baseline_rows": 101,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.4349840458522951,
+        "excess_roi": 0.04574810159472659,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.33206803233632515,
+          0.4619654583199141
+        ],
+        "top5_removed_roi": -1.4255091103965702,
+        "worst_day_pnl": -26.000000000000007,
+        "live_fill_rate_diagnostic": 0.2375,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 80,
+        "orderbook_taker_roi": -0.06830596101499845
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 87,
+        "active_dates": 9,
+        "cost_usd_1share": 57.475,
+        "counterfactual_pnl_usd_1share": -44.75,
+        "roi": -0.7785993910395824,
+        "roi_ci95_event_date_cluster": [
+          -1.8262233511242134,
+          -0.07819621175727845
+        ],
+        "baseline_rows": 105,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.6340057636887607,
+        "excess_roi": -0.1445936273508217,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.5554437323112364,
+          0.8736699489303309
+        ],
+        "top5_removed_roi": -0.9371781668383111,
+        "worst_day_pnl": -18.6,
+        "live_fill_rate_diagnostic": 0.5517241379310345,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 87,
+        "orderbook_taker_roi": -0.09463614622480357
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.20-0.80",
+        "side": "BUY_NO",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "mild",
+        "eligible_filter": "no_filter",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "全机会里，买BUY_NO，入场价0.20-0.80，T-18-24，abs_edge>=0.03，温和点差过滤，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 82,
+        "active_dates": 8,
+        "cost_usd_1share": 54.4455,
+        "counterfactual_pnl_usd_1share": -14.455000000000005,
+        "roi": -0.265494852650816,
+        "roi_ci95_event_date_cluster": [
+          -1.1173566936091663,
+          0.9871608014369253
+        ],
+        "baseline_rows": 104,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.3004683281337088,
+        "excess_roi": 0.03497347548289276,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.28468622985345904,
+          0.37598246246286776
+        ],
+        "top5_removed_roi": -1.4255091103965702,
+        "worst_day_pnl": -26.000000000000007,
+        "live_fill_rate_diagnostic": 0.24390243902439024,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 82,
+        "orderbook_taker_roi": -0.05608292222479476
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 90,
+        "active_dates": 9,
+        "cost_usd_1share": 59.22,
+        "counterfactual_pnl_usd_1share": -52.19999999999998,
+        "roi": -0.8814589665653493,
+        "roi_ci95_event_date_cluster": [
+          -1.779495740209505,
+          -0.16268012239523938
+        ],
+        "baseline_rows": 109,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.6866833472338061,
+        "excess_roi": -0.1947756193315432,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.5573585430081297,
+          0.5767879680635817
+        ],
+        "top5_removed_roi": -1.0527885475693408,
+        "worst_day_pnl": -24.45,
+        "live_fill_rate_diagnostic": 0.5444444444444444,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 90,
+        "orderbook_taker_roi": -0.10477453580901859
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.30-0.70",
+        "side": "BUY_NO",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "none",
+        "eligible_filter": "eligible_control",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "旧 eligible 对照里，买BUY_NO，入场价0.30-0.70，T-18-24，abs_edge>=0.03，不过滤流动性，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 36,
+        "active_dates": 11,
+        "cost_usd_1share": 21.479999999999997,
+        "counterfactual_pnl_usd_1share": -4.8000000000000025,
+        "roi": -0.22346368715083814,
+        "roi_ci95_event_date_cluster": [
+          -4.116630353295811,
+          2.98234131157392
+        ],
+        "baseline_rows": 47,
+        "baseline_active_dates": 12,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.25622518946228795,
+        "excess_roi": 0.03276150231144981,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.438286133371434,
+          1.5617340598363565
+        ],
+        "top5_removed_roi": -3.0849020361121786,
+        "worst_day_pnl": -24.1,
+        "live_fill_rate_diagnostic": 0.4444444444444444,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 20,
+        "orderbook_taker_roi": -0.17149958574979285
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 43,
+        "active_dates": 9,
+        "cost_usd_1share": 26.470000000000002,
+        "counterfactual_pnl_usd_1share": -64.7,
+        "roi": -2.444276539478655,
+        "roi_ci95_event_date_cluster": [
+          -4.007083825265643,
+          -0.8362446135812059
+        ],
+        "baseline_rows": 51,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -1.3599999999999999,
+        "excess_roi": -1.084276539478655,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.5881082172522738,
+          0.3238888589698703
+        ],
+        "top5_removed_roi": -3.1170108161258607,
+        "worst_day_pnl": -27.7,
+        "live_fill_rate_diagnostic": 0.813953488372093,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 43,
+        "orderbook_taker_roi": -0.2614475627769572
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.25-0.75",
+        "side": "BUY_NO",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.05,
+        "liquidity_filter": "none",
+        "eligible_filter": "no_filter",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "全机会里，买BUY_NO，入场价0.25-0.75，T-18-24，abs_edge>=0.05，不过滤流动性，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 230,
+        "active_dates": 21,
+        "cost_usd_1share": 144.4915,
+        "counterfactual_pnl_usd_1share": 5.084999999999994,
+        "roi": 0.03519238155877677,
+        "roi_ci95_event_date_cluster": [
+          -0.8436590271408998,
+          0.7934119883877535
+        ],
+        "baseline_rows": 262,
+        "baseline_active_dates": 21,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": 0.0038499665022599916,
+        "excess_roi": 0.031342415056516776,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.19577055050818343,
+          0.22300863649908786
+        ],
+        "top5_removed_roi": -0.8401987463853399,
+        "worst_day_pnl": -37.650000000000006,
+        "live_fill_rate_diagnostic": 0.09130434782608696,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 79,
+        "orderbook_taker_roi": -0.10928018705116072
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 76,
+        "active_dates": 9,
+        "cost_usd_1share": 48.495,
+        "counterfactual_pnl_usd_1share": -44.95,
+        "roi": -0.9268996803794207,
+        "roi_ci95_event_date_cluster": [
+          -2.1011747409491233,
+          0.12050591363598571
+        ],
+        "baseline_rows": 95,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.6526730075434568,
+        "excess_roi": -0.2742266728359639,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.8301329344548702,
+          1.1657207231634836
+        ],
+        "top5_removed_roi": -1.3749365804160325,
+        "worst_day_pnl": -19.749999999999996,
+        "live_fill_rate_diagnostic": 0.5657894736842105,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 76,
+        "orderbook_taker_roi": -0.11486622409977867
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    },
+    {
+      "rule": {
+        "price_band": "0.25-0.75",
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "mild",
+        "eligible_filter": "no_filter",
+        "regime": "high_uncertainty_no_trade",
+        "human_readable_idea": "全机会里，买双边，入场价0.25-0.75，T-18-24，abs_edge>=0.03，温和点差过滤，反向观察高不确定性区。"
+      },
+      "train": {
+        "split": "train",
+        "rows": 87,
+        "active_dates": 9,
+        "cost_usd_1share": 49.18600000000001,
+        "counterfactual_pnl_usd_1share": -1.8599999999999932,
+        "roi": -0.037815638596348414,
+        "roi_ci95_event_date_cluster": [
+          -1.9304779639975165,
+          2.2666812705366928
+        ],
+        "baseline_rows": 114,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.05775968184830987,
+        "excess_roi": 0.019944043251961453,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.808719178149834,
+          0.8318576523269039
+        ],
+        "top5_removed_roi": -2.5146198830409356,
+        "worst_day_pnl": -35.050000000000004,
+        "live_fill_rate_diagnostic": 0.27586206896551724,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 87,
+        "orderbook_taker_roi": -0.04118970746502299
+      },
+      "holdout": {
+        "split": "holdout",
+        "rows": 88,
+        "active_dates": 9,
+        "cost_usd_1share": 51.824999999999996,
+        "counterfactual_pnl_usd_1share": -48.25,
+        "roi": -0.9310178485287024,
+        "roi_ci95_event_date_cluster": [
+          -3.303157673336183,
+          0.12353256396108263
+        ],
+        "baseline_rows": 113,
+        "baseline_active_dates": 9,
+        "baseline": "same side + price band + hour bucket + edge threshold + liquidity + eligible filter, no forecast regime overlay",
+        "baseline_roi": -0.40307101727447214,
+        "excess_roi": -0.5279468312542303,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.6006330468087053,
+          1.5155673352832923
+        ],
+        "top5_removed_roi": -2.3890063424947146,
+        "worst_day_pnl": -29.65,
+        "live_fill_rate_diagnostic": 0.5795454545454546,
+        "low_price_buy_yes_rows": 0,
+        "orderbook_matched_rows": 88,
+        "orderbook_taker_roi": -0.1135420596001509
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "final_verdict": "inconclusive"
+    }
+  ],
+  "direction_summary": [
+    {
+      "direction": "entry_band_25_75_all",
+      "human_readable_idea": "旧 25-75 入场价带本身是否有帮助。",
+      "sample_size": "train 364 / holdout 127",
+      "holdout_result": "ROI -28.8%, pnl -21.04, dates 9",
+      "top5_removed": "-198.2%",
+      "gates": "FAIL/FAIL/FAIL",
+      "verdict": "inconclusive",
+      "next_step": "仅研究；若要继续，必须预注册下一版规则后重跑。"
+    },
+    {
+      "direction": "old_side_band_proxy",
+      "human_readable_idea": "近似旧 side_band：YES 低中价、NO 中高价，按 opportunity 复现。",
+      "sample_size": "train 257 / holdout 84",
+      "holdout_result": "ROI +108.2%, pnl +41.01, dates 9",
+      "top5_removed": "-245.5%",
+      "gates": "FAIL/FAIL/FAIL",
+      "verdict": "inconclusive",
+      "next_step": "仅研究；若要继续，必须预注册下一版规则后重跑。"
+    },
+    {
+      "direction": "low_price_buy_yes_lottery",
+      "human_readable_idea": "低价 BUY_YES 彩票票是否拖累。",
+      "sample_size": "train 259 / holdout 89",
+      "holdout_result": "ROI +469.1%, pnl +38.32, dates 7",
+      "top5_removed": "-450.9%",
+      "gates": "FAIL/FAIL/FAIL",
+      "verdict": "inconclusive",
+      "next_step": "仅研究；若要继续，必须预注册下一版规则后重跑。"
+    },
+    {
+      "direction": "buy_no_only_25_75",
+      "human_readable_idea": "BUY_NO base-rate 是否解释了收益。",
+      "sample_size": "train 280 / holdout 102",
+      "holdout_result": "ROI -49.7%, pnl -32.45, dates 9",
+      "top5_removed": "-117.3%",
+      "gates": "FAIL/FAIL/FAIL",
+      "verdict": "inconclusive",
+      "next_step": "仅研究；若要继续，必须预注册下一版规则后重跑。"
+    },
+    {
+      "direction": "low_uncertainty_overlay",
+      "human_readable_idea": "forecast 低不确定性是否提供额外筛选。",
+      "sample_size": "train 52 / holdout 29",
+      "holdout_result": "ROI +161.8%, pnl +23.68, dates 4",
+      "top5_removed": "NA",
+      "gates": "FAIL/FAIL/FAIL",
+      "verdict": "inconclusive",
+      "next_step": "仅研究；若要继续，必须预注册下一版规则后重跑。"
+    }
+  ],
+  "out_json": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-10-side-band-forecast-regime-clean-test-v0.json",
+  "out_md": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-10-side-band-forecast-regime-clean-test-v0.md"
+}

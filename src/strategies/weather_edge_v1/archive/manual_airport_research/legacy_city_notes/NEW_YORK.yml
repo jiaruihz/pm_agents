@@ -1,0 +1,33 @@
+city_key: nyc
+display_name: NYC
+settlement_station: LaGuardia Airport Station
+station_code: KLGA
+default_unit: F
+must_check_rules_each_time: true
+timezone: America/New_York
+
+wu_history_url: https://www.wunderground.com/history/daily/us/ny/new-york-city/KLGA
+wu_hourly_url: https://www.wunderground.com/hourly/us/ny/new-york-city/KLGA
+
+same_stack_reference:
+  - https://www.weather.com/
+
+official_secondary_source:
+  - TODO
+
+event_url_example:
+  - https://polymarket.com/event/highest-temperature-in-nyc-on-march-12-2026
+
+weather_traits:
+  - 市场标题写 NYC，但实际结算看 LGA
+  - 单位经常是华氏度
+  - 机场站与曼哈顿体感和媒体报道温度可能明显不同
+
+common_mispricing:
+  - 把 Manhattan / Central Park 讨论当成 KLGA 结算锚
+  - 忘记市场单位是 F 而不是 C
+  - 只看新闻 headline，不看 rules
+
+notes:
+  - NYC 盘进场前先确认单位
+  - 华氏 exact 档位更细，1~2F 的边界更敏感

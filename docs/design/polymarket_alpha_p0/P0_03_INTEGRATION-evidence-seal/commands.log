@@ -1,0 +1,32 @@
+# Run from /Users/deepsleep/projects/pm_agents at source commit fe5598ca4a3bcd13b538dfb6e2cd550def2659dd
+
+PYTHONPATH=. .venv/bin/pytest -q \
+  tests/polymarket_alpha/test_storage_p0_02.py \
+  tests/polymarket_alpha/test_gamma_catalog_p0_03.py \
+  tests/polymarket_alpha/test_rule_gates_p0_07.py \
+  --junitxml=docs/design/polymarket_alpha_p0/P0_03_INTEGRATION-evidence-seal/test-results/focused.xml
+# 73 passed in 0.45s
+
+PYTHONPATH=. .venv/bin/pytest -q tests/polymarket_alpha \
+  --junitxml=docs/design/polymarket_alpha_p0/P0_03_INTEGRATION-evidence-seal/test-results/full-alpha.xml
+# 166 passed in 0.71s
+
+PYTHONPATH=. .venv/bin/pytest -q \
+  tests/polymarket_alpha/test_security_wave0.py \
+  tests/polymarket_alpha/test_security_transport_p0_11.py \
+  tests/polymarket_alpha/test_security_os_sandbox_p0_11.py \
+  --junitxml=docs/design/polymarket_alpha_p0/P0_03_INTEGRATION-evidence-seal/test-results/no-live.xml
+# 59 passed in 0.14s
+
+PYTHONPATH=. .venv/bin/pytest -q \
+  tests/research_tests/test_gamma_normalize_models.py \
+  tests/research_tests/test_gamma_pagination.py \
+  tests/research_tests/polymarket/test_market_resolver.py \
+  --junitxml=docs/design/polymarket_alpha_p0/P0_03_INTEGRATION-evidence-seal/test-results/legacy-gamma.xml
+# 8 passed in 0.14s
+
+PYTHONPATH=. .venv/bin/python -m compileall -q src/polymarket_alpha
+# PASS
+
+git diff --check -- src/polymarket_alpha tests/polymarket_alpha
+# PASS

@@ -1,0 +1,32 @@
+{
+  "cities_requested": 49,
+  "cities_with_cache": 49,
+  "cities_with_output": 49,
+  "core_only": false,
+  "db": "runtime/weather.db",
+  "decision_hours": [
+    18,
+    19,
+    20,
+    21
+  ],
+  "detail_rows": 90180,
+  "end_date": null,
+  "experiment": "m3_observed_max_residual_v0",
+  "min_obs_per_day": 8,
+  "notes": [
+    "Physical residual only; no market prices, PnL, orderbook, or live action.",
+    "floor_c_bucket_delta is a v0 proxy and does not verify contract rounding rules.",
+    "Timezone mapping is hardcoded in this script for v0 and should be promoted to a shared station profile if reused."
+  ],
+  "output_dir": "docs/analysis/2026-06/generated/m3_observed_max_v0",
+  "outputs": {
+    "coverage": "docs/analysis/2026-06/generated/m3_observed_max_v0/m3_observed_max_cache_coverage.csv",
+    "detail": "docs/analysis/2026-06/generated/m3_observed_max_v0/m3_observed_max_residual_detail.csv",
+    "summary_by_city_hour": "docs/analysis/2026-06/generated/m3_observed_max_v0/m3_observed_max_residual_by_city_hour.csv",
+    "summary_by_hour": "docs/analysis/2026-06/generated/m3_observed_max_v0/m3_observed_max_residual_by_hour.csv"
+  },
+  "start_date": null,
+  "summary_rows": 196,
+  "wu_dir": "runtime/weather_edge_v1/market_data/cache/wu_obs"
+}

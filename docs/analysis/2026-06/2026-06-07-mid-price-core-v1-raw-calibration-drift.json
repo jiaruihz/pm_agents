@@ -1,0 +1,1207 @@
+{
+  "generated_at_utc": "2026-06-07T14:29:09.017915+00:00",
+  "checks": {
+    "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+    "db_mtime_utc": "2026-06-07T05:49:19.463464+00:00",
+    "fact_built_at_utc": "2026-06-07T05:48:57.787507+00:00",
+    "trade_class": [
+      {
+        "trade_class": "live_real",
+        "rows": 1302
+      },
+      {
+        "trade_class": "live_simulated",
+        "rows": 1077
+      },
+      {
+        "trade_class": "paper",
+        "rows": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "rows": 636
+      }
+    ],
+    "settlement_status": [
+      {
+        "settlement_status": "[NULL]",
+        "rows": 388
+      },
+      {
+        "settlement_status": "settled",
+        "rows": 4912
+      }
+    ],
+    "signal_candidates": {
+      "rows": 23299,
+      "eligible": 7567,
+      "paper_ordered": 2795,
+      "live_filled": 503
+    }
+  },
+  "code_breaks": {
+    "by_target_date_code": [
+      {
+        "target_date": "2026-05-16",
+        "code_version": "live-cycle-migration",
+        "fills": 16,
+        "runs": 6,
+        "avg_model_p_yes": 0.3875,
+        "avg_market_price": 0.4781,
+        "avg_fact_edge": 0.1199,
+        "pnl_usd": 8.99
+      },
+      {
+        "target_date": "2026-05-17",
+        "code_version": "live-cycle-migration",
+        "fills": 9,
+        "runs": 4,
+        "avg_model_p_yes": 0.2249,
+        "avg_market_price": 0.4083,
+        "avg_fact_edge": 0.0146,
+        "pnl_usd": 19.16
+      },
+      {
+        "target_date": "2026-05-20",
+        "code_version": "live-cycle-migration",
+        "fills": 12,
+        "runs": 6,
+        "avg_model_p_yes": 0.2192,
+        "avg_market_price": 0.3725,
+        "avg_fact_edge": -0.1533,
+        "pnl_usd": 16.92
+      },
+      {
+        "target_date": "2026-05-21",
+        "code_version": "live-cycle-migration",
+        "fills": 18,
+        "runs": 8,
+        "avg_model_p_yes": 0.2976,
+        "avg_market_price": 0.3314,
+        "avg_fact_edge": -0.0338,
+        "pnl_usd": -2.04
+      },
+      {
+        "target_date": "2026-05-22",
+        "code_version": "live-cycle-migration",
+        "fills": 22,
+        "runs": 9,
+        "avg_model_p_yes": 0.23,
+        "avg_market_price": 0.3868,
+        "avg_fact_edge": -0.0673,
+        "pnl_usd": 34.24
+      },
+      {
+        "target_date": "2026-05-23",
+        "code_version": "live-cycle-migration",
+        "fills": 17,
+        "runs": 6,
+        "avg_model_p_yes": 0.1345,
+        "avg_market_price": 0.4085,
+        "avg_fact_edge": -0.274,
+        "pnl_usd": 11.84
+      },
+      {
+        "target_date": "2026-05-24",
+        "code_version": "live-cycle-migration",
+        "fills": 27,
+        "runs": 6,
+        "avg_model_p_yes": 0.3073,
+        "avg_market_price": 0.3726,
+        "avg_fact_edge": -0.0653,
+        "pnl_usd": 28.5
+      },
+      {
+        "target_date": "2026-05-25",
+        "code_version": "live-cycle-migration",
+        "fills": 25,
+        "runs": 9,
+        "avg_model_p_yes": 0.2455,
+        "avg_market_price": 0.3604,
+        "avg_fact_edge": -0.1149,
+        "pnl_usd": 12.89
+      },
+      {
+        "target_date": "2026-05-26",
+        "code_version": "live-cycle-migration",
+        "fills": 25,
+        "runs": 10,
+        "avg_model_p_yes": 0.2341,
+        "avg_market_price": 0.4174,
+        "avg_fact_edge": -0.0813,
+        "pnl_usd": -11.51
+      },
+      {
+        "target_date": "2026-05-27",
+        "code_version": "live-cycle-migration",
+        "fills": 39,
+        "runs": 12,
+        "avg_model_p_yes": 0.2054,
+        "avg_market_price": 0.5282,
+        "avg_fact_edge": 0.1554,
+        "pnl_usd": 9.42
+      },
+      {
+        "target_date": "2026-05-28",
+        "code_version": "live-cycle-migration",
+        "fills": 45,
+        "runs": 9,
+        "avg_model_p_yes": 0.212,
+        "avg_market_price": 0.5711,
+        "avg_fact_edge": 0.1617,
+        "pnl_usd": -11.45
+      },
+      {
+        "target_date": "2026-05-29",
+        "code_version": "live-cycle-migration",
+        "fills": 59,
+        "runs": 17,
+        "avg_model_p_yes": 0.2236,
+        "avg_market_price": 0.4926,
+        "avg_fact_edge": 0.1332,
+        "pnl_usd": 57.95
+      },
+      {
+        "target_date": "2026-05-30",
+        "code_version": "live-cycle-migration",
+        "fills": 56,
+        "runs": 13,
+        "avg_model_p_yes": 0.2366,
+        "avg_market_price": 0.5479,
+        "avg_fact_edge": 0.1866,
+        "pnl_usd": -0.97
+      },
+      {
+        "target_date": "2026-05-31",
+        "code_version": "live-cycle-migration",
+        "fills": 60,
+        "runs": 16,
+        "avg_model_p_yes": 0.287,
+        "avg_market_price": 0.5132,
+        "avg_fact_edge": 0.1705,
+        "pnl_usd": -74.86
+      },
+      {
+        "target_date": "2026-06-01",
+        "code_version": "live-cycle-migration",
+        "fills": 67,
+        "runs": 11,
+        "avg_model_p_yes": 0.3108,
+        "avg_market_price": 0.5092,
+        "avg_fact_edge": 0.2046,
+        "pnl_usd": 14.9
+      },
+      {
+        "target_date": "2026-06-02",
+        "code_version": "live-cycle-migration",
+        "fills": 55,
+        "runs": 18,
+        "avg_model_p_yes": 0.2627,
+        "avg_market_price": 0.5412,
+        "avg_fact_edge": 0.1615,
+        "pnl_usd": -18.12
+      },
+      {
+        "target_date": "2026-06-03",
+        "code_version": "live-cycle-migration",
+        "fills": 47,
+        "runs": 17,
+        "avg_model_p_yes": 0.2838,
+        "avg_market_price": 0.4828,
+        "avg_fact_edge": 0.1644,
+        "pnl_usd": 29.85
+      },
+      {
+        "target_date": "2026-06-04",
+        "code_version": "live-cycle-migration",
+        "fills": 54,
+        "runs": 18,
+        "avg_model_p_yes": 0.2638,
+        "avg_market_price": 0.511,
+        "avg_fact_edge": 0.2094,
+        "pnl_usd": -46.19
+      },
+      {
+        "target_date": "2026-06-05",
+        "code_version": "live-cycle-migration",
+        "fills": 54,
+        "runs": 14,
+        "avg_model_p_yes": 0.3432,
+        "avg_market_price": 0.5072,
+        "avg_fact_edge": 0.2029,
+        "pnl_usd": -69.49
+      }
+    ],
+    "by_code_period": [
+      {
+        "period": "post_2026_06_01",
+        "code_version": "live-cycle-migration",
+        "fills": 277,
+        "runs": 78,
+        "min_target_date": "2026-06-01",
+        "max_target_date": "2026-06-05",
+        "cost_usd": 738.52,
+        "pnl_usd": -89.06,
+        "roi": -0.1206
+      },
+      {
+        "period": "pre_2026_06_01",
+        "code_version": "live-cycle-migration",
+        "fills": 430,
+        "runs": 131,
+        "min_target_date": "2026-05-16",
+        "max_target_date": "2026-05-31",
+        "cost_usd": 1211.27,
+        "pnl_usd": 99.06,
+        "roi": 0.0818
+      }
+    ],
+    "config": [
+      {
+        "config_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "name": "t1_trading_mid_price_core_v1_notional_$5.0_shares_10.0_entry_0.25-0.75",
+        "params": "{\"algorithm_version\":\"mid_price_core_v1\",\"city_pool\":\"t1_trading\",\"entry_price_window\":\"0.25-0.75\",\"execution_policy\":\"mid_price_core_v1\",\"fixed_order_shares\":10.0,\"live_enabled\":true,\"max_entry_price\":0.75,\"max_order_notional\":5.0,\"max_order_shares\":null,\"min_edge\":0.1,\"min_entry_price\":0.25,\"paper_enabled\":true,\"signal_builder_version\":\"weather_snapshot_signal_builder\",\"sizing_mode\":\"notional\",\"source\":\"live_cycle\",\"strategy_family\":\"weather_edge_v1\",\"trade_planner_version\":\"weather_trade_planner\",\"universe_scope\":\"configured_live_pool\"}",
+        "created_at_utc": "2026-06-07T05:28:47Z"
+      }
+    ]
+  },
+  "code_log": [
+    {
+      "sha": "8c6f9d2",
+      "date": "2026-06-01",
+      "subject": "strategy: retire maker_queue_v1 active paths"
+    },
+    {
+      "sha": "e957b03",
+      "date": "2026-06-01",
+      "subject": "Fix weather live exposure guards"
+    },
+    {
+      "sha": "7a3d68c",
+      "date": "2026-05-31",
+      "subject": "fix: validate weather strategy instance notional caps"
+    },
+    {
+      "sha": "5dd7fc3",
+      "date": "2026-05-31",
+      "subject": "ops: run weather live strategies as explicit instances"
+    },
+    {
+      "sha": "04f611c",
+      "date": "2026-05-31",
+      "subject": "fix: clarify live dedup skip reason"
+    },
+    {
+      "sha": "127b1a0",
+      "date": "2026-05-31",
+      "subject": "strategy: per-side entry band + min_edge gate (BUY_YES vs BUY_NO)"
+    },
+    {
+      "sha": "c4ad8cc",
+      "date": "2026-05-30",
+      "subject": "fix(weather-exec): prevent TypeError crash when split leg has no matching quote"
+    },
+    {
+      "sha": "7943a37",
+      "date": "2026-05-30",
+      "subject": "feat(weather-exec): floor sub-minimum orders to min_order_shares"
+    },
+    {
+      "sha": "f7895a2",
+      "date": "2026-05-30",
+      "subject": "fix(weather): defer mid_price_core_v2 quotes per-leg when no live book"
+    },
+    {
+      "sha": "f17b0c2",
+      "date": "2026-05-30",
+      "subject": "strategy: add mid_price_core_v2 execution policy (split taker/maker on low-price high-edge)"
+    },
+    {
+      "sha": "ed20065",
+      "date": "2026-05-29",
+      "subject": "feat: add weather signal candidates analysis layer"
+    },
+    {
+      "sha": "86daa20",
+      "date": "2026-05-29",
+      "subject": "feat(fact_trades): migrate PnL computation to fact_trades as single source of truth"
+    },
+    {
+      "sha": "3903edc",
+      "date": "2026-05-29",
+      "subject": "feat: add fact_trades builder — unified fill-grain PnL fact table"
+    },
+    {
+      "sha": "c4bd996",
+      "date": "2026-05-28",
+      "subject": "feat: add helper functions to snapshot signal builder"
+    },
+    {
+      "sha": "a88cbd2",
+      "date": "2026-05-28",
+      "subject": "fix: restore defer_to_executor path for maker_queue when no live book in signal"
+    },
+    {
+      "sha": "20b41ad",
+      "date": "2026-05-27",
+      "subject": "feat: add maker_queue_v2 execution policy"
+    }
+  ],
+  "overall": [
+    {
+      "period": "post_2026_06_01",
+      "fills": 277,
+      "days": 5,
+      "cost_usd": 738.5193,
+      "pnl_usd": -89.0595,
+      "roi": -0.120592,
+      "win_rate": 0.436823,
+      "avg_side_p_raw": 0.70085,
+      "avg_raw_edge": 0.198698,
+      "avg_abs_yes_divergence": 0.189808
+    },
+    {
+      "period": "pre_2026_06_01",
+      "fills": 430,
+      "days": 14,
+      "cost_usd": 1211.2715,
+      "pnl_usd": 99.056,
+      "roi": 0.081779,
+      "win_rate": 0.588372,
+      "avg_side_p_raw": 0.750548,
+      "avg_raw_edge": 0.21643,
+      "avg_abs_yes_divergence": 0.278109
+    }
+  ],
+  "by_side": [
+    {
+      "period": "post_2026_06_01",
+      "side": "BUY_NO",
+      "fills": 172,
+      "days": 5,
+      "cost_usd": 525.634,
+      "pnl_usd": -38.9793,
+      "roi": -0.074157,
+      "win_rate": 0.552326,
+      "avg_side_p_raw": 0.827768,
+      "avg_raw_edge": 0.211803,
+      "avg_abs_yes_divergence": 0.20094
+    },
+    {
+      "period": "post_2026_06_01",
+      "side": "BUY_YES",
+      "fills": 105,
+      "days": 5,
+      "cost_usd": 212.8853,
+      "pnl_usd": -50.0802,
+      "roi": -0.235245,
+      "win_rate": 0.247619,
+      "avg_side_p_raw": 0.492946,
+      "avg_raw_edge": 0.177231,
+      "avg_abs_yes_divergence": 0.171574
+    },
+    {
+      "period": "pre_2026_06_01",
+      "side": "BUY_NO",
+      "fills": 306,
+      "days": 14,
+      "cost_usd": 935.1261,
+      "pnl_usd": 38.3299,
+      "roi": 0.040989,
+      "win_rate": 0.660131,
+      "avg_side_p_raw": 0.855684,
+      "avg_raw_edge": 0.23052,
+      "avg_abs_yes_divergence": 0.321818
+    },
+    {
+      "period": "pre_2026_06_01",
+      "side": "BUY_YES",
+      "fills": 124,
+      "days": 14,
+      "cost_usd": 276.1454,
+      "pnl_usd": 60.7261,
+      "roi": 0.219906,
+      "win_rate": 0.41129,
+      "avg_side_p_raw": 0.491101,
+      "avg_raw_edge": 0.181657,
+      "avg_abs_yes_divergence": 0.170246
+    }
+  ],
+  "by_model": [
+    {
+      "period": "post_2026_06_01",
+      "model_version": "ecmwf",
+      "fills": 165,
+      "days": 5,
+      "cost_usd": 438.0917,
+      "pnl_usd": -119.3304,
+      "roi": -0.272387,
+      "win_rate": 0.363636,
+      "avg_side_p_raw": 0.688739,
+      "avg_raw_edge": 0.184158,
+      "avg_abs_yes_divergence": 0.177015
+    },
+    {
+      "period": "post_2026_06_01",
+      "model_version": "gfs",
+      "fills": 112,
+      "days": 5,
+      "cost_usd": 300.4276,
+      "pnl_usd": 30.2709,
+      "roi": 0.100759,
+      "win_rate": 0.544643,
+      "avg_side_p_raw": 0.718691,
+      "avg_raw_edge": 0.22012,
+      "avg_abs_yes_divergence": 0.208655
+    },
+    {
+      "period": "pre_2026_06_01",
+      "model_version": "ecmwf",
+      "fills": 196,
+      "days": 13,
+      "cost_usd": 563.5208,
+      "pnl_usd": 38.7979,
+      "roi": 0.068849,
+      "win_rate": 0.586735,
+      "avg_side_p_raw": 0.723109,
+      "avg_raw_edge": 0.194027,
+      "avg_abs_yes_divergence": 0.240195
+    },
+    {
+      "period": "pre_2026_06_01",
+      "model_version": "gfs",
+      "fills": 234,
+      "days": 14,
+      "cost_usd": 647.7507,
+      "pnl_usd": 60.2581,
+      "roi": 0.093027,
+      "win_rate": 0.589744,
+      "avg_side_p_raw": 0.773532,
+      "avg_raw_edge": 0.235194,
+      "avg_abs_yes_divergence": 0.309866
+    }
+  ],
+  "by_side_p_bin": [
+    {
+      "period": "post_2026_06_01",
+      "side_p_bin": "0.45-0.55",
+      "fills": 42,
+      "days": 5,
+      "cost_usd": 83.9226,
+      "pnl_usd": -20.0275,
+      "roi": -0.238643,
+      "win_rate": 0.285714,
+      "avg_side_p_raw": 0.495688,
+      "avg_raw_edge": 0.150926,
+      "avg_abs_yes_divergence": 0.145569
+    },
+    {
+      "period": "post_2026_06_01",
+      "side_p_bin": "0.55-0.65",
+      "fills": 21,
+      "days": 4,
+      "cost_usd": 42.2014,
+      "pnl_usd": 36.5286,
+      "roi": 0.865579,
+      "win_rate": 0.666667,
+      "avg_side_p_raw": 0.610795,
+      "avg_raw_edge": 0.246033,
+      "avg_abs_yes_divergence": 0.23989
+    },
+    {
+      "period": "post_2026_06_01",
+      "side_p_bin": "0.65-0.75",
+      "fills": 34,
+      "days": 5,
+      "cost_usd": 103.4589,
+      "pnl_usd": -15.7855,
+      "roi": -0.152578,
+      "win_rate": 0.382353,
+      "avg_side_p_raw": 0.698385,
+      "avg_raw_edge": 0.166032,
+      "avg_abs_yes_divergence": 0.153385
+    },
+    {
+      "period": "post_2026_06_01",
+      "side_p_bin": "0.75-0.85",
+      "fills": 50,
+      "days": 5,
+      "cost_usd": 144.9831,
+      "pnl_usd": 22.095,
+      "roi": 0.152397,
+      "win_rate": 0.76,
+      "avg_side_p_raw": 0.793076,
+      "avg_raw_edge": 0.178676,
+      "avg_abs_yes_divergence": 0.171376
+    },
+    {
+      "period": "post_2026_06_01",
+      "side_p_bin": "<=0.45",
+      "fills": 43,
+      "days": 5,
+      "cost_usd": 89.0096,
+      "pnl_usd": -53.3096,
+      "roi": -0.598919,
+      "win_rate": 0.046512,
+      "avg_side_p_raw": 0.398502,
+      "avg_raw_edge": 0.134084,
+      "avg_abs_yes_divergence": 0.1292
+    },
+    {
+      "period": "post_2026_06_01",
+      "side_p_bin": ">0.85",
+      "fills": 87,
+      "days": 5,
+      "cost_usd": 274.9437,
+      "pnl_usd": -58.5605,
+      "roi": -0.212991,
+      "win_rate": 0.482759,
+      "avg_side_p_raw": 0.919026,
+      "avg_raw_edge": 0.266544,
+      "avg_abs_yes_divergence": 0.25386
+    },
+    {
+      "period": "pre_2026_06_01",
+      "side_p_bin": "0.45-0.55",
+      "fills": 51,
+      "days": 11,
+      "cost_usd": 121.0191,
+      "pnl_usd": 24.0009,
+      "roi": 0.198323,
+      "win_rate": 0.431373,
+      "avg_side_p_raw": 0.493392,
+      "avg_raw_edge": 0.187294,
+      "avg_abs_yes_divergence": 0.171063
+    },
+    {
+      "period": "pre_2026_06_01",
+      "side_p_bin": "0.55-0.65",
+      "fills": 25,
+      "days": 11,
+      "cost_usd": 68.14,
+      "pnl_usd": 63.1994,
+      "roi": 0.927494,
+      "win_rate": 0.76,
+      "avg_side_p_raw": 0.614136,
+      "avg_raw_edge": 0.193736,
+      "avg_abs_yes_divergence": 0.185136
+    },
+    {
+      "period": "pre_2026_06_01",
+      "side_p_bin": "0.65-0.75",
+      "fills": 44,
+      "days": 11,
+      "cost_usd": 117.5523,
+      "pnl_usd": 7.4337,
+      "roi": 0.063238,
+      "win_rate": 0.568182,
+      "avg_side_p_raw": 0.698739,
+      "avg_raw_edge": 0.192148,
+      "avg_abs_yes_divergence": 0.192375
+    },
+    {
+      "period": "pre_2026_06_01",
+      "side_p_bin": "0.75-0.85",
+      "fills": 82,
+      "days": 10,
+      "cost_usd": 229.6453,
+      "pnl_usd": 28.0442,
+      "roi": 0.12212,
+      "win_rate": 0.719512,
+      "avg_side_p_raw": 0.800622,
+      "avg_raw_edge": 0.174646,
+      "avg_abs_yes_divergence": 0.258671
+    },
+    {
+      "period": "pre_2026_06_01",
+      "side_p_bin": "<=0.45",
+      "fills": 49,
+      "days": 8,
+      "cost_usd": 98.083,
+      "pnl_usd": -19.8497,
+      "roi": -0.202376,
+      "win_rate": 0.244898,
+      "avg_side_p_raw": 0.403788,
+      "avg_raw_edge": 0.134604,
+      "avg_abs_yes_divergence": 0.130624
+    },
+    {
+      "period": "pre_2026_06_01",
+      "side_p_bin": ">0.85",
+      "fills": 179,
+      "days": 14,
+      "cost_usd": 576.8317,
+      "pnl_usd": -3.7726,
+      "roi": -0.00654,
+      "win_rate": 0.648045,
+      "avg_side_p_raw": 0.927588,
+      "avg_raw_edge": 0.275409,
+      "avg_abs_yes_divergence": 0.391945
+    }
+  ],
+  "by_raw_edge_bin": [
+    {
+      "period": "post_2026_06_01",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 121,
+      "days": 5,
+      "cost_usd": 298.6751,
+      "pnl_usd": -53.9526,
+      "roi": -0.18064,
+      "win_rate": 0.338843,
+      "avg_side_p_raw": 0.583368,
+      "avg_raw_edge": 0.126839,
+      "avg_abs_yes_divergence": 0.121798
+    },
+    {
+      "period": "post_2026_06_01",
+      "raw_edge_bin": "0.15-0.25",
+      "fills": 86,
+      "days": 5,
+      "cost_usd": 247.7746,
+      "pnl_usd": -42.1314,
+      "roi": -0.170039,
+      "win_rate": 0.476744,
+      "avg_side_p_raw": 0.731705,
+      "avg_raw_edge": 0.194379,
+      "avg_abs_yes_divergence": 0.185426
+    },
+    {
+      "period": "post_2026_06_01",
+      "raw_edge_bin": ">0.25",
+      "fills": 70,
+      "days": 5,
+      "cost_usd": 192.0696,
+      "pnl_usd": 7.0246,
+      "roi": 0.036573,
+      "win_rate": 0.557143,
+      "avg_side_p_raw": 0.866019,
+      "avg_raw_edge": 0.328219,
+      "avg_abs_yes_divergence": 0.312754
+    },
+    {
+      "period": "pre_2026_06_01",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 109,
+      "days": 14,
+      "cost_usd": 277.417,
+      "pnl_usd": 49.65,
+      "roi": 0.178972,
+      "win_rate": 0.605505,
+      "avg_side_p_raw": 0.604907,
+      "avg_raw_edge": 0.123715,
+      "avg_abs_yes_divergence": 0.162726
+    },
+    {
+      "period": "pre_2026_06_01",
+      "raw_edge_bin": "0.15-0.25",
+      "fills": 209,
+      "days": 14,
+      "cost_usd": 582.4116,
+      "pnl_usd": 18.3771,
+      "roi": 0.031553,
+      "win_rate": 0.583732,
+      "avg_side_p_raw": 0.744944,
+      "avg_raw_edge": 0.195519,
+      "avg_abs_yes_divergence": 0.266978
+    },
+    {
+      "period": "pre_2026_06_01",
+      "raw_edge_bin": ">0.25",
+      "fills": 112,
+      "days": 13,
+      "cost_usd": 351.4428,
+      "pnl_usd": 31.029,
+      "roi": 0.08829,
+      "win_rate": 0.580357,
+      "avg_side_p_raw": 0.902745,
+      "avg_raw_edge": 0.345682,
+      "avg_abs_yes_divergence": 0.411173
+    }
+  ],
+  "worst_interactions": [
+    {
+      "period": "post_2026_06_01",
+      "city": "BuenosAires",
+      "side": "BUY_YES",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 5,
+      "days": 2,
+      "cost_usd": 14.9964,
+      "pnl_usd": -14.9964,
+      "roi": -1.0,
+      "win_rate": 0.0,
+      "avg_side_p_raw": 0.40114,
+      "avg_raw_edge": 0.11714,
+      "avg_abs_yes_divergence": 0.11414
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "LA",
+      "side": "BUY_YES",
+      "model_version": "gfs",
+      "raw_edge_bin": ">0.25",
+      "fills": 5,
+      "days": 2,
+      "cost_usd": 12.1431,
+      "pnl_usd": -12.1431,
+      "roi": -1.0,
+      "win_rate": 0.0,
+      "avg_side_p_raw": 0.65332,
+      "avg_raw_edge": 0.34132,
+      "avg_abs_yes_divergence": 0.31352
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Ankara",
+      "side": "BUY_NO",
+      "model_version": "ecmwf",
+      "raw_edge_bin": ">0.25",
+      "fills": 7,
+      "days": 4,
+      "cost_usd": 19.4197,
+      "pnl_usd": -11.9597,
+      "roi": -0.615853,
+      "win_rate": 0.142857,
+      "avg_side_p_raw": 0.963986,
+      "avg_raw_edge": 0.341129,
+      "avg_abs_yes_divergence": 0.330414
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Warsaw",
+      "side": "BUY_YES",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 10,
+      "days": 4,
+      "cost_usd": 17.0093,
+      "pnl_usd": -10.0755,
+      "roi": -0.592354,
+      "win_rate": 0.2,
+      "avg_side_p_raw": 0.46901,
+      "avg_raw_edge": 0.12801,
+      "avg_abs_yes_divergence": 0.12251
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Moscow",
+      "side": "BUY_YES",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 8,
+      "days": 2,
+      "cost_usd": 9.9925,
+      "pnl_usd": -9.9925,
+      "roi": -1.0,
+      "win_rate": 0.0,
+      "avg_side_p_raw": 0.402275,
+      "avg_raw_edge": 0.137275,
+      "avg_abs_yes_divergence": 0.132275
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "BuenosAires",
+      "side": "BUY_NO",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.15-0.25",
+      "fills": 3,
+      "days": 2,
+      "cost_usd": 9.9906,
+      "pnl_usd": -9.9906,
+      "roi": -1.0,
+      "win_rate": 0.0,
+      "avg_side_p_raw": 0.8569,
+      "avg_raw_edge": 0.2169,
+      "avg_abs_yes_divergence": 0.2119
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Munich",
+      "side": "BUY_NO",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 5,
+      "days": 2,
+      "cost_usd": 9.9075,
+      "pnl_usd": -9.9075,
+      "roi": -1.0,
+      "win_rate": 0.0,
+      "avg_side_p_raw": 0.6731,
+      "avg_raw_edge": 0.1171,
+      "avg_abs_yes_divergence": 0.1081
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Jeddah",
+      "side": "BUY_NO",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.15-0.25",
+      "fills": 8,
+      "days": 4,
+      "cost_usd": 24.6263,
+      "pnl_usd": -9.7563,
+      "roi": -0.396174,
+      "win_rate": 0.625,
+      "avg_side_p_raw": 0.867912,
+      "avg_raw_edge": 0.191663,
+      "avg_abs_yes_divergence": 0.179163
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "NYC",
+      "side": "BUY_YES",
+      "model_version": "gfs",
+      "raw_edge_bin": "0.15-0.25",
+      "fills": 7,
+      "days": 2,
+      "cost_usd": 9.705,
+      "pnl_usd": -9.705,
+      "roi": -1.0,
+      "win_rate": 0.0,
+      "avg_side_p_raw": 0.482957,
+      "avg_raw_edge": 0.184386,
+      "avg_abs_yes_divergence": 0.172957
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Munich",
+      "side": "BUY_NO",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.15-0.25",
+      "fills": 7,
+      "days": 3,
+      "cost_usd": 14.983,
+      "pnl_usd": -7.4306,
+      "roi": -0.495937,
+      "win_rate": 0.428571,
+      "avg_side_p_raw": 0.796457,
+      "avg_raw_edge": 0.197886,
+      "avg_abs_yes_divergence": 0.195029
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Karachi",
+      "side": "BUY_NO",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 5,
+      "days": 3,
+      "cost_usd": 14.7384,
+      "pnl_usd": -7.0884,
+      "roi": -0.480947,
+      "win_rate": 0.2,
+      "avg_side_p_raw": 0.74222,
+      "avg_raw_edge": 0.11022,
+      "avg_abs_yes_divergence": 0.10922
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Guangzhou",
+      "side": "BUY_NO",
+      "model_version": "gfs",
+      "raw_edge_bin": "0.15-0.25",
+      "fills": 4,
+      "days": 3,
+      "cost_usd": 13.4903,
+      "pnl_usd": -5.687,
+      "roi": -0.421561,
+      "win_rate": 0.5,
+      "avg_side_p_raw": 0.864025,
+      "avg_raw_edge": 0.204025,
+      "avg_abs_yes_divergence": 0.196525
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Miami",
+      "side": "BUY_NO",
+      "model_version": "gfs",
+      "raw_edge_bin": "0.15-0.25",
+      "fills": 4,
+      "days": 3,
+      "cost_usd": 14.8986,
+      "pnl_usd": -5.2886,
+      "roi": -0.354973,
+      "win_rate": 0.25,
+      "avg_side_p_raw": 0.78745,
+      "avg_raw_edge": 0.19745,
+      "avg_abs_yes_divergence": 0.1912
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Ankara",
+      "side": "BUY_YES",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 4,
+      "days": 1,
+      "cost_usd": 4.9998,
+      "pnl_usd": -4.9998,
+      "roi": -1.0,
+      "win_rate": 0.0,
+      "avg_side_p_raw": 0.3711,
+      "avg_raw_edge": 0.1111,
+      "avg_abs_yes_divergence": 0.1061
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Jeddah",
+      "side": "BUY_YES",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 6,
+      "days": 1,
+      "cost_usd": 4.9998,
+      "pnl_usd": -4.9998,
+      "roi": -1.0,
+      "win_rate": 0.0,
+      "avg_side_p_raw": 0.4051,
+      "avg_raw_edge": 0.1451,
+      "avg_abs_yes_divergence": 0.1401
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Jeddah",
+      "side": "BUY_YES",
+      "model_version": "ecmwf",
+      "raw_edge_bin": ">0.25",
+      "fills": 3,
+      "days": 1,
+      "cost_usd": 4.9995,
+      "pnl_usd": -4.9995,
+      "roi": -1.0,
+      "win_rate": 0.0,
+      "avg_side_p_raw": 0.8895,
+      "avg_raw_edge": 0.3395,
+      "avg_abs_yes_divergence": 0.3395
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "NYC",
+      "side": "BUY_NO",
+      "model_version": "gfs",
+      "raw_edge_bin": "0.15-0.25",
+      "fills": 5,
+      "days": 4,
+      "cost_usd": 21.2534,
+      "pnl_usd": -4.1455,
+      "roi": -0.195051,
+      "win_rate": 0.6,
+      "avg_side_p_raw": 0.80544,
+      "avg_raw_edge": 0.18744,
+      "avg_abs_yes_divergence": 0.17544
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "NYC",
+      "side": "BUY_YES",
+      "model_version": "gfs",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 7,
+      "days": 3,
+      "cost_usd": 13.9339,
+      "pnl_usd": -3.8439,
+      "roi": -0.275866,
+      "win_rate": 0.142857,
+      "avg_side_p_raw": 0.459457,
+      "avg_raw_edge": 0.125171,
+      "avg_abs_yes_divergence": 0.123029
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "BuenosAires",
+      "side": "BUY_NO",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 6,
+      "days": 4,
+      "cost_usd": 19.9816,
+      "pnl_usd": -3.6016,
+      "roi": -0.180248,
+      "win_rate": 0.333333,
+      "avg_side_p_raw": 0.798033,
+      "avg_raw_edge": 0.1347,
+      "avg_abs_yes_divergence": 0.131367
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "London",
+      "side": "BUY_YES",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 9,
+      "days": 4,
+      "cost_usd": 18.5249,
+      "pnl_usd": -3.3749,
+      "roi": -0.182182,
+      "win_rate": 0.333333,
+      "avg_side_p_raw": 0.4964,
+      "avg_raw_edge": 0.129733,
+      "avg_abs_yes_divergence": 0.126956
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Singapore",
+      "side": "BUY_NO",
+      "model_version": "gfs",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 7,
+      "days": 1,
+      "cost_usd": 9.9882,
+      "pnl_usd": -2.9486,
+      "roi": -0.295205,
+      "win_rate": 0.285714,
+      "avg_side_p_raw": 0.670143,
+      "avg_raw_edge": 0.131571,
+      "avg_abs_yes_divergence": 0.126571
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Moscow",
+      "side": "BUY_NO",
+      "model_version": "ecmwf",
+      "raw_edge_bin": ">0.25",
+      "fills": 5,
+      "days": 3,
+      "cost_usd": 24.5722,
+      "pnl_usd": -2.9322,
+      "roi": -0.11933,
+      "win_rate": 0.6,
+      "avg_side_p_raw": 0.9524,
+      "avg_raw_edge": 0.2864,
+      "avg_abs_yes_divergence": 0.2694
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Karachi",
+      "side": "BUY_NO",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.15-0.25",
+      "fills": 9,
+      "days": 3,
+      "cost_usd": 19.9871,
+      "pnl_usd": -2.8771,
+      "roi": -0.143948,
+      "win_rate": 0.666667,
+      "avg_side_p_raw": 0.790667,
+      "avg_raw_edge": 0.182889,
+      "avg_abs_yes_divergence": 0.178444
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Istanbul",
+      "side": "BUY_YES",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 4,
+      "days": 2,
+      "cost_usd": 9.9956,
+      "pnl_usd": -2.7556,
+      "roi": -0.275681,
+      "win_rate": 0.25,
+      "avg_side_p_raw": 0.4993,
+      "avg_raw_edge": 0.1393,
+      "avg_abs_yes_divergence": 0.13805
+    },
+    {
+      "period": "post_2026_06_01",
+      "city": "Istanbul",
+      "side": "BUY_NO",
+      "model_version": "ecmwf",
+      "raw_edge_bin": "0.10-0.15",
+      "fills": 3,
+      "days": 2,
+      "cost_usd": 9.5919,
+      "pnl_usd": -2.1319,
+      "roi": -0.22226,
+      "win_rate": 0.333333,
+      "avg_side_p_raw": 0.7356,
+      "avg_raw_edge": 0.1356,
+      "avg_abs_yes_divergence": 0.103933
+    }
+  ],
+  "candidate_by_edge": [
+    {
+      "period": "post_2026_06_01",
+      "raw_edge_bin": "0.10-0.15",
+      "eligible": 33,
+      "ordered": 33,
+      "live_filled": 32,
+      "win_rate": 0.606061,
+      "cf_pnl": 25.75,
+      "avg_side_p_raw": 0.654242,
+      "avg_raw_edge_proxy": 0.126212,
+      "avg_entry": 0.52803,
+      "cf_roi_proxy": 1.477762
+    },
+    {
+      "period": "post_2026_06_01",
+      "raw_edge_bin": "0.15-0.25",
+      "eligible": 37,
+      "ordered": 37,
+      "live_filled": 33,
+      "win_rate": 0.540541,
+      "cf_pnl": -22.555,
+      "avg_side_p_raw": 0.800995,
+      "avg_raw_edge_proxy": 0.199495,
+      "avg_entry": 0.6015,
+      "cf_roi_proxy": -1.013457
+    },
+    {
+      "period": "post_2026_06_01",
+      "raw_edge_bin": ">0.25",
+      "eligible": 35,
+      "ordered": 35,
+      "live_filled": 28,
+      "win_rate": 0.542857,
+      "cf_pnl": -6.94,
+      "avg_side_p_raw": 0.890597,
+      "avg_raw_edge_proxy": 0.327911,
+      "avg_entry": 0.562686,
+      "cf_roi_proxy": -0.352392
+    },
+    {
+      "period": "pre_2026_06_01",
+      "raw_edge_bin": "0.10-0.15",
+      "eligible": 60,
+      "ordered": 60,
+      "live_filled": 35,
+      "win_rate": 0.516667,
+      "cf_pnl": -25.55,
+      "avg_side_p_raw": 0.685452,
+      "avg_raw_edge_proxy": 0.126202,
+      "avg_entry": 0.55925,
+      "cf_roi_proxy": -0.761436
+    },
+    {
+      "period": "pre_2026_06_01",
+      "raw_edge_bin": "0.15-0.25",
+      "eligible": 106,
+      "ordered": 102,
+      "live_filled": 70,
+      "win_rate": 0.584906,
+      "cf_pnl": 12.735,
+      "avg_side_p_raw": 0.777277,
+      "avg_raw_edge_proxy": 0.204386,
+      "avg_entry": 0.572892,
+      "cf_roi_proxy": 0.209711
+    },
+    {
+      "period": "pre_2026_06_01",
+      "raw_edge_bin": ">0.25",
+      "eligible": 89,
+      "ordered": 87,
+      "live_filled": 57,
+      "win_rate": 0.595506,
+      "cf_pnl": 38.8,
+      "avg_side_p_raw": 0.904033,
+      "avg_raw_edge_proxy": 0.352122,
+      "avg_entry": 0.55191,
+      "cf_roi_proxy": 0.789902
+    }
+  ],
+  "code_conclusion": "- 目前不像一个简单的 6/1 单点 code_version 断裂：目标样本的 `strategy_id=live_weather_edge_v1_4ef9b3ec3e2e` 和 `entry_price_window=0.25-0.75` 连续覆盖 2026-05-16 到 2026-06-07；`fact_trades.code_version` 在本 DB 中只有 1 个取值（`live-cycle-migration`），6 月前后相同。\n- 但 `code_version=live-cycle-migration` 不是精确 git SHA，所以它只能说明 fact 层没有记录出版本断点，不能排除真实运行代码在 5/31 已变。\n- 代码层最可疑的是 `127b1a0 strategy: per-side entry band + min_edge gate` 和 `5dd7fc3 ops: run weather live strategies as explicit instances`。`127b1a0` 的提交说明明确写到 live_cycle defaults baked per-side band strategy，且修改了 signal builder 的 per-side gate；这类改动可能改变候选进入 planner 的集合、实例归属或 `entry_price_window` 记录，而不一定体现在 `execution_policy=mid_price_core_v1`。\n- 因此结论是：**不像 PnL 公式或 fact 表单点断裂，但存在实例/默认参数层改动嫌疑**。要最终排除，需要抽样 raw live signal -> plan -> order -> fact 四层，验证 6/1 后 `v1_25_75` 是否真的仍是 flat 0.25-0.75/min_edge 0.10，而不是被 per-side defaults 或实例启动脚本污染。",
+  "mechanism_conclusion": "- 6 月后退化的核心是 raw probability 的排序/校准失效：已成交样本从 `+99.06` 变 `-89.06`，win rate 从 58.8% 降到 43.7%。\n- 最关键断点在 raw edge 低/中段：6 月前 `0.10-0.15` 为 `+49.65`，6 月后为 `-53.95`；6 月前 `0.15-0.25` 为 `+18.38`，6 月后为 `-42.13`。高 raw edge `>0.25` 6 月后仍为 `+7.02`。\n- 这说明不是所有已成交 raw 信号失效，而是原 v1 live 接受的边际 raw edge 现在噪声过大。候选机会宇宙只部分支持这个结论：`0.15-0.25` 同样转弱，但 `0.10-0.15` 在候选表里 6 月后反而正，说明执行选择/实例归属/timing 仍可能参与了退化。不中止实盘时，应先切掉边际段并做四层审计，而不是全盘否定 raw model。",
+  "actions": "1. **主 live 规则先升 raw edge 门槛**：`raw_edge<=0.25` 转 shadow，`raw_edge>0.25` 保留小 size live。理由：真实成交亏损集中在 `0.10-0.25`，高 raw edge 仍略正；候选表不完全同向，所以先作为风控，不作为永久 alpha 规则。\n2. **做 city-side-model 组合黑名单/降权，而不是单变量黑名单**：先降权报告中 6 月后最差的组合；城市单独弱但组合样本不足的只 shadow。理由：避免 Simpson paradox，也避免把可能的实例污染误判为城市 alpha。\n3. **ECMWF 不直接全停，但降 size 并要求更高 raw edge**：例如 ECMWF live 要 `raw_edge>0.30`，GFS 可先沿用 `>0.25`。理由：6 月后 ECMWF 是主要拖累，但可能和 city/timing/实例默认参数 mix 纠缠。\n4. **保留 blended edge 作为二级风控**：`blended_edge<0.10` 时 shadow；但不要把它当 alpha。理由：它能拦近期边际 raw 信号，但 6 月前会误伤。\n5. **立即加一个代码安全审计任务**：对 5/29-5/31 后的 raw live signal JSON 抽样，验证 `model_p_yes`、`market_price`、`edge`、`side`、`strategy_instance`、`entry_price_window` 在 signal、plan、order、fact 四层一致。理由：当前 fact 切片不像简单代码断裂，但 per-side defaults/实例启动脚本确实是可疑变更点。"
+}

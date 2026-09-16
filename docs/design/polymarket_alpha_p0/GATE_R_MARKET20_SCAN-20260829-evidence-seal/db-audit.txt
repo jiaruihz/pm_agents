@@ -1,0 +1,15 @@
+run_id=market20-20260829-candidate-scan
+database=/private/tmp/polymarket-alpha-pilot/market20-20260829-current/alpha-final.db
+replay_count=2
+clock_policy=fixed observed_at and fixed ingested_at
+
+alpha_recall_hit|20
+alpha_candidate|20
+alpha_book_capture_demand_v2|0
+alpha_research_result|0
+alpha_review_decision|0
+alpha_prediction_record|0
+
+The debug database alpha.db is excluded because pre-fix retries used a changing ingest
+clock and created 40 recall rows for 20 candidates. It remains in /private/tmp and is
+not part of this evidence seal.

@@ -1,0 +1,41 @@
+{
+  "action": "SIMULATE",
+  "blocking_reasons": [],
+  "conservative_probability": "0.74",
+  "created_at": "2026-08-27T10:12:00Z",
+  "direction": "YES",
+  "execution": "NO_ORDER",
+  "extensions": {
+    "rank_config_sha256": "79be47016cb828f7c22dc6c53343c9f4c5f799fc68fc201692c6918e52826ac5",
+    "score": "0.5135",
+    "score_breakdown": {
+      "edge": "0.084",
+      "evidence": "0.19",
+      "recall": "0.002",
+      "rule": "0.2375"
+    }
+  },
+  "input_artifact_ids": [
+    "candidate_card:2b096c0d66b7b9f177c1428bac44bf59e23485a5ec63475d4f3193b062adfd9a",
+    "rule_contract:e70032329f899e98737797d75ff536093727a45309592f617530bc38af08fce3",
+    "rule_gate_decision:1073afab78809312975b9b6548a41510b5c9ebdc5c31d1c5347d6ba3d5268652",
+    "rule_gate_decision:1ae4c40dd56d8cf624869719fa333238bf636c3dd28c2f55c00c9584613b06e2",
+    "research_result:335de399f08acf13d8b3a96400ff2db95b018edeb39c76e323e0d824f2c91053",
+    "research_import_receipt:27c32545fea0083f043fcb952e1534ac892989034753622a76fa9ee153b2f041",
+    "orderbook_snapshot:ac6578619d47f869dc8ce8767886518b3a200acfcd2522fef2aec5bffa3a8db1",
+    "market_packet:bd943b85455fbfcc0d9569d85f57e8ee0890e8817ab50782a32a0e7baf82cdbb",
+    "research_result:2b9fd390781ac845b00bf15163feebb0fccbdf9f676a509d62c15c64861c5282",
+    "research_import_receipt:7141b8e3781fba4a037299949886c21fc34ff425f9691d7bb9dbb62c6f1fdd2f"
+  ],
+  "market_id": "pilot-market",
+  "net_edge": "0.24",
+  "provenance": [],
+  "record_id": "review_decision:a0703cd10c80f44b051b1c40e03fc0bcf8bf9666f6bc792514be89b5ea650605",
+  "rule_gate_b": "PASS",
+  "rule_hash": "394158931d3587c0385774fbc34621bc79b6a1c8918cfd7fb09b1ed6f1a65df0",
+  "run_id": "p0-12-decision",
+  "schema_version": "alpha_p0_v1.0",
+  "source": "alpha_deterministic_ranker",
+  "source_version": "p0_09b_v1:p0-12-fixture",
+  "target_size": "10"
+}

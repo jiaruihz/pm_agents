@@ -1,0 +1,528 @@
+{
+  "alignment_row_count": 84240,
+  "checkpoint_status_counts": [
+    {
+      "checkpoint": "entry_after_p95_latency",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "entry_after_p95_latency",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "entry_after_p95_latency",
+      "count": 641,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "entry_after_p95_latency",
+      "count": 200,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "entry_after_p95_latency",
+      "count": 2852,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "entry_after_p95_latency",
+      "count": 18,
+      "primary_status": "VALID_BUT_INSUFFICIENT_DEPTH"
+    },
+    {
+      "checkpoint": "entry_after_p95_latency",
+      "count": 144,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "entry_after_p95_latency",
+      "count": 394,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_120s",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "official_plus_120s",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "official_plus_120s",
+      "count": 177,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "official_plus_120s",
+      "count": 146,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "official_plus_120s",
+      "count": 1084,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "official_plus_120s",
+      "count": 8,
+      "primary_status": "VALID_BUT_INSUFFICIENT_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_120s",
+      "count": 1288,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "official_plus_120s",
+      "count": 1546,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_15s",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "official_plus_15s",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "official_plus_15s",
+      "count": 515,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "official_plus_15s",
+      "count": 186,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "official_plus_15s",
+      "count": 2757,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "official_plus_15s",
+      "count": 4,
+      "primary_status": "VALID_BUT_INSUFFICIENT_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_15s",
+      "count": 376,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "official_plus_15s",
+      "count": 411,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_1s",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "official_plus_1s",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "official_plus_1s",
+      "count": 511,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "official_plus_1s",
+      "count": 201,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "official_plus_1s",
+      "count": 2887,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "official_plus_1s",
+      "count": 336,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "official_plus_1s",
+      "count": 314,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_300s",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "official_plus_300s",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "official_plus_300s",
+      "count": 125,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "official_plus_300s",
+      "count": 173,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "official_plus_300s",
+      "count": 3756,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "official_plus_300s",
+      "count": 56,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "official_plus_300s",
+      "count": 139,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_30s",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "official_plus_30s",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "official_plus_30s",
+      "count": 339,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "official_plus_30s",
+      "count": 94,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "official_plus_30s",
+      "count": 1095,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "official_plus_30s",
+      "count": 8,
+      "primary_status": "VALID_BUT_INSUFFICIENT_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_30s",
+      "count": 1266,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "official_plus_30s",
+      "count": 1447,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_3s",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "official_plus_3s",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "official_plus_3s",
+      "count": 517,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "official_plus_3s",
+      "count": 192,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "official_plus_3s",
+      "count": 2872,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "official_plus_3s",
+      "count": 2,
+      "primary_status": "VALID_BUT_INSUFFICIENT_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_3s",
+      "count": 340,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "official_plus_3s",
+      "count": 326,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_5s",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "official_plus_5s",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "official_plus_5s",
+      "count": 517,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "official_plus_5s",
+      "count": 190,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "official_plus_5s",
+      "count": 2820,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "official_plus_5s",
+      "count": 4,
+      "primary_status": "VALID_BUT_INSUFFICIENT_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_5s",
+      "count": 354,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "official_plus_5s",
+      "count": 364,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_60s",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "official_plus_60s",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "official_plus_60s",
+      "count": 329,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "official_plus_60s",
+      "count": 122,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "official_plus_60s",
+      "count": 1040,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "official_plus_60s",
+      "count": 8,
+      "primary_status": "VALID_BUT_INSUFFICIENT_DEPTH"
+    },
+    {
+      "checkpoint": "official_plus_60s",
+      "count": 1272,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "official_plus_60s",
+      "count": 1478,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    },
+    {
+      "checkpoint": "pre_official",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "pre_official",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "pre_official",
+      "count": 511,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "pre_official",
+      "count": 199,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "pre_official",
+      "count": 2887,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "pre_official",
+      "count": 336,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "pre_official",
+      "count": 316,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    },
+    {
+      "checkpoint": "pre_source",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "pre_source",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "pre_source",
+      "count": 645,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "pre_source",
+      "count": 228,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "pre_source",
+      "count": 3054,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "pre_source",
+      "count": 14,
+      "primary_status": "VALID_BUT_INSUFFICIENT_DEPTH"
+    },
+    {
+      "checkpoint": "pre_source",
+      "count": 62,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "pre_source",
+      "count": 246,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    },
+    {
+      "checkpoint": "source_minus_300s_placebo",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "source_minus_300s_placebo",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "source_minus_300s_placebo",
+      "count": 665,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "source_minus_300s_placebo",
+      "count": 219,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "source_minus_300s_placebo",
+      "count": 3047,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "source_minus_300s_placebo",
+      "count": 16,
+      "primary_status": "VALID_BUT_INSUFFICIENT_DEPTH"
+    },
+    {
+      "checkpoint": "source_minus_300s_placebo",
+      "count": 40,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "source_minus_300s_placebo",
+      "count": 262,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    },
+    {
+      "checkpoint": "source_t0",
+      "count": 2217,
+      "primary_status": "ARCHIVE_MISSING"
+    },
+    {
+      "checkpoint": "source_t0",
+      "count": 14,
+      "primary_status": "CLOCK_UNCERTAINTY"
+    },
+    {
+      "checkpoint": "source_t0",
+      "count": 651,
+      "primary_status": "NO_BASELINE"
+    },
+    {
+      "checkpoint": "source_t0",
+      "count": 227,
+      "primary_status": "OPEN_GAP"
+    },
+    {
+      "checkpoint": "source_t0",
+      "count": 3054,
+      "primary_status": "STALE_BOOK"
+    },
+    {
+      "checkpoint": "source_t0",
+      "count": 14,
+      "primary_status": "VALID_BUT_INSUFFICIENT_DEPTH"
+    },
+    {
+      "checkpoint": "source_t0",
+      "count": 62,
+      "primary_status": "VALID_BUT_ONE_SIDED"
+    },
+    {
+      "checkpoint": "source_t0",
+      "count": 241,
+      "primary_status": "VALID_TWO_SIDED_DEPTH"
+    }
+  ],
+  "coverage_hash": "3e225e2713c5c149aacb91cad2c8b353e3ed6e53ddb76f953e97915213b1f4e5",
+  "event_count": 841,
+  "invalid_and_execution_infeasible_overlap_count": 0,
+  "source_t0_book_valid_count": 66,
+  "source_t0_book_valid_rate": 0.07847800237812129,
+  "source_t0_exact_prior_no_row_count": 841,
+  "source_t0_execution_infeasible_count": 22,
+  "source_t0_primary_status_counts": {
+    "ARCHIVE_MISSING": 278,
+    "NO_BASELINE": 44,
+    "OPEN_GAP": 34,
+    "STALE_BOOK": 419,
+    "VALID_BUT_INSUFFICIENT_DEPTH": 4,
+    "VALID_BUT_ONE_SIDED": 18,
+    "VALID_TWO_SIDED_DEPTH": 44
+  },
+  "source_t0_reconstruction_invalid_count": 775,
+  "unknown_primary_status_count": 0
+}

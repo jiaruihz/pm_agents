@@ -1,0 +1,43 @@
+{
+  "schema_version": "alpha_p0_v1.0",
+  "record_id": "read_only_policy:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "run_id": "policy_run:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "created_at": "2026-08-26T05:00:00Z",
+  "source": "security_fixture",
+  "source_version": "v1",
+  "provenance": [],
+  "extensions": {},
+  "profile": "READ_ONLY",
+  "endpoints": [
+    {
+      "rule_id": "gamma_events_public",
+      "method": "GET",
+      "host": "gamma-api.polymarket.com",
+      "path": "/events",
+      "allowed_query_keys": ["closed", "limit", "offset", "tag_id"],
+      "required_query_keys": ["closed", "limit"],
+      "body_policy": "NONE",
+      "allowed_body_fields": [],
+      "required_body_fields": [],
+      "max_batch_items": 0,
+      "max_body_bytes": 0,
+      "allowed_request_headers": ["accept", "user-agent"]
+    },
+    {
+      "rule_id": "clob_books_public_batch",
+      "method": "POST",
+      "host": "clob.polymarket.com",
+      "path": "/books",
+      "allowed_query_keys": [],
+      "required_query_keys": [],
+      "body_policy": "OBJECT_ARRAY",
+      "allowed_body_fields": ["token_id"],
+      "required_body_fields": ["token_id"],
+      "max_batch_items": 4,
+      "max_body_bytes": 512,
+      "allowed_request_headers": ["accept", "content-type", "user-agent"]
+    }
+  ],
+  "allowed_environment_keys": ["SSL_CERT_FILE"],
+  "max_redirects": 0
+}

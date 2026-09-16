@@ -1,0 +1,42 @@
+{
+  "schema_version": "weather_research_prereg_v1",
+  "research_id": "current_yes_core_carry_actual_transport_tail_v1",
+  "run_id": "iem_actual_transition_monotone_tail_20260807",
+  "frozen_before_formal_run": true,
+  "created_at_utc": "2026-08-07T10:24:00Z",
+  "hypothesis": "Actual as-of METAR dewpoint, wind direction/persistence, cloud and rain transitions add economically meaningful overshoot-tail ranking beyond frozen Core and reduce high-risk Core Carry exposure without broadly suppressing winner shares.",
+  "target": "Upward exit from the current exact bracket by settlement (overshoot=1).",
+  "denominator": "Frozen 1,349 Core-scored PIT checkpoints / 801 city-date-bracket state entries / 36 cities / 31 target dates from 2026-06-02 through 2026-07-08; the 136 frozen baseline-selected entries are a secondary sizing denominator.",
+  "pit_boundary": "IEM ASOS/METAR rows require valid_utc <= decision_snapshot_ts_utc and a latest-row age <=90 minutes. Lag features use only observations with valid_utc <= the lag clock. Archive report timestamps are available but original first-seen ingestion timestamps are not.",
+  "actual_feature_families": [
+    "dewpoint_1h_3h_transition",
+    "wind_direction_persistence_and_hemisphere_warm_component",
+    "warm_moist_and_cold_transport_response",
+    "cloud_thickening_cooling_and_clearing_reheat",
+    "precipitation_onset_cooling",
+    "gust_warming_transport",
+    "pressure_and_airmass_transition"
+  ],
+  "context_features": [
+    "settlement_native_forecast_exit_margin",
+    "fresh_high_remaining_solar_heat"
+  ],
+  "model": "Frozen Core overshoot logit offset plus one L2-regularized monotone logistic residual. Each engineered feature is pre-oriented so a larger value means more overshoot risk; residual feature coefficients are constrained non-negative and the calibration intercept is unconstrained.",
+  "development_protocol": "First 8 target dates warm-up; next 15 dates expanding OOF diagnostics. No outcome-based feature, threshold or hyperparameter selection.",
+  "forward_protocol": "Last 8 historical target dates scored by one fit using only prior dates. Outcomes have been seen by the wider research program, so this is diagnostic historical forward, not clean program-wide forward.",
+  "primary_tail_metrics": [
+    "top_20pct_state_entry_overshoot_recall_and_lift",
+    "top_20pct_state_entry_winner_false_positive_rate",
+    "selected_entry_10_to_5_share_risk_budget_pnl_delta",
+    "selected_entry_loss_share_reduction_and_winner_profit_sacrificed"
+  ],
+  "probability_metrics_secondary": [
+    "target_date_equal_state_entry_brier",
+    "target_date_equal_state_entry_logloss"
+  ],
+  "sizing_overlay": "For each OOF test date, downsize frozen selected entries from 10 to 5 shares when challenger overshoot probability is above the training selected-entry 80th percentile. Compare with a frozen-Core-risk overlay at its own training 80th percentile and fixed 10.",
+  "materiality_rule": "Worth a new zero-notional forward collector only if historical forward top-20% overshoot lift is >=1.5x and the sizing overlay reduces at least one-half loss position without sacrificing more winner profit than loss capital saved. Probability deltas alone cannot pass.",
+  "uncertainty": "Target-date block bootstrap for proper-score deltas; tail counts and per-date policy PnL are reported without pretending six selected losses provide precise inference.",
+  "unique_action": "Build the actual-transition tail challenger and decide whether to continue it as a complete-score zero-notional forward model. Do not change Core live eligibility or sizing.",
+  "live_action": "None"
+}

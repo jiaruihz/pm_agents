@@ -1,0 +1,955 @@
+{
+  "generated_at_bj": "2026-06-07T15:06:50+08:00",
+  "snapshot": {
+    "fact_built_at_utc": "2026-06-07T05:48:57.787507+00:00",
+    "min_target_date": "2026-05-16",
+    "max_target_date": "2026-06-07",
+    "min_fill_date_bj": "2026-05-16",
+    "max_fill_date_bj": "2026-06-07",
+    "max_order_ts_utc": "2026-06-07T05:29:07Z",
+    "max_fill_ts_utc": "2026-06-07T04:58:40+00:00",
+    "max_val_snapshot_ts_utc": "2026-06-07T05:00:53Z",
+    "live_real_rows": 1302,
+    "live_real_distinct_fills": 1302
+  },
+  "trade_class": [
+    {
+      "trade_class": "live_real",
+      "rows": 1302
+    },
+    {
+      "trade_class": "live_simulated",
+      "rows": 1077
+    },
+    {
+      "trade_class": "paper",
+      "rows": 2285
+    },
+    {
+      "trade_class": "snapshot_replay",
+      "rows": 636
+    }
+  ],
+  "settlement": [
+    {
+      "settlement_status": null,
+      "rows": 388
+    },
+    {
+      "settlement_status": "settled",
+      "rows": 4912
+    }
+  ],
+  "fill_period_by_instance": [
+    {
+      "period": "recent_7d_2026-05-31_to_2026-06-06",
+      "strategy_instance": "legacy_maker_queue_v1_25_75",
+      "fills": 3,
+      "settled_fills": 3,
+      "open_fills": 0,
+      "cash_cost_usd": 9.38,
+      "settled_cost_usd": 9.38,
+      "realized_pnl_usd": 7.61,
+      "open_cost_usd": 0.0,
+      "open_missing_mid_rows": 0,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "81.1%"
+    },
+    {
+      "period": "recent_7d_2026-05-31_to_2026-06-06",
+      "strategy_instance": "mid_price_core_v1_25_75",
+      "fills": 412,
+      "settled_fills": 325,
+      "open_fills": 87,
+      "cash_cost_usd": 1055.36,
+      "settled_cost_usd": 850.3,
+      "realized_pnl_usd": -151.11,
+      "open_cost_usd": 205.06,
+      "open_missing_mid_rows": 69,
+      "unrealized_pnl_mid_usd": -9.35,
+      "unrealized_pnl_bid_usd": -6.88,
+      "val_snapshot_ts_utc": "2026-06-07T05:00:53Z",
+      "roi_settled": "-17.8%"
+    },
+    {
+      "period": "recent_7d_2026-05-31_to_2026-06-06",
+      "strategy_instance": "mid_price_core_v1_side_band",
+      "fills": 114,
+      "settled_fills": 104,
+      "open_fills": 10,
+      "cash_cost_usd": 276.71,
+      "settled_cost_usd": 241.72,
+      "realized_pnl_usd": 24.76,
+      "open_cost_usd": 34.99,
+      "open_missing_mid_rows": 10,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "10.2%"
+    },
+    {
+      "period": "recent_7d_2026-05-31_to_2026-06-06",
+      "strategy_instance": "mid_price_core_v2_25_75",
+      "fills": 122,
+      "settled_fills": 120,
+      "open_fills": 2,
+      "cash_cost_usd": 301.26,
+      "settled_cost_usd": 292.86,
+      "realized_pnl_usd": -86.76,
+      "open_cost_usd": 8.4,
+      "open_missing_mid_rows": 2,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "-29.6%"
+    },
+    {
+      "period": "recent_14d_2026-05-24_to_2026-06-06",
+      "strategy_instance": "legacy_maker_queue_v1_25_75",
+      "fills": 76,
+      "settled_fills": 76,
+      "open_fills": 0,
+      "cash_cost_usd": 213.36,
+      "settled_cost_usd": 213.36,
+      "realized_pnl_usd": -28.33,
+      "open_cost_usd": 0.0,
+      "open_missing_mid_rows": 0,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "-13.3%"
+    },
+    {
+      "period": "recent_14d_2026-05-24_to_2026-06-06",
+      "strategy_instance": "legacy_maker_queue_v2_25_75",
+      "fills": 59,
+      "settled_fills": 59,
+      "open_fills": 0,
+      "cash_cost_usd": 188.25,
+      "settled_cost_usd": 188.25,
+      "realized_pnl_usd": 22.99,
+      "open_cost_usd": 0.0,
+      "open_missing_mid_rows": 0,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "12.2%"
+    },
+    {
+      "period": "recent_14d_2026-05-24_to_2026-06-06",
+      "strategy_instance": "mid_price_core_v1_25_75",
+      "fills": 699,
+      "settled_fills": 612,
+      "open_fills": 87,
+      "cash_cost_usd": 1875.62,
+      "settled_cost_usd": 1670.56,
+      "realized_pnl_usd": -82.99,
+      "open_cost_usd": 205.06,
+      "open_missing_mid_rows": 69,
+      "unrealized_pnl_mid_usd": -9.35,
+      "unrealized_pnl_bid_usd": -6.88,
+      "val_snapshot_ts_utc": "2026-06-07T05:00:53Z",
+      "roi_settled": "-5.0%"
+    },
+    {
+      "period": "recent_14d_2026-05-24_to_2026-06-06",
+      "strategy_instance": "mid_price_core_v1_side_band",
+      "fills": 114,
+      "settled_fills": 104,
+      "open_fills": 10,
+      "cash_cost_usd": 276.71,
+      "settled_cost_usd": 241.72,
+      "realized_pnl_usd": 24.76,
+      "open_cost_usd": 34.99,
+      "open_missing_mid_rows": 10,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "10.2%"
+    },
+    {
+      "period": "recent_14d_2026-05-24_to_2026-06-06",
+      "strategy_instance": "mid_price_core_v2_25_75",
+      "fills": 177,
+      "settled_fills": 175,
+      "open_fills": 2,
+      "cash_cost_usd": 430.97,
+      "settled_cost_usd": 422.57,
+      "realized_pnl_usd": -72.74,
+      "open_cost_usd": 8.4,
+      "open_missing_mid_rows": 2,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "-17.2%"
+    },
+    {
+      "period": "before_2026-05-24",
+      "strategy_instance": "mid_price_core_v1_25_75",
+      "fills": 120,
+      "settled_fills": 95,
+      "open_fills": 25,
+      "cash_cost_usd": 360.83,
+      "settled_cost_usd": 279.23,
+      "realized_pnl_usd": 92.98,
+      "open_cost_usd": 81.6,
+      "open_missing_mid_rows": 25,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "33.3%"
+    }
+  ],
+  "target_period_by_instance": [
+    {
+      "period": "recent_7d_2026-05-31_to_2026-06-06",
+      "strategy_instance": "legacy_maker_queue_v1_25_75",
+      "fills": 3,
+      "settled_fills": 3,
+      "open_fills": 0,
+      "cash_cost_usd": 9.38,
+      "settled_cost_usd": 9.38,
+      "realized_pnl_usd": 7.61,
+      "open_cost_usd": 0.0,
+      "open_missing_mid_rows": 0,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "81.1%"
+    },
+    {
+      "period": "recent_7d_2026-05-31_to_2026-06-06",
+      "strategy_instance": "mid_price_core_v1_25_75",
+      "fills": 404,
+      "settled_fills": 337,
+      "open_fills": 67,
+      "cash_cost_usd": 1041.44,
+      "settled_cost_usd": 898.28,
+      "realized_pnl_usd": -163.91,
+      "open_cost_usd": 143.16,
+      "open_missing_mid_rows": 67,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "-18.2%"
+    },
+    {
+      "period": "recent_7d_2026-05-31_to_2026-06-06",
+      "strategy_instance": "mid_price_core_v1_side_band",
+      "fills": 116,
+      "settled_fills": 104,
+      "open_fills": 12,
+      "cash_cost_usd": 281.71,
+      "settled_cost_usd": 241.72,
+      "realized_pnl_usd": 24.76,
+      "open_cost_usd": 39.99,
+      "open_missing_mid_rows": 12,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "10.2%"
+    },
+    {
+      "period": "recent_7d_2026-05-31_to_2026-06-06",
+      "strategy_instance": "mid_price_core_v2_25_75",
+      "fills": 130,
+      "settled_fills": 128,
+      "open_fills": 2,
+      "cash_cost_usd": 323.08,
+      "settled_cost_usd": 314.68,
+      "realized_pnl_usd": -93.59,
+      "open_cost_usd": 8.4,
+      "open_missing_mid_rows": 2,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "-29.7%"
+    },
+    {
+      "period": "recent_14d_2026-05-24_to_2026-06-06",
+      "strategy_instance": "legacy_maker_queue_v1_25_75",
+      "fills": 76,
+      "settled_fills": 76,
+      "open_fills": 0,
+      "cash_cost_usd": 213.36,
+      "settled_cost_usd": 213.36,
+      "realized_pnl_usd": -28.33,
+      "open_cost_usd": 0.0,
+      "open_missing_mid_rows": 0,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "-13.3%"
+    },
+    {
+      "period": "recent_14d_2026-05-24_to_2026-06-06",
+      "strategy_instance": "legacy_maker_queue_v2_25_75",
+      "fills": 59,
+      "settled_fills": 59,
+      "open_fills": 0,
+      "cash_cost_usd": 188.25,
+      "settled_cost_usd": 188.25,
+      "realized_pnl_usd": 22.99,
+      "open_cost_usd": 0.0,
+      "open_missing_mid_rows": 0,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "12.2%"
+    },
+    {
+      "period": "recent_14d_2026-05-24_to_2026-06-06",
+      "strategy_instance": "mid_price_core_v1_25_75",
+      "fills": 680,
+      "settled_fills": 613,
+      "open_fills": 67,
+      "cash_cost_usd": 1818.66,
+      "settled_cost_usd": 1675.51,
+      "realized_pnl_usd": -79.1,
+      "open_cost_usd": 143.16,
+      "open_missing_mid_rows": 67,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "-4.7%"
+    },
+    {
+      "period": "recent_14d_2026-05-24_to_2026-06-06",
+      "strategy_instance": "mid_price_core_v1_side_band",
+      "fills": 116,
+      "settled_fills": 104,
+      "open_fills": 12,
+      "cash_cost_usd": 281.71,
+      "settled_cost_usd": 241.72,
+      "realized_pnl_usd": 24.76,
+      "open_cost_usd": 39.99,
+      "open_missing_mid_rows": 12,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "10.2%"
+    },
+    {
+      "period": "recent_14d_2026-05-24_to_2026-06-06",
+      "strategy_instance": "mid_price_core_v2_25_75",
+      "fills": 177,
+      "settled_fills": 175,
+      "open_fills": 2,
+      "cash_cost_usd": 430.97,
+      "settled_cost_usd": 422.57,
+      "realized_pnl_usd": -72.74,
+      "open_cost_usd": 8.4,
+      "open_missing_mid_rows": 2,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "-17.2%"
+    },
+    {
+      "period": "before_2026-05-24",
+      "strategy_instance": "mid_price_core_v1_25_75",
+      "fills": 119,
+      "settled_fills": 94,
+      "open_fills": 25,
+      "cash_cost_usd": 355.88,
+      "settled_cost_usd": 274.28,
+      "realized_pnl_usd": 89.09,
+      "open_cost_usd": 81.6,
+      "open_missing_mid_rows": 25,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "roi_settled": "32.5%"
+    }
+  ],
+  "period_total": [
+    {
+      "period": "recent_7d_2026-05-31_to_2026-06-06",
+      "fills": 651,
+      "settled_fills": 552,
+      "open_fills": 99,
+      "cash_cost_usd": 1642.72,
+      "settled_cost_usd": 1394.27,
+      "realized_pnl_usd": -205.51,
+      "open_cost_usd": 248.45,
+      "open_missing_mid_rows": 81,
+      "unrealized_pnl_mid_usd": -9.35,
+      "unrealized_pnl_bid_usd": -6.88,
+      "val_snapshot_ts_utc": "2026-06-07T05:00:53Z",
+      "date_lens": "fill_date_bj",
+      "roi_settled": "-14.7%"
+    },
+    {
+      "period": "recent_14d_2026-05-24_to_2026-06-06",
+      "fills": 1125,
+      "settled_fills": 1026,
+      "open_fills": 99,
+      "cash_cost_usd": 2984.9,
+      "settled_cost_usd": 2736.45,
+      "realized_pnl_usd": -136.31,
+      "open_cost_usd": 248.45,
+      "open_missing_mid_rows": 81,
+      "unrealized_pnl_mid_usd": -9.35,
+      "unrealized_pnl_bid_usd": -6.88,
+      "val_snapshot_ts_utc": "2026-06-07T05:00:53Z",
+      "date_lens": "fill_date_bj",
+      "roi_settled": "-5.0%"
+    },
+    {
+      "period": "before_2026-05-24",
+      "fills": 120,
+      "settled_fills": 95,
+      "open_fills": 25,
+      "cash_cost_usd": 360.83,
+      "settled_cost_usd": 279.23,
+      "realized_pnl_usd": 92.98,
+      "open_cost_usd": 81.6,
+      "open_missing_mid_rows": 25,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "date_lens": "fill_date_bj",
+      "roi_settled": "33.3%"
+    },
+    {
+      "period": "recent_7d_2026-05-31_to_2026-06-06",
+      "fills": 653,
+      "settled_fills": 572,
+      "open_fills": 81,
+      "cash_cost_usd": 1655.61,
+      "settled_cost_usd": 1464.07,
+      "realized_pnl_usd": -225.14,
+      "open_cost_usd": 191.54,
+      "open_missing_mid_rows": 81,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "date_lens": "target_date",
+      "roi_settled": "-15.4%"
+    },
+    {
+      "period": "recent_14d_2026-05-24_to_2026-06-06",
+      "fills": 1108,
+      "settled_fills": 1027,
+      "open_fills": 81,
+      "cash_cost_usd": 2932.94,
+      "settled_cost_usd": 2741.4,
+      "realized_pnl_usd": -132.42,
+      "open_cost_usd": 191.54,
+      "open_missing_mid_rows": 81,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "date_lens": "target_date",
+      "roi_settled": "-4.8%"
+    },
+    {
+      "period": "before_2026-05-24",
+      "fills": 119,
+      "settled_fills": 94,
+      "open_fills": 25,
+      "cash_cost_usd": 355.88,
+      "settled_cost_usd": 274.28,
+      "realized_pnl_usd": 89.09,
+      "open_cost_usd": 81.6,
+      "open_missing_mid_rows": 25,
+      "unrealized_pnl_mid_usd": 0.0,
+      "unrealized_pnl_bid_usd": null,
+      "val_snapshot_ts_utc": null,
+      "date_lens": "target_date",
+      "roi_settled": "32.5%"
+    }
+  ],
+  "possible_300": [
+    {
+      "date_lens": "fill_date_bj",
+      "cash_cost_usd": 1642.72,
+      "realized_pnl_usd": -205.51,
+      "open_cost_usd": 248.45,
+      "open_missing_mid_rows": 81,
+      "available_mid_mtm_open": -9.35,
+      "realized_minus_open_cost_diagnostic": -453.96,
+      "realized_plus_available_mid_mtm": -214.86
+    },
+    {
+      "date_lens": "target_date",
+      "cash_cost_usd": 1655.61,
+      "realized_pnl_usd": -225.14,
+      "open_cost_usd": 191.54,
+      "open_missing_mid_rows": 81,
+      "available_mid_mtm_open": 0.0,
+      "realized_minus_open_cost_diagnostic": -416.68,
+      "realized_plus_available_mid_mtm": -225.14
+    }
+  ],
+  "target_daily_realized_pnl": [
+    {
+      "date": "2026-05-16",
+      "total": 8.99,
+      "v1_25_75": 8.99,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-17",
+      "total": 19.16,
+      "v1_25_75": 19.16,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-18",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-20",
+      "total": 16.92,
+      "v1_25_75": 16.92,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-21",
+      "total": -2.04,
+      "v1_25_75": -2.04,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-22",
+      "total": 34.24,
+      "v1_25_75": 34.24,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-23",
+      "total": 11.84,
+      "v1_25_75": 11.84,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-24",
+      "total": 29.24,
+      "v1_25_75": 28.5,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-25",
+      "total": 14.55,
+      "v1_25_75": 12.89,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-26",
+      "total": -25.57,
+      "v1_25_75": -11.51,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-27",
+      "total": 4.92,
+      "v1_25_75": 9.42,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-28",
+      "total": -21.35,
+      "v1_25_75": -11.45,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-29",
+      "total": 94.95,
+      "v1_25_75": 57.95,
+      "v2_25_75": 13.26,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-30",
+      "total": -4.01,
+      "v1_25_75": -0.97,
+      "v2_25_75": 7.6,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-31",
+      "total": -125.67,
+      "v1_25_75": -74.86,
+      "v2_25_75": -50.81,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-06-01",
+      "total": 68.92,
+      "v1_25_75": 14.9,
+      "v2_25_75": -17.3,
+      "side_band": 63.71
+    },
+    {
+      "date": "2026-06-02",
+      "total": -12.12,
+      "v1_25_75": -18.12,
+      "v2_25_75": 1.82,
+      "side_band": 4.18
+    },
+    {
+      "date": "2026-06-03",
+      "total": 68.92,
+      "v1_25_75": 29.85,
+      "v2_25_75": 23.25,
+      "side_band": 15.82
+    },
+    {
+      "date": "2026-06-04",
+      "total": -112.41,
+      "v1_25_75": -46.19,
+      "v2_25_75": -27.24,
+      "side_band": -38.98
+    },
+    {
+      "date": "2026-06-05",
+      "total": -112.77,
+      "v1_25_75": -69.49,
+      "v2_25_75": -23.31,
+      "side_band": -19.97
+    },
+    {
+      "date": "2026-06-06",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-06-07",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    }
+  ],
+  "target_daily_open_cost": [
+    {
+      "date": "2026-05-16",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-17",
+      "total": 49.13,
+      "v1_25_75": 49.13,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-18",
+      "total": 32.47,
+      "v1_25_75": 32.47,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-20",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-21",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-22",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-23",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-24",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-25",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-26",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-27",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-28",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-29",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-30",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-31",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-06-01",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-06-02",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-06-03",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-06-04",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-06-05",
+      "total": 0.0,
+      "v1_25_75": 0.0,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-06-06",
+      "total": 191.55,
+      "v1_25_75": 143.16,
+      "v2_25_75": 8.4,
+      "side_band": 39.99
+    },
+    {
+      "date": "2026-06-07",
+      "total": 168.77,
+      "v1_25_75": 143.95,
+      "v2_25_75": 0.0,
+      "side_band": 24.82
+    }
+  ],
+  "fill_daily_cash_cost": [
+    {
+      "date": "2026-05-16",
+      "total": 44.4,
+      "v1_25_75": 44.4,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-17",
+      "total": 73.07,
+      "v1_25_75": 73.07,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-18",
+      "total": 27.86,
+      "v1_25_75": 27.86,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-20",
+      "total": 44.56,
+      "v1_25_75": 44.56,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-21",
+      "total": 69.66,
+      "v1_25_75": 69.66,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-22",
+      "total": 48.89,
+      "v1_25_75": 48.89,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-23",
+      "total": 52.38,
+      "v1_25_75": 52.38,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-24",
+      "total": 87.06,
+      "v1_25_75": 63.53,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-25",
+      "total": 100.37,
+      "v1_25_75": 76.3,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-26",
+      "total": 120.93,
+      "v1_25_75": 73.86,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-27",
+      "total": 264.7,
+      "v1_25_75": 170.6,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-28",
+      "total": 233.19,
+      "v1_25_75": 106.42,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-29",
+      "total": 197.79,
+      "v1_25_75": 163.4,
+      "v2_25_75": 0.0,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-30",
+      "total": 338.15,
+      "v1_25_75": 166.15,
+      "v2_25_75": 129.71,
+      "side_band": 0.0
+    },
+    {
+      "date": "2026-05-31",
+      "total": 258.94,
+      "v1_25_75": 146.6,
+      "v2_25_75": 85.11,
+      "side_band": 17.85
+    },
+    {
+      "date": "2026-06-01",
+      "total": 326.93,
+      "v1_25_75": 150.1,
+      "v2_25_75": 85.14,
+      "side_band": 91.69
+    },
+    {
+      "date": "2026-06-02",
+      "total": 239.41,
+      "v1_25_75": 179.96,
+      "v2_25_75": 33.45,
+      "side_band": 26.0
+    },
+    {
+      "date": "2026-06-03",
+      "total": 161.12,
+      "v1_25_75": 109.52,
+      "v2_25_75": 26.31,
+      "side_band": 25.29
+    },
+    {
+      "date": "2026-06-04",
+      "total": 236.06,
+      "v1_25_75": 153.58,
+      "v2_25_75": 27.95,
+      "side_band": 54.53
+    },
+    {
+      "date": "2026-06-05",
+      "total": 243.83,
+      "v1_25_75": 169.18,
+      "v2_25_75": 43.29,
+      "side_band": 31.36
+    },
+    {
+      "date": "2026-06-06",
+      "total": 176.4,
+      "v1_25_75": 146.41,
+      "v2_25_75": 0.0,
+      "side_band": 29.99
+    },
+    {
+      "date": "2026-06-07",
+      "total": 111.86,
+      "v1_25_75": 82.05,
+      "v2_25_75": 0.0,
+      "side_band": 29.81
+    }
+  ]
+}

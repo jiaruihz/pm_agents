@@ -1,0 +1,27 @@
+version: US_FAST_WEATHER_AIRPORT_SET_V1
+purpose: latency benchmark across climate zones and reporting patterns
+
+primary_20:
+  - {icao: KSEA, city: Seattle, timezone: America/Los_Angeles}
+  - {icao: KPDX, city: Portland, timezone: America/Los_Angeles}
+  - {icao: KSFO, city: San Francisco, timezone: America/Los_Angeles}
+  - {icao: KLAX, city: Los Angeles, timezone: America/Los_Angeles}
+  - {icao: KLAS, city: Las Vegas, timezone: America/Los_Angeles}
+  - {icao: KPHX, city: Phoenix, timezone: America/Phoenix}
+  - {icao: KSLC, city: Salt Lake City, timezone: America/Denver}
+  - {icao: KDEN, city: Denver, timezone: America/Denver}
+  - {icao: KDFW, city: Dallas-Fort Worth, timezone: America/Chicago}
+  - {icao: KIAH, city: Houston, timezone: America/Chicago}
+  - {icao: KMSP, city: Minneapolis, timezone: America/Chicago}
+  - {icao: KORD, city: Chicago O'Hare, timezone: America/Chicago}
+  - {icao: KATL, city: Atlanta, timezone: America/New_York}
+  - {icao: KMIA, city: Miami, timezone: America/New_York}
+  - {icao: KDCA, city: Washington National, timezone: America/New_York}
+  - {icao: KIAD, city: Washington Dulles, timezone: America/New_York}
+  - {icao: KJFK, city: New York JFK, timezone: America/New_York}
+  - {icao: KLGA, city: New York LaGuardia, timezone: America/New_York}
+  - {icao: KEWR, city: Newark, timezone: America/New_York}
+  - {icao: KBOS, city: Boston, timezone: America/New_York}
+
+smoke_test_4: [KSEA, KORD, KJFK, KPHX]
+

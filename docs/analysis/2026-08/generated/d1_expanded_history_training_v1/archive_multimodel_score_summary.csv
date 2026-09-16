@@ -1,0 +1,4 @@
+arm,states,dates,cities,logloss,brier,rps,h_minus_reference_logloss,ci_low,ci_high,status
+H_archive_known_multimodel,41,8,19,1.955467,0.076832,0.095504,0.068322,-0.110860,0.252080,inconclusive_vs_W0
+robust_tail_W0_same_dates,41,8,19,1.887145,0.076037,0.086559,0.000000,,,reference
+market_same_dates,41,8,19,1.563286,0.068366,0.063577,0.392180,0.104166,0.676280,H_significantly_worse

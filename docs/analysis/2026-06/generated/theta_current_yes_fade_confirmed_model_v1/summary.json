@@ -1,0 +1,62 @@
+{
+  "artifact_type": "theta_current_yes_fade_confirmed_logistic_v1",
+  "coverage": {
+    "fade_rows": 857,
+    "holdout_dates": 13,
+    "holdout_rows": 461,
+    "source_rows": 3239,
+    "train_dates": 13,
+    "train_rows": 396
+  },
+  "generated_at_utc": "2026-06-18T15:53:05+00:00",
+  "holdout_metrics": [
+    {
+      "active_dates": 13,
+      "actual_rate": 0.8980477223427332,
+      "auc": 0.8619590913762976,
+      "brier": 0.05976622888001783,
+      "logloss": 0.21812438233870504,
+      "mean_pred": 0.883838863455546,
+      "model": "base_current_yes_model",
+      "rows": 461
+    },
+    {
+      "active_dates": 13,
+      "actual_rate": 0.8980477223427332,
+      "auc": 0.8162195497995682,
+      "brier": 0.07146137444243915,
+      "logloss": 0.25932558325629484,
+      "mean_pred": 0.8703000612743859,
+      "model": "fade_confirmed_specialist",
+      "rows": 461
+    }
+  ],
+  "live_like_comparison": {
+    "base_current_yes_model": {
+      "active_dates": 11,
+      "avg_yes_ask": 0.8043658536585364,
+      "cities": 15,
+      "orders": 41,
+      "yes_cost": 32.97899999999999,
+      "yes_pnl": 6.020999999999999,
+      "yes_roi": 0.18257072682616213,
+      "yes_win_rate": 0.9512195121951219
+    },
+    "fade_confirmed_specialist": {
+      "active_dates": 12,
+      "avg_yes_ask": 0.8192499999999999,
+      "cities": 17,
+      "orders": 44,
+      "yes_cost": 36.047,
+      "yes_pnl": 4.952999999999999,
+      "yes_roi": 0.13740394484977944,
+      "yes_win_rate": 0.9318181818181818
+    }
+  },
+  "outputs": {
+    "artifact": "docs/analysis/2026-06/generated/theta_current_yes_fade_confirmed_model_v1/fade_confirmed_model.json",
+    "markdown": "docs/analysis/2026-06/2026-06-18-current-yes-fade-confirmed-specialist-model-v1.md",
+    "metrics": "docs/analysis/2026-06/generated/theta_current_yes_fade_confirmed_model_v1/model_metrics.csv",
+    "selected_holdout": "docs/analysis/2026-06/generated/theta_current_yes_fade_confirmed_model_v1/live_like_selected_holdout.csv"
+  }
+}

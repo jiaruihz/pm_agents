@@ -1,0 +1,30 @@
+source_id,class,family,normal_access,priority,required_action,initial_status
+DIRECT_ASOS_AWOS_PHONE,DIRECT_SENSOR,direct_airport,published telephone dial-in,P0,build current inventory and measured call pipeline,IN_PROGRESS
+DIRECT_ASOS_AWOS_VHF,DIRECT_SENSOR,direct_airport,local or authorized receiver,P1,assess representative airports,OPEN
+DIRECT_D_ATIS,DIRECT_SENSOR,direct_airport,FAA or commercial subscription,P0,discover current access and trial,IN_PROGRESS
+AIRPORT_VENDOR_CLOUD,DIRECT_SENSOR,direct_airport,public/customer web or API,P0,enumerate target-airport portals,OPEN
+NOAAPORT_DIRECT,METAR_TRANSPORT,official_push,C-band receiver,P0,test or obtain hosted/hardware path,OPEN
+NOAAPORT_RELAY,METAR_TRANSPORT,official_push,public or paid relay,P0,test SAUS99/SPUS99,OPEN
+UNIDATA_NTEXT,METAR_TRANSPORT,community_push,authorized LDM upstream,P0,request and implement,OPEN
+UNIDATA_IDS_DDPLUS,METAR_TRANSPORT,community_push,authorized LDM upstream,P0,request and implement,OPEN
+WIS2_ORIGIN,METAR_TRANSPORT,public_push,public MQTT,P0,repair diagnose decode race,IN_PROGRESS
+WIS2_CACHE,METAR_TRANSPORT,public_push,public MQTT,P1,repair diagnose decode race,IN_PROGRESS
+FAA_SCDS_CSS_WX,METAR_TRANSPORT,normal_application,public account plus SAA,P0,inspect current catalog and subscribe,ACCESS_REQUIRED
+FAA_SCDS_TERMINAL,DIRECT_SENSOR,normal_application,public account plus SAA,P0,inspect D-ATIS terminal services,ACCESS_REQUIRED
+MADIS_OMO_LDM,DIRECT_SENSOR,one_minute_sensor,application or LDM,P1,apply and measure separately,ACCESS_REQUIRED
+MADIS_OMO_PUBLIC,DIRECT_SENSOR,one_minute_sensor,public files,P2,retain as slow/control path,OBSERVED
+SYNOPTIC_METAR_PUSH,METAR_TRANSPORT,commercial_trial,commercial trial,P0,activate and measure,ACCESS_REQUIRED
+SYNOPTIC_HF_ASOS,DIRECT_SENSOR,commercial_trial,commercial trial,P1,activate and measure,ACCESS_REQUIRED
+IEM_EXPERIMENTAL,DIRECT_SENSOR,research_relay,public/requested,P2,measure lineage and latency,PARTIAL
+WMSCR_AWI,METAR_TRANSPORT,upstream_intermediary,sales inquiry,P0,request receive-only feed or trial,ACCESS_REQUIRED
+WMSCR_DBT,METAR_TRANSPORT,upstream_intermediary,sales inquiry,P0,request receive-only feed or trial,ACCESS_REQUIRED
+WMSCR_ANYAWOS,METAR_TRANSPORT,upstream_intermediary,sales inquiry,P0,request receive-only feed or trial,ACCESS_REQUIRED
+WMSCR_RSI,METAR_TRANSPORT,upstream_intermediary,sales inquiry,P0,request receive-only feed or trial,ACCESS_REQUIRED
+WMSCR_URF,METAR_TRANSPORT,upstream_intermediary,sales inquiry,P0,request receive-only feed or trial,ACCESS_REQUIRED
+MESOTECH_AWOS_LIVE,DIRECT_SENSOR,manufacturer_cloud,airport or vendor access,P1,map covered airports and request access,OPEN
+METAR_WS,METAR_TRANSPORT,commercial_relay,sandbox or trial,P0,measure and request lineage,OPEN
+AWC_API,METAR_TRANSPORT,baseline,public HTTP,P2,continue baseline,OBSERVED
+AWC_CACHE,METAR_TRANSPORT,baseline,public HTTP,P2,continue baseline,OBSERVED
+TGFTP,METAR_TRANSPORT,baseline,public HTTP,P2,continue baseline,OBSERVED
+WU_TWC,DIRECT_SENSOR,baseline,API or page,P3,retain as slow comparison,OBSERVED
+PEAKMET,COMPETITOR_VISIBLE,competitor,legitimate trial or member,P0,record seven days and fingerprint,ACCESS_REQUIRED

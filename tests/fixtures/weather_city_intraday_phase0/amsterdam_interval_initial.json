@@ -1,0 +1,35 @@
+{
+  "fixture_kind": "interval_initial",
+  "note": "KNMI interval initial event",
+  "raw_ref": {
+    "line_numbers": [
+      85
+    ],
+    "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/2026-07-31/knmi_observations.jsonl",
+    "source_file_sha256_at_census": "1bf4d9d4965b60954c9426ff54f50599b6229ddfcb18ba5ee163453be27cc4f2"
+  },
+  "record_schema_fingerprint": "e8573616417f95c25c8d6a77cca4bcf715fa2901fc6e8b45ca1b49401cbd949f",
+  "records": {
+    "available_at_utc": "2026-07-31T02:43:42.037259+00:00",
+    "city": "Amsterdam",
+    "event_role": "new_content",
+    "first_seen_at_utc": "2026-07-31T02:43:42.037259+00:00",
+    "information_event_id": "16102d7ad19fd3f52fd0f1060eced776028629412182d43facd911b7ce65b24d",
+    "knmi_revision": "2026-07-31T02:43:42+00:00",
+    "knmi_revision_kind": "initial",
+    "material_state_change": true,
+    "max_temp_c_past_10m": 18.8,
+    "measurement_interval_end_utc": "2026-07-31T02:40:00+00:00",
+    "observation_time_utc": "2026-07-31T02:40:00+00:00",
+    "payload_hash": "fd1095c89682698dadbe6e86440310cad7baaffb90a2a058ca60ab514319f54e",
+    "provider_item_id": "2026-07-31T02:40:00+00:00",
+    "raw_payload_hash": "d4661c48c974ff93",
+    "revision_of_event_id": null,
+    "schema_version": "weather_high_frequency_observation_v1",
+    "source": "knmi",
+    "station": "0-20000-0-06240",
+    "target_date": "2026-07-31",
+    "temp_c": 18.6
+  },
+  "schema_version": "weather_city_intraday_phase0_fixture_v1"
+}

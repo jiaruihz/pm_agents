@@ -1,0 +1,204 @@
+{
+  "schema_version": "ankara_exchange_evidence_v2",
+  "fetched_at_utc": "2026-07-21T04:25:00Z",
+  "account": "0x76c7AD96E789E3995046Af3BB13218F5f1a2860E",
+  "event_slug": "highest-temperature-in-ankara-on-july-20-2026",
+  "condition_id": "0xa14345e95fb61c59fdf36f3bb093a70fc941c3016df72ef8f712d13bdc4b060d",
+  "market": {
+    "question": "Will the highest temperature in Ankara be 34°C on July 20?",
+    "slug": "highest-temperature-in-ankara-on-july-20-2026-34c",
+    "closed": true,
+    "accepting_orders": false,
+    "tokens": [
+      {
+        "outcome": "Yes",
+        "price": 0,
+        "winner": false,
+        "token_id": "104757260688050676017992104621890151625842283117097258262886875442818871263240"
+      },
+      {
+        "outcome": "No",
+        "price": 1,
+        "winner": true,
+        "token_id": "14195114579538454862457556864293019994853969167105820657583282794111188475363"
+      }
+    ],
+    "source": "https://clob.polymarket.com/markets/0xa14345e95fb61c59fdf36f3bb093a70fc941c3016df72ef8f712d13bdc4b060d"
+  },
+  "account_activity": [
+    {
+      "timestamp_utc": "2026-07-20T11:28:24Z",
+      "timestamp_ankara": "2026-07-20T14:28:24+03:00",
+      "type": "TRADE",
+      "side": "BUY",
+      "outcome": "Yes",
+      "price": 0.90,
+      "size": 5,
+      "usdc_size": 4.5225,
+      "transaction_hash": "0x3b70c1919a1b1977041912141760810ea6354506a991d84a48cc61ba6a63de31",
+      "lineage": "strategy_taker"
+    },
+    {
+      "timestamp_utc": "2026-07-20T11:29:07Z",
+      "timestamp_ankara": "2026-07-20T14:29:07+03:00",
+      "type": "TRADE",
+      "side": "BUY",
+      "outcome": "Yes",
+      "price": 0.89,
+      "size": 5,
+      "usdc_size": 4.45,
+      "transaction_hash": "0x266563515b5ebbab2c2643b5af07011017f38ec982c56fa7f02c9615a35da3f3",
+      "lineage": "strategy_maker"
+    },
+    {
+      "timestamp_utc": "2026-07-20T12:24:06Z",
+      "timestamp_ankara": "2026-07-20T15:24:06+03:00",
+      "type": "TRADE",
+      "side": "BUY",
+      "outcome": "Yes",
+      "price": 0.78,
+      "size": 5,
+      "usdc_size": 3.90,
+      "transaction_hash": "0x68c7d38e540b931ce7984eeea2330ebcbb9bdfffc14d97e81331c74b303b1cb9",
+      "lineage": "manual_unlinked"
+    },
+    {
+      "timestamp_utc": "2026-07-20T13:26:54Z",
+      "timestamp_ankara": "2026-07-20T16:26:54+03:00",
+      "type": "TRADE",
+      "side": "BUY",
+      "outcome": "No",
+      "price": 0.58,
+      "size": 5,
+      "usdc_size": 2.9609,
+      "transaction_hash": "0x96a7f848c39278c9ed7decd7c18ab3ab73259cd9a597df930cce067466caaee9",
+      "lineage": "manual_unlinked"
+    },
+    {
+      "timestamp_utc": "2026-07-20T13:53:01Z",
+      "timestamp_ankara": "2026-07-20T16:53:01+03:00",
+      "type": "TRADE",
+      "side": "BUY",
+      "outcome": "No",
+      "price": 0.66,
+      "size": 5,
+      "usdc_size": 3.30,
+      "transaction_hash": "0x458b555f479a4e142fd9502083ce9c22c3194723fb6178459c63b55ebf093c57",
+      "lineage": "manual_unlinked"
+    },
+    {
+      "timestamp_utc": "2026-07-20T13:53:36Z",
+      "timestamp_ankara": "2026-07-20T16:53:36+03:00",
+      "type": "TRADE",
+      "side": "BUY",
+      "outcome": "No",
+      "price": 0.64,
+      "size": 5,
+      "usdc_size": 3.2576,
+      "transaction_hash": "0xfc0a3416f7df2dc74be21edbb6988cf9d14aa3e970712533a4bdc499f918dd21",
+      "lineage": "manual_unlinked"
+    },
+    {
+      "timestamp_utc": "2026-07-20T21:43:54Z",
+      "timestamp_ankara": "2026-07-21T00:43:54+03:00",
+      "type": "REDEEM",
+      "outcome": "No",
+      "size": 15,
+      "usdc_size": 15,
+      "transaction_hash": "0x02d19da3caf38dd4c7b4f562275d949dddb1b64360e6a0ef4084435afa2bf00b",
+      "lineage": "account_settlement"
+    }
+  ],
+  "cash_summary": {
+    "yes_shares": 15,
+    "yes_activity_usdc": 12.8725,
+    "no_shares": 15,
+    "no_activity_usdc": 9.5185,
+    "redeemed_usdc": 15,
+    "reverse_no_leg_pnl_usdc": 5.4815,
+    "reverse_no_leg_roi": 0.575879602878605,
+    "whole_condition_net_cash_usdc": -7.391,
+    "basis": "Public activity usdcSize cash amounts; no additional fee estimate is added."
+  },
+  "event_account_activity_file": "ankara_event_account_activity.jsonl",
+  "event_cash_summary": {
+    "buy_cash_outflow_usdc": 99.092444,
+    "sell_cash_inflow_usdc": 32.9,
+    "redeem_cash_inflow_usdc": 70.815453,
+    "whole_event_net_cash_usdc": 4.623009,
+    "by_condition": [
+      {
+        "bracket": "33",
+        "buy_cash_outflow_usdc": 41.702494,
+        "sell_cash_inflow_usdc": 32.9,
+        "redeem_cash_inflow_usdc": 19.815453,
+        "net_cash_usdc": 11.012959
+      },
+      {
+        "bracket": "34",
+        "buy_cash_outflow_usdc": 22.391,
+        "sell_cash_inflow_usdc": 0,
+        "redeem_cash_inflow_usdc": 15,
+        "net_cash_usdc": -7.391
+      },
+      {
+        "bracket": "35",
+        "buy_cash_outflow_usdc": 34.99895,
+        "sell_cash_inflow_usdc": 0,
+        "redeem_cash_inflow_usdc": 36,
+        "net_cash_usdc": 1.00105
+      }
+    ],
+    "attribution": {
+      "automatic_34_yes_10_share_net_cash_usdc": -8.9725,
+      "manual_34_overlay_net_cash_usdc": 1.5815,
+      "manual_33_condition_net_cash_usdc": 11.012959,
+      "manual_35_condition_net_cash_usdc": 1.00105,
+      "all_manual_actions_net_cash_usdc": 13.595509
+    },
+    "basis": "All 31 Poly account activity rows for the Ankara July 20 event. BUY is cash outflow; SELL and REDEEM are cash inflow. This is the fee-inclusive account cash-flow view exposed by activity.usdcSize."
+  },
+  "closed_positions": [
+    {
+      "bracket": "33",
+      "outcome": "Yes",
+      "avg_price": 0.721086,
+      "total_bought": 54.815453,
+      "realized_pnl_usdc": 15.119337
+    },
+    {
+      "bracket": "33",
+      "outcome": "No",
+      "avg_price": 0.81,
+      "total_bought": 5,
+      "realized_pnl_usdc": -4.05
+    },
+    {
+      "bracket": "34",
+      "outcome": "Yes",
+      "avg_price": 0.856666,
+      "total_bought": 15,
+      "realized_pnl_usdc": -12.84999
+    },
+    {
+      "bracket": "34",
+      "outcome": "No",
+      "avg_price": 0.626666,
+      "total_bought": 15,
+      "realized_pnl_usdc": 5.60001
+    },
+    {
+      "bracket": "35",
+      "outcome": "No",
+      "avg_price": 0.971832,
+      "total_bought": 36,
+      "realized_pnl_usdc": 1.014048
+    }
+  ],
+  "closed_position_summary": {
+    "whole_event_realized_pnl_before_activity_fee_delta_usdc": 4.833405,
+    "activity_cash_minus_closed_position_pnl_usdc": -0.210396,
+    "basis": "Sum of Poly closed-positions realizedPnl. The activity cash view is authoritative for post-fee event cash because it captures the cash amounts exposed on each account activity row."
+  },
+  "source_note": "The original account_activity array is the 34-condition subset. The sibling event activity JSONL freezes the full 33/34/35 event across all paginated account activity. Public activity proves account-level cash flow but does not provide authenticated order ids for manual trades."
+}

@@ -1,0 +1,171 @@
+{
+  "artifact_counts": {
+    "case_state_snapshots": 385,
+    "interaction_timeline": 142,
+    "orders_and_fills": 55
+  },
+  "artifacts": [
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-21T03:13:07.942493+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-07/generated/intraday_decision_casebook_v1/interaction_timeline.jsonl",
+      "role": "frozen_user_visible_interaction",
+      "sha256": "d7fe98b6fafc1d0accb4fe106c0656e76845f24bddb4cfd52991f53a8bb90c84",
+      "size_bytes": 121066
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-21T03:13:07.945565+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-07/generated/intraday_decision_casebook_v1/case_state_snapshots.jsonl",
+      "role": "frozen_pit_case_state",
+      "sha256": "0adf42daa8d44b2b5fcd85badab0a350cdc1baae2cb56eb53ff27222c0e3bd9e",
+      "size_bytes": 525724
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-21T03:13:07.946365+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-07/generated/intraday_decision_casebook_v1/orders_and_fills.jsonl",
+      "role": "frozen_order_and_fill_lineage",
+      "sha256": "298e7ddbcae7f808d12d76c34dfd9e560592d301e1c88fd8926f7168e699255d",
+      "size_bytes": 131945
+    }
+  ],
+  "canonical_max_fact_built_at_utc": "2026-07-21T03:07:22.472507+00:00",
+  "case_date": "2026-07-20",
+  "generated_at_utc": "2026-07-21T03:13:07.946389+00:00",
+  "known_gaps": [
+    "Ankara's full 33/34/35 event activity is reconstructed from all paginated public account activity. Manual rows include size, price, transaction hash, and account-level cash flow, but remain absent from strategy raw journals and canonical fact_trades because authenticated order ids are unavailable.",
+    "Ankara maker exchange state proves 5 shares matched at 0.89. A durable fill-price adjustment repairs the prior canonical 0.781 requested-price error; old artifacts generated before the adjustment remain polluted.",
+    "Busan maker canonical fill time/fee retain the known ingestion-time and estimated-fee issues documented in the dedicated lineage report.",
+    "The transcript export contains user-visible user/assistant messages only; system, developer, tool-call, and hidden reasoning records are intentionally excluded."
+  ],
+  "schema_version": "intraday_decision_casebook_manifest_v1",
+  "scope": [
+    "busan_31_no",
+    "lucknow_27_yes",
+    "ankara_34_yes_reversal"
+  ],
+  "sources": [
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-20T12:23:04.365373+00:00",
+      "path": "/Users/deepsleep/.codex/sessions/2026/07/17/rollout-2026-07-17T11-52-52-019f6e34-a9f0-76e2-98b2-b8a0a450c0de.jsonl",
+      "role": "busan_user_visible_interaction",
+      "sha256": "a7fc57f9368ce948ae436c700e0816c77f2eae11aff5b9516b1283a5bcf79a43",
+      "size_bytes": 17874252
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-21T03:13:06.488686+00:00",
+      "path": "/Users/deepsleep/.codex/sessions/2026/07/14/rollout-2026-07-14T16-41-34-019f5fc9-e394-7182-a6fc-dc0eb9aa3a62.jsonl",
+      "role": "lucknow_ankara_user_visible_interaction",
+      "sha256": "638ed2a8492fd4a883d1345b65a4c00edd49e9e691b80b20204b995d3b6f6472",
+      "size_bytes": 28725725
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-21T02:12:20.019014+00:00",
+      "path": "/Users/deepsleep/.codex/sessions/2026/07/20/rollout-2026-07-20T23-19-51-019f801c-b0c0-7d11-b7a4-05757d23f4bc.jsonl",
+      "role": "three_case_synthesis_interaction",
+      "sha256": "399b16f574a87410bbeb2663ce2b03c559977169a27a8942991dcc3d165edf58",
+      "size_bytes": 2766723
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-21T02:59:45.159914+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents_prod/runtime/weather_edge_v1/current_yes_heat_death_shadow_v1/state_decisions.jsonl",
+      "role": "heat_death_pit_state",
+      "sha256": "de49befda8d42f2f3ba823e7b3e35f47ca4eaf2e94a5ecc7dc4f8eb49ef4a921",
+      "size_bytes": 173109077
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-21T02:35:26.394738+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents_prod/runtime/weather_edge_v1/d1_yes_high_mid_live_v1/shadow_events.jsonl",
+      "role": "ankara_d1_pit_state",
+      "sha256": "9e09f10963c6a579392e9e54deab1b1bbd5280cfa976a9631cf145407dfe8b43",
+      "size_bytes": 470190
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-20T07:55:07.297090+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents_prod/runtime/weather_edge_v1/current_yes_heat_death_tiny_live_h2_early_dislocation_v1/live_orders.jsonl",
+      "role": "lucknow_raw_order_journal",
+      "sha256": "0a32c6dc6b8ed8c43adb86451763d4309b4a5ac9bf7e2665c1ab83c3a0a3da1e",
+      "size_bytes": 144519
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-21T02:14:07.723673+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents_prod/runtime/weather_edge_v1/d1_yes_high_mid_live_v1/live_orders.jsonl",
+      "role": "ankara_raw_order_journal",
+      "sha256": "2ead8140887668d46c16b43f06ccc55d12e1316a5c5ea341f1f2d4c68844e3bf",
+      "size_bytes": 425357
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-21T03:11:50.013853+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-07/generated/intraday_decision_casebook_v1/ankara_exchange_evidence.json",
+      "role": "ankara_public_activity_and_resolution",
+      "sha256": "04f40db2ee9503f899fae1a0d8c106c782b90de314c1225a888b009d1ddd0dd2",
+      "size_bytes": 6879
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-21T03:11:14.662638+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-07/generated/intraday_decision_casebook_v1/ankara_event_account_activity.jsonl",
+      "role": "ankara_full_event_public_account_activity",
+      "sha256": "582b6abd2071c8c9c39f716355eb784489569645959d98d90ac6042ccb3ac4ac",
+      "size_bytes": 21675
+    },
+    {
+      "exists": true,
+      "hash_note": "omitted_for_live_wal_database; extracted rows are hashed",
+      "mtime_utc": "2026-07-21T03:07:22.601127+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+      "role": "canonical_fact_trades",
+      "sha256": null,
+      "size_bytes": 1209475072
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-20T08:55:47.003636+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-07/generated/busan_cross_confirmation_v1/summary.json",
+      "role": "busan_replay_artifact",
+      "sha256": "769e0c59a8d9e23fa05647923a4dcf980098dfd3870471d8b3df244d2fd317d2",
+      "size_bytes": 5081
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-20T08:55:47.003453+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-07/generated/busan_cross_confirmation_v1/morning_amos_book_joined_timeline.csv",
+      "role": "busan_replay_artifact",
+      "sha256": "e826176dd341fff1a5a2b37aa9f2e22ca9396a0f56ece49b6455dfe6f619dca7",
+      "size_bytes": 4119
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-20T08:55:47.003225+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-07/generated/busan_cross_confirmation_v1/today_no_book_timeline.csv",
+      "role": "busan_replay_artifact",
+      "sha256": "633c1c6ae0c6b78624dd36cf7afcc345e3e620308f02fca981ad5fd34a2b865a",
+      "size_bytes": 13154
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-20T08:55:47.002737+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-07/generated/busan_cross_confirmation_v1/today_event_windows.csv",
+      "role": "busan_replay_artifact",
+      "sha256": "82800d933a56186ca53c89eceb865473a046df57ce7bdd68d4fb411eaa085c91",
+      "size_bytes": 1014
+    },
+    {
+      "exists": true,
+      "mtime_utc": "2026-07-20T08:55:47.002586+00:00",
+      "path": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-07/generated/busan_cross_confirmation_v1/historical_episode_checkpoints.csv",
+      "role": "busan_replay_artifact",
+      "sha256": "30e33fdc0cbff08b031bb0004b6f36b45608ea22000247916468a71f82768abc",
+      "size_bytes": 39104
+    }
+  ]
+}

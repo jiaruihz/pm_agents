@@ -1,0 +1,806 @@
+{
+  "generated_at_utc": "2026-06-16T15:56:45.286660+00:00",
+  "target_metric": "low_price_yes_reheat_reversal_v0",
+  "row_grain": "city + target_date + decision_hour_local + target YES bracket",
+  "label": "target_yes_wins",
+  "self_check": {
+    "fact_trades_max_built_at_utc": "2026-06-16T15:50:05.971834+00:00",
+    "fact_trades_by_class": [
+      {
+        "trade_class": "live_real",
+        "rows": 855
+      },
+      {
+        "trade_class": "live_simulated",
+        "rows": 624
+      },
+      {
+        "trade_class": "paper",
+        "rows": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "rows": 636
+      }
+    ],
+    "fact_trades_by_settlement_status": [
+      {
+        "settlement_status": "",
+        "rows": 90
+      },
+      {
+        "settlement_status": "settled",
+        "rows": 4310
+      }
+    ],
+    "fact_signal_candidate_coverage": {
+      "rows": 30919,
+      "eligible": 10685,
+      "paper_ordered": 4123,
+      "live_filled": 348
+    },
+    "clob_order_fill_join": [
+      {
+        "status": "error",
+        "orders": 33,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 961,
+        "with_fill": 855
+      }
+    ]
+  },
+  "clob_gate": {
+    "gate_pass": true,
+    "fail_reasons": [],
+    "missing_order_rows": 0,
+    "over_order_keys": 0,
+    "db_fill_cost_minus_fact_cost": 0.0
+  },
+  "coverage": {
+    "source_aligned_whitelist_cities": 36,
+    "pm_history_city_dates_loaded": 1266,
+    "observed_rows": 4750,
+    "joined_quote_rows": 25703,
+    "paired_tail_no_rows": 3209,
+    "date_min": "2026-05-20",
+    "date_max": "2026-06-14",
+    "active_dates": 26,
+    "orderbook_files_seen": 1289,
+    "orderbook_records_seen": 1630457,
+    "orderbook_records_kept_before_hourly_dedupe": 60912,
+    "quote_rows_after_hourly_dedupe": 33481,
+    "records_missing_history": 29846,
+    "records_missing_tz": 0,
+    "records_wrong_day_hour": 1465732,
+    "records_no_best_ask": 38122,
+    "records_bad_bracket": 0,
+    "raw_orderbook_files_seen": 1289,
+    "raw_orderbook_records_seen": 1630457,
+    "raw_orderbook_records_kept_before_hourly_dedupe": 60912,
+    "raw_quote_rows_after_hourly_dedupe": 33481,
+    "raw_records_missing_history": 29846,
+    "raw_records_missing_tz": 0,
+    "raw_records_wrong_day_hour": 1465732,
+    "raw_records_no_best_ask": 38122,
+    "raw_records_bad_bracket": 0,
+    "low_price_yes_reheat_rows_with_prior": 4347,
+    "cities": 36,
+    "hit_rate": 0.03036576949620428,
+    "prior_coverage_note": "forecast prior joined from fact_signal_candidates by city/date/bracket"
+  },
+  "model_metrics": {
+    "train": {
+      "rows": 2030,
+      "positives": 62,
+      "hit_rate": 0.030541871921182268,
+      "auc_context": 0.950088512981904,
+      "brier_context": 0.09518165518315701
+    },
+    "holdout": {
+      "rows": 2317,
+      "positives": 70,
+      "hit_rate": 0.030211480362537766,
+      "auc_context": 0.8175344904316867,
+      "brier_context": 0.08978627893456793
+    }
+  },
+  "edge_summary": [
+    {
+      "selector": "train:all_low_price_reheat_yes",
+      "rows": 2030,
+      "active_dates": 12,
+      "cities": 36,
+      "hit_rate": 0.030541871921182268,
+      "avg_price": 0.04501674876847291,
+      "cost_proxy": 91.38400000000001,
+      "pnl_proxy": -29.384000000000007,
+      "roi_proxy": -0.3215442528232514,
+      "top_cities": [
+        {
+          "city": "Ankara",
+          "rows": 77,
+          "pnl_proxy": 3.416,
+          "cost_proxy": 3.584,
+          "roi_proxy": 0.953125
+        },
+        {
+          "city": "Lucknow",
+          "rows": 39,
+          "pnl_proxy": 2.685,
+          "cost_proxy": 1.315,
+          "roi_proxy": 2.0418250950570345
+        },
+        {
+          "city": "Denver",
+          "rows": 18,
+          "pnl_proxy": 1.801,
+          "cost_proxy": 1.199,
+          "roi_proxy": 1.5020850708924103
+        },
+        {
+          "city": "Chengdu",
+          "rows": 91,
+          "pnl_proxy": 1.628,
+          "cost_proxy": 4.372,
+          "roi_proxy": 0.37236962488563585
+        },
+        {
+          "city": "Atlanta",
+          "rows": 56,
+          "pnl_proxy": 1.502,
+          "cost_proxy": 3.4979999999999998,
+          "roi_proxy": 0.4293882218410521
+        },
+        {
+          "city": "Taipei",
+          "rows": 13,
+          "pnl_proxy": 1.445,
+          "cost_proxy": 0.555,
+          "roi_proxy": 2.6036036036036037
+        },
+        {
+          "city": "Guangzhou",
+          "rows": 56,
+          "pnl_proxy": 1.442,
+          "cost_proxy": 2.558,
+          "roi_proxy": 0.5637216575449571
+        },
+        {
+          "city": "Houston",
+          "rows": 48,
+          "pnl_proxy": 1.2309999999999999,
+          "cost_proxy": 3.769,
+          "roi_proxy": 0.3266118333775537
+        }
+      ]
+    },
+    {
+      "selector": "train:raw_edge_gt_0",
+      "rows": 1886,
+      "active_dates": 12,
+      "cities": 36,
+      "hit_rate": 0.02863202545068929,
+      "avg_price": 0.04134835630965006,
+      "cost_proxy": 77.983,
+      "pnl_proxy": -23.983000000000004,
+      "roi_proxy": -0.30754138722542096,
+      "top_cities": [
+        {
+          "city": "Ankara",
+          "rows": 64,
+          "pnl_proxy": 4.4239999999999995,
+          "cost_proxy": 2.576,
+          "roi_proxy": 1.717391304347826
+        },
+        {
+          "city": "Warsaw",
+          "rows": 87,
+          "pnl_proxy": 2.06,
+          "cost_proxy": 2.94,
+          "roi_proxy": 0.7006802721088435
+        },
+        {
+          "city": "Denver",
+          "rows": 18,
+          "pnl_proxy": 1.801,
+          "cost_proxy": 1.199,
+          "roi_proxy": 1.5020850708924103
+        },
+        {
+          "city": "Lucknow",
+          "rows": 38,
+          "pnl_proxy": 1.781,
+          "cost_proxy": 1.219,
+          "roi_proxy": 1.4610336341263328
+        },
+        {
+          "city": "Guangzhou",
+          "rows": 43,
+          "pnl_proxy": 1.591,
+          "cost_proxy": 1.409,
+          "roi_proxy": 1.1291696238466997
+        },
+        {
+          "city": "Atlanta",
+          "rows": 46,
+          "pnl_proxy": 1.457,
+          "cost_proxy": 2.543,
+          "roi_proxy": 0.5729453401494298
+        },
+        {
+          "city": "Taipei",
+          "rows": 13,
+          "pnl_proxy": 1.445,
+          "cost_proxy": 0.555,
+          "roi_proxy": 2.6036036036036037
+        },
+        {
+          "city": "Seattle",
+          "rows": 32,
+          "pnl_proxy": 1.2710000000000001,
+          "cost_proxy": 1.7289999999999999,
+          "roi_proxy": 0.7351069982648931
+        }
+      ]
+    },
+    {
+      "selector": "train:blended_edge_gt_0",
+      "rows": 1886,
+      "active_dates": 12,
+      "cities": 36,
+      "hit_rate": 0.02863202545068929,
+      "avg_price": 0.04134835630965006,
+      "cost_proxy": 77.983,
+      "pnl_proxy": -23.983000000000004,
+      "roi_proxy": -0.30754138722542096,
+      "top_cities": [
+        {
+          "city": "Ankara",
+          "rows": 64,
+          "pnl_proxy": 4.4239999999999995,
+          "cost_proxy": 2.576,
+          "roi_proxy": 1.717391304347826
+        },
+        {
+          "city": "Warsaw",
+          "rows": 87,
+          "pnl_proxy": 2.06,
+          "cost_proxy": 2.94,
+          "roi_proxy": 0.7006802721088435
+        },
+        {
+          "city": "Denver",
+          "rows": 18,
+          "pnl_proxy": 1.801,
+          "cost_proxy": 1.199,
+          "roi_proxy": 1.5020850708924103
+        },
+        {
+          "city": "Lucknow",
+          "rows": 38,
+          "pnl_proxy": 1.781,
+          "cost_proxy": 1.219,
+          "roi_proxy": 1.4610336341263328
+        },
+        {
+          "city": "Guangzhou",
+          "rows": 43,
+          "pnl_proxy": 1.591,
+          "cost_proxy": 1.409,
+          "roi_proxy": 1.1291696238466997
+        },
+        {
+          "city": "Atlanta",
+          "rows": 46,
+          "pnl_proxy": 1.457,
+          "cost_proxy": 2.543,
+          "roi_proxy": 0.5729453401494298
+        },
+        {
+          "city": "Taipei",
+          "rows": 13,
+          "pnl_proxy": 1.445,
+          "cost_proxy": 0.555,
+          "roi_proxy": 2.6036036036036037
+        },
+        {
+          "city": "Seattle",
+          "rows": 32,
+          "pnl_proxy": 1.2710000000000001,
+          "cost_proxy": 1.7289999999999999,
+          "roi_proxy": 0.7351069982648931
+        }
+      ]
+    },
+    {
+      "selector": "train:reheat_adjusted_edge_gt_0",
+      "rows": 527,
+      "active_dates": 12,
+      "cities": 33,
+      "hit_rate": 0.09487666034155598,
+      "avg_price": 0.06977229601518026,
+      "cost_proxy": 36.769999999999996,
+      "pnl_proxy": 13.23,
+      "roi_proxy": 0.3598041881968997,
+      "top_cities": [
+        {
+          "city": "Ankara",
+          "rows": 46,
+          "pnl_proxy": 4.578,
+          "cost_proxy": 2.422,
+          "roi_proxy": 1.8901734104046244
+        },
+        {
+          "city": "Warsaw",
+          "rows": 16,
+          "pnl_proxy": 3.653,
+          "cost_proxy": 1.347,
+          "roi_proxy": 2.7119524870081664
+        },
+        {
+          "city": "Seattle",
+          "rows": 13,
+          "pnl_proxy": 1.8820000000000001,
+          "cost_proxy": 1.118,
+          "roi_proxy": 1.6833631484794276
+        },
+        {
+          "city": "Denver",
+          "rows": 12,
+          "pnl_proxy": 1.881,
+          "cost_proxy": 1.119,
+          "roi_proxy": 1.6809651474530831
+        },
+        {
+          "city": "Guangzhou",
+          "rows": 35,
+          "pnl_proxy": 1.785,
+          "cost_proxy": 1.215,
+          "roi_proxy": 1.4691358024691357
+        },
+        {
+          "city": "Atlanta",
+          "rows": 39,
+          "pnl_proxy": 1.519,
+          "cost_proxy": 2.481,
+          "roi_proxy": 0.6122531237404273
+        },
+        {
+          "city": "Taipei",
+          "rows": 12,
+          "pnl_proxy": 1.45,
+          "cost_proxy": 0.55,
+          "roi_proxy": 2.6363636363636362
+        },
+        {
+          "city": "Chengdu",
+          "rows": 34,
+          "pnl_proxy": 0.934,
+          "cost_proxy": 2.066,
+          "roi_proxy": 0.4520813165537271
+        }
+      ]
+    },
+    {
+      "selector": "train:reheat_adjusted_edge_top_decile",
+      "rows": 203,
+      "active_dates": 12,
+      "cities": 25,
+      "hit_rate": 0.2019704433497537,
+      "avg_price": 0.11080295566502464,
+      "cost_proxy": 22.493000000000002,
+      "pnl_proxy": 18.507,
+      "roi_proxy": 0.8227893122304717,
+      "top_cities": [
+        {
+          "city": "Ankara",
+          "rows": 25,
+          "pnl_proxy": 5.175,
+          "cost_proxy": 1.825,
+          "roi_proxy": 2.835616438356164
+        },
+        {
+          "city": "Warsaw",
+          "rows": 7,
+          "pnl_proxy": 3.91,
+          "cost_proxy": 1.09,
+          "roi_proxy": 3.5871559633027523
+        },
+        {
+          "city": "Seattle",
+          "rows": 4,
+          "pnl_proxy": 2.21,
+          "cost_proxy": 0.79,
+          "roi_proxy": 2.7974683544303796
+        },
+        {
+          "city": "Wuhan",
+          "rows": 11,
+          "pnl_proxy": 2.043,
+          "cost_proxy": 0.957,
+          "roi_proxy": 2.1347962382445145
+        },
+        {
+          "city": "Denver",
+          "rows": 10,
+          "pnl_proxy": 1.913,
+          "cost_proxy": 1.087,
+          "roi_proxy": 1.7598896044158234
+        },
+        {
+          "city": "Taipei",
+          "rows": 4,
+          "pnl_proxy": 1.589,
+          "cost_proxy": 0.41100000000000003,
+          "roi_proxy": 3.8661800486618003
+        },
+        {
+          "city": "Lucknow",
+          "rows": 11,
+          "pnl_proxy": 1.441,
+          "cost_proxy": 0.559,
+          "roi_proxy": 2.5778175313059033
+        },
+        {
+          "city": "Houston",
+          "rows": 20,
+          "pnl_proxy": 1.254,
+          "cost_proxy": 1.746,
+          "roi_proxy": 0.718213058419244
+        }
+      ]
+    },
+    {
+      "selector": "holdout:all_low_price_reheat_yes",
+      "rows": 2317,
+      "active_dates": 14,
+      "cities": 36,
+      "hit_rate": 0.030211480362537766,
+      "avg_price": 0.040646957272334916,
+      "cost_proxy": 94.179,
+      "pnl_proxy": -24.179000000000006,
+      "roi_proxy": -0.2567345161872605,
+      "top_cities": [
+        {
+          "city": "Wellington",
+          "rows": 59,
+          "pnl_proxy": 3.8729999999999998,
+          "cost_proxy": 1.127,
+          "roi_proxy": 3.4365572315882873
+        },
+        {
+          "city": "Munich",
+          "rows": 71,
+          "pnl_proxy": 3.861,
+          "cost_proxy": 2.139,
+          "roi_proxy": 1.8050490883590466
+        },
+        {
+          "city": "Denver",
+          "rows": 62,
+          "pnl_proxy": 3.32,
+          "cost_proxy": 3.68,
+          "roi_proxy": 0.9021739130434782
+        },
+        {
+          "city": "Wuhan",
+          "rows": 76,
+          "pnl_proxy": 3.312,
+          "cost_proxy": 2.688,
+          "roi_proxy": 1.232142857142857
+        },
+        {
+          "city": "LA",
+          "rows": 14,
+          "pnl_proxy": 2.058,
+          "cost_proxy": 0.9420000000000001,
+          "roi_proxy": 2.184713375796178
+        },
+        {
+          "city": "Houston",
+          "rows": 16,
+          "pnl_proxy": 1.027,
+          "cost_proxy": 0.973,
+          "roi_proxy": 1.0554984583761562
+        },
+        {
+          "city": "Guangzhou",
+          "rows": 56,
+          "pnl_proxy": 0.8749999999999999,
+          "cost_proxy": 2.125,
+          "roi_proxy": 0.41176470588235287
+        },
+        {
+          "city": "Busan",
+          "rows": 76,
+          "pnl_proxy": 0.8469999999999999,
+          "cost_proxy": 3.153,
+          "roi_proxy": 0.26863304789089754
+        }
+      ]
+    },
+    {
+      "selector": "holdout:raw_edge_gt_0",
+      "rows": 2167,
+      "active_dates": 14,
+      "cities": 36,
+      "hit_rate": 0.029995385325334564,
+      "avg_price": 0.037771573604060915,
+      "cost_proxy": 81.851,
+      "pnl_proxy": -16.851000000000003,
+      "roi_proxy": -0.20587408828236678,
+      "top_cities": [
+        {
+          "city": "Munich",
+          "rows": 68,
+          "pnl_proxy": 4.077,
+          "cost_proxy": 1.923,
+          "roi_proxy": 2.1201248049921997
+        },
+        {
+          "city": "Denver",
+          "rows": 53,
+          "pnl_proxy": 4.046,
+          "cost_proxy": 2.954,
+          "roi_proxy": 1.3696682464454977
+        },
+        {
+          "city": "Wellington",
+          "rows": 54,
+          "pnl_proxy": 3.898,
+          "cost_proxy": 1.102,
+          "roi_proxy": 3.537205081669691
+        },
+        {
+          "city": "Wuhan",
+          "rows": 70,
+          "pnl_proxy": 3.682,
+          "cost_proxy": 2.318,
+          "roi_proxy": 1.5884383088869714
+        },
+        {
+          "city": "LA",
+          "rows": 14,
+          "pnl_proxy": 2.058,
+          "cost_proxy": 0.9420000000000001,
+          "roi_proxy": 2.184713375796178
+        },
+        {
+          "city": "Madrid",
+          "rows": 128,
+          "pnl_proxy": 1.2919999999999998,
+          "cost_proxy": 5.708,
+          "roi_proxy": 0.22634898388227045
+        },
+        {
+          "city": "Houston",
+          "rows": 16,
+          "pnl_proxy": 1.027,
+          "cost_proxy": 0.973,
+          "roi_proxy": 1.0554984583761562
+        },
+        {
+          "city": "Busan",
+          "rows": 68,
+          "pnl_proxy": 0.9129999999999999,
+          "cost_proxy": 3.087,
+          "roi_proxy": 0.2957563977972141
+        }
+      ]
+    },
+    {
+      "selector": "holdout:blended_edge_gt_0",
+      "rows": 2167,
+      "active_dates": 14,
+      "cities": 36,
+      "hit_rate": 0.029995385325334564,
+      "avg_price": 0.037771573604060915,
+      "cost_proxy": 81.851,
+      "pnl_proxy": -16.851000000000003,
+      "roi_proxy": -0.20587408828236678,
+      "top_cities": [
+        {
+          "city": "Munich",
+          "rows": 68,
+          "pnl_proxy": 4.077,
+          "cost_proxy": 1.923,
+          "roi_proxy": 2.1201248049921997
+        },
+        {
+          "city": "Denver",
+          "rows": 53,
+          "pnl_proxy": 4.046,
+          "cost_proxy": 2.954,
+          "roi_proxy": 1.3696682464454977
+        },
+        {
+          "city": "Wellington",
+          "rows": 54,
+          "pnl_proxy": 3.898,
+          "cost_proxy": 1.102,
+          "roi_proxy": 3.537205081669691
+        },
+        {
+          "city": "Wuhan",
+          "rows": 70,
+          "pnl_proxy": 3.682,
+          "cost_proxy": 2.318,
+          "roi_proxy": 1.5884383088869714
+        },
+        {
+          "city": "LA",
+          "rows": 14,
+          "pnl_proxy": 2.058,
+          "cost_proxy": 0.9420000000000001,
+          "roi_proxy": 2.184713375796178
+        },
+        {
+          "city": "Madrid",
+          "rows": 128,
+          "pnl_proxy": 1.2919999999999998,
+          "cost_proxy": 5.708,
+          "roi_proxy": 0.22634898388227045
+        },
+        {
+          "city": "Houston",
+          "rows": 16,
+          "pnl_proxy": 1.027,
+          "cost_proxy": 0.973,
+          "roi_proxy": 1.0554984583761562
+        },
+        {
+          "city": "Busan",
+          "rows": 68,
+          "pnl_proxy": 0.9129999999999999,
+          "cost_proxy": 3.087,
+          "roi_proxy": 0.2957563977972141
+        }
+      ]
+    },
+    {
+      "selector": "holdout:reheat_adjusted_edge_gt_0",
+      "rows": 515,
+      "active_dates": 14,
+      "cities": 33,
+      "hit_rate": 0.07378640776699029,
+      "avg_price": 0.0673883495145631,
+      "cost_proxy": 34.705,
+      "pnl_proxy": 3.2950000000000017,
+      "roi_proxy": 0.09494309177351971,
+      "top_cities": [
+        {
+          "city": "Denver",
+          "rows": 41,
+          "pnl_proxy": 4.311,
+          "cost_proxy": 2.689,
+          "roi_proxy": 1.6031982149497954
+        },
+        {
+          "city": "Wuhan",
+          "rows": 34,
+          "pnl_proxy": 2.444,
+          "cost_proxy": 1.556,
+          "roi_proxy": 1.5706940874035988
+        },
+        {
+          "city": "LA",
+          "rows": 10,
+          "pnl_proxy": 2.273,
+          "cost_proxy": 0.727,
+          "roi_proxy": 3.126547455295736
+        },
+        {
+          "city": "Madrid",
+          "rows": 7,
+          "pnl_proxy": 1.865,
+          "cost_proxy": 1.135,
+          "roi_proxy": 1.6431718061674008
+        },
+        {
+          "city": "Austin",
+          "rows": 32,
+          "pnl_proxy": 1.767,
+          "cost_proxy": 2.233,
+          "roi_proxy": 0.7913121361397223
+        },
+        {
+          "city": "SaoPaulo",
+          "rows": 45,
+          "pnl_proxy": 1.181,
+          "cost_proxy": 2.819,
+          "roi_proxy": 0.4189428875487762
+        },
+        {
+          "city": "Guangzhou",
+          "rows": 25,
+          "pnl_proxy": 1.156,
+          "cost_proxy": 0.844,
+          "roi_proxy": 1.3696682464454977
+        },
+        {
+          "city": "Houston",
+          "rows": 13,
+          "pnl_proxy": 1.114,
+          "cost_proxy": 0.886,
+          "roi_proxy": 1.2573363431151243
+        }
+      ]
+    },
+    {
+      "selector": "holdout:reheat_adjusted_edge_top_decile",
+      "rows": 232,
+      "active_dates": 14,
+      "cities": 30,
+      "hit_rate": 0.1206896551724138,
+      "avg_price": 0.10110775862068966,
+      "cost_proxy": 23.457,
+      "pnl_proxy": 4.543,
+      "roi_proxy": 0.19367353028946582,
+      "top_cities": [
+        {
+          "city": "Denver",
+          "rows": 29,
+          "pnl_proxy": 4.7219999999999995,
+          "cost_proxy": 2.278,
+          "roi_proxy": 2.072870939420544
+        },
+        {
+          "city": "Austin",
+          "rows": 11,
+          "pnl_proxy": 2.6390000000000002,
+          "cost_proxy": 1.361,
+          "roi_proxy": 1.9390154298310067
+        },
+        {
+          "city": "LA",
+          "rows": 4,
+          "pnl_proxy": 2.33,
+          "cost_proxy": 0.67,
+          "roi_proxy": 3.4776119402985075
+        },
+        {
+          "city": "Madrid",
+          "rows": 2,
+          "pnl_proxy": 1.5899999999999999,
+          "cost_proxy": 0.41000000000000003,
+          "roi_proxy": 3.8780487804878043
+        },
+        {
+          "city": "Houston",
+          "rows": 10,
+          "pnl_proxy": 1.2249999999999999,
+          "cost_proxy": 0.775,
+          "roi_proxy": 1.5806451612903223
+        },
+        {
+          "city": "Wuhan",
+          "rows": 11,
+          "pnl_proxy": 1.017,
+          "cost_proxy": 0.983,
+          "roi_proxy": 1.034587995930824
+        },
+        {
+          "city": "Karachi",
+          "rows": 3,
+          "pnl_proxy": 0.7170000000000001,
+          "cost_proxy": 0.28300000000000003,
+          "roi_proxy": 2.53356890459364
+        },
+        {
+          "city": "Shanghai",
+          "rows": 2,
+          "pnl_proxy": 0.6299999999999999,
+          "cost_proxy": 0.37,
+          "roi_proxy": 1.7027027027027024
+        }
+      ]
+    }
+  ],
+  "artifacts": {
+    "scored_rows_csv": "docs/analysis/2026-06/generated/low_price_yes_reheat_reversal_v0/scored_rows.csv"
+  },
+  "verdict": "shadow/research only"
+}

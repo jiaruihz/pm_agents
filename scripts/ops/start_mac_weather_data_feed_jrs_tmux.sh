@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+VOLUME="${WEATHER_JRS_VOLUME:-/Volumes/jrs}"
+RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$(weather_production_path "$PROJECT_DIR" data_feed_runtime_root)}"
+STRATEGY_SNAPSHOT_ROOT="${WEATHER_STRATEGY_SNAPSHOT_ROOT:-$(weather_production_path "$PROJECT_DIR" strategy_snapshot_root)}"
+FORECAST_CURVE_ROOT="${WEATHER_DATA_FEED_FORECAST_CURVE_ROOT:-$(weather_production_path "$PROJECT_DIR" forecast_hourly_curve_dir)}"
+MARKET_BOOKS_LATEST="${WEATHER_MARKET_BOOKS_LATEST:-$(weather_production_path "$PROJECT_DIR" market_books_latest)}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
+TMUX_SESSION="${WEATHER_DATA_FEED_TMUX_SESSION:-weather_data_feed_jrs}"
+LOG_FILE="$RUNTIME_ROOT/loop/data_feed_tmux.log"
+SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$PROJECT_DIR}"
+SOURCE_EVENTS_RESEARCH_CITIES="${WEATHER_DATA_FEED_SOURCE_EVENTS_RESEARCH_CITIES:-Seoul HongKong Shenzhen TelAviv Istanbul Moscow}"
+RUNWAY_OBSERVATIONS_ENABLED="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_ENABLED:-0}"
+RUNWAY_OBSERVATIONS_INTERVAL_SEC="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_INTERVAL_SEC:-60}"
+RUNWAY_OBSERVATIONS_SOURCES="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_SOURCES:-}"
+FAST_OBS_ACTIVE_LOCAL_START_HOUR="${WEATHER_DATA_FEED_FAST_OBS_ACTIVE_LOCAL_START_HOUR:-6}"
+FAST_OBS_ACTIVE_LOCAL_END_HOUR="${WEATHER_DATA_FEED_FAST_OBS_ACTIVE_LOCAL_END_HOUR:-22}"
+OBSERVATION_ADDITIONAL_CITIES="${WEATHER_DATA_FEED_OBSERVATION_ADDITIONAL_CITIES:-Seoul}"
+
+if [[ ! -d "$VOLUME" ]]; then
+  echo "missing mounted volume: $VOLUME" >&2
+  exit 1
+fi
+
+weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$RUNTIME_ROOT/loop"
+
+weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+rm -f "$RUNTIME_ROOT/loop/data_feed_loop.pid"
+weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+  "cd '$PROJECT_DIR' && export WEATHER_DATA_FEED_SERVICE_DIR='$SERVICE_DIR' && export WEATHER_DATA_FEED_RUNTIME_ROOT='$RUNTIME_ROOT' && export WEATHER_STRATEGY_SNAPSHOT_ROOT='$STRATEGY_SNAPSHOT_ROOT' && export WEATHER_DATA_FEED_FORECAST_CURVE_ROOT='$FORECAST_CURVE_ROOT' && export WEATHER_MARKET_BOOKS_LATEST='$MARKET_BOOKS_LATEST' && export WEATHER_DATA_FEED_SOURCE_EVENTS_RESEARCH_CITIES='$SOURCE_EVENTS_RESEARCH_CITIES' && export WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_ENABLED='$RUNWAY_OBSERVATIONS_ENABLED' && export WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_INTERVAL_SEC='$RUNWAY_OBSERVATIONS_INTERVAL_SEC' && export WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_SOURCES='$RUNWAY_OBSERVATIONS_SOURCES' && export WEATHER_DATA_FEED_FAST_OBS_ACTIVE_LOCAL_START_HOUR='$FAST_OBS_ACTIVE_LOCAL_START_HOUR' && export WEATHER_DATA_FEED_FAST_OBS_ACTIVE_LOCAL_END_HOUR='$FAST_OBS_ACTIVE_LOCAL_END_HOUR' && export WEATHER_DATA_FEED_OBSERVATION_ADDITIONAL_CITIES='$OBSERVATION_ADDITIONAL_CITIES' && export MAC_WEATHER_DATA_FEED_LOOP_CHILD=1 && exec '$PROJECT_DIR/scripts/ops/start_mac_weather_data_feed_loop.sh' >> '$LOG_FILE' 2>&1"
+sleep 1
+if ! weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
+  echo "failed to start $TMUX_SESSION; inspect $LOG_FILE" >&2
+  exit 1
+fi
+
+echo "started $TMUX_SESSION on tmux socket $TMUX_SOCKET"
+echo "runtime=$RUNTIME_ROOT"
+echo "service_dir=$SERVICE_DIR"
+echo "log=$LOG_FILE"
+echo "source_events_research_cities=${SOURCE_EVENTS_RESEARCH_CITIES:-none}"
+echo "runway_observations_enabled=$RUNWAY_OBSERVATIONS_ENABLED"
+echo "runway_observations_interval_sec=$RUNWAY_OBSERVATIONS_INTERVAL_SEC"
+echo "runway_observations_sources=${RUNWAY_OBSERVATIONS_SOURCES:-all}"
+echo "fast_observation_owner=weather_live_cross_observations"
+echo "fast_obs_active_local_start_hour=$FAST_OBS_ACTIVE_LOCAL_START_HOUR"
+echo "fast_obs_active_local_end_hour=$FAST_OBS_ACTIVE_LOCAL_END_HOUR"
+echo "observation_additional_cities=${OBSERVATION_ADDITIONAL_CITIES:-none}"

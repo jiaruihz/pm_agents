@@ -1,0 +1,86 @@
+identity:
+  city_key: doha
+  display_name: Doha
+  market_unit: C
+  timezone: Asia/Qatar
+
+station:
+  station_name: Hamad International Airport
+  station_code: OTHH
+  iata_code: DOH
+  object_type: airport
+  settlement_scope: Only the Hamad airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values, matching Doha-style weather-market rules.
+  station_match_rule: Must match Hamad International Airport Station / OTHH. Do not substitute a generic Doha city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: OTHH
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not treat provisional history as final settlement.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: OTHH
+    role: trading_anchor
+    use_for: Record target-day high, peak timing, and whether the dry-air airport path is stable.
+    do_not_use_for: Do not map the displayed forecast integer directly to a guaranteed settlement call.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain market consensus inside the TWC stack.
+      do_not_use_for: Do not replace OTHH with a generic Doha page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check visibility, haze, and airport observations.
+    - family: checkwx
+      page_type: metar_taf
+      location_object: airport
+      use_for: Check current airport observation and whether dust or haze is building.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and coastal moderation risk.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: A Doha city page is not the OTHH airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Urban pages can diverge from the airport dry-range path.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only to explain market drift.
+
+operator_notes:
+  summary: Doha is a dry-air airport contract where same-station WU Hourly should dominate. Support pages mainly confirm whether dust, haze, or marine moderation are shifting the expected top bucket.
+  why_this_station: OTHH is the clean airport object for a Doha contract and is easier to verify than generic urban Doha pages.
+  main_risks:
+    - Dust or haze muting the daytime top.
+    - Coastal moderation clipping the warm edge.
+    - Market participants anchoring to generic Doha city pages.
+  common_wrong_anchor:
+    - Central Doha pages instead of OTHH.
+    - App pages that describe the city without a station match.
+  usage_order:
+    - Open Polymarket rules and confirm OTHH plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check CheckWX or another airport observation source for haze and ramp confirmation.
+    - Use city pages only as wrong-anchor diagnostics.

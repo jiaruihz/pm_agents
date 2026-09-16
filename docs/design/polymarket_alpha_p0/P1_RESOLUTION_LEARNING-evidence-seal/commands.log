@@ -1,0 +1,5 @@
+PYTHONPATH=. .venv/bin/python -m pytest -q tests/polymarket_alpha/test_learning_resolution_p1.py tests/polymarket_alpha/test_learning_scoring_p1.py tests/polymarket_alpha/test_storage_p1_resolution_learning.py tests/polymarket_alpha/test_storage_p0_02.py tests/polymarket_alpha/test_storage_p0_02r2.py tests/polymarket_alpha/test_contracts_p0_01.py tests/polymarket_alpha/test_contracts_p0_01r2.py
+env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u NO_PROXY -u http_proxy -u https_proxy -u all_proxy -u no_proxy PYTHONPATH=. .venv/bin/python -m pytest -q tests/polymarket_alpha
+PYTHONPATH=. .venv/bin/python -c "from src.polymarket_alpha.security import audit_source_tree; r=audit_source_tree('src/polymarket_alpha/learning'); print(r.passed, len(r.violations))"
+git diff --check -- src/polymarket_alpha/contracts src/polymarket_alpha/learning src/polymarket_alpha/storage tests/polymarket_alpha
+

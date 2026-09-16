@@ -1,0 +1,22 @@
+{
+  "city": "Amsterdam",
+  "condition_ids": [
+    "0x231926c4b587719ebcd64581de6d11bd251d80e2517a6736bd6b4444413a9d94"
+  ],
+  "demand_created_at_wall_ns": 1787883026668491000,
+  "demand_effective_from_wall_ns": 1787883026668491000,
+  "demand_effective_to_wall_ns": 1787883071668491000,
+  "market_identity_hash": "aaf653b9f47bec673854c43847ce1c465238e27316311408f46accbab14d57d3",
+  "neighbor_brackets": [
+    "20",
+    "21"
+  ],
+  "no_token_ids": [],
+  "reason": "bounded isolated public-read-only canary",
+  "schema_version": "wcir_collector_clock_shadow_v1",
+  "source": "operator supplied frozen token identity",
+  "target_date": "2026-08-28",
+  "yes_token_ids": [
+    "31093818460558427786061634221576512916351494782561764883465144588283506331292"
+  ]
+}

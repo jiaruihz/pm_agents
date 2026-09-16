@@ -1,0 +1,59 @@
+{
+  "target_date": "2026-08-02",
+  "grain": "one_row_per_jma_observation_first_seen_checkpoint",
+  "window_jst": [
+    10.0,
+    18.0
+  ],
+  "raw_book_rows": 2747,
+  "source_observations_all_day": 73,
+  "source_observations_in_window": 24,
+  "expected_10m_observations_in_window": 48,
+  "source_observation_coverage": 0.5,
+  "max_book_after_first_seen_seconds": 900.0,
+  "checkpoint_rows_preserved": 24,
+  "pit_current_book_rows": 23,
+  "scored_two_sided_rows": 22,
+  "one_sided_current_book_rows": 1,
+  "missing_current_book_rows": 1,
+  "edge_threshold_after_fee": 0.02,
+  "v2_trigger_count": 0,
+  "v2_trigger_wins": 0,
+  "no_floor_trigger_count": 0,
+  "no_floor_trigger_wins": 0,
+  "v2_brier_on_scored_rows": 0.0003808617063402882,
+  "market_brier_on_scored_rows": 0.00029053409090909195,
+  "v2_edge_after_fee_min": -0.01952039416915545,
+  "v2_edge_after_fee_max": -0.0028153868148494796,
+  "unconditional_buy_every_scored_checkpoint": {
+    "shares_per_order": 5.0,
+    "orders": 22,
+    "wins": 11,
+    "cost_1share_each": 10.92184,
+    "fee_adjusted_pnl_1share_each": 0.07816000000000048,
+    "cost_5shares_each": 54.6092,
+    "fee_adjusted_pnl_5shares_each": 0.3908000000000024
+  },
+  "model_direction_p_no_gte_0_5": {
+    "shares_per_order": 5.0,
+    "orders": 11,
+    "wins": 11,
+    "cost_1share_each": 10.853589999999999,
+    "fee_adjusted_pnl_1share_each": 0.14641000000000048,
+    "cost_5shares_each": 54.26794999999999,
+    "fee_adjusted_pnl_5shares_each": 0.7320500000000024
+  },
+  "v2_edge_policy": {
+    "shares_per_order": 5.0,
+    "orders": 0,
+    "wins": 0,
+    "cost_1share_each": 0,
+    "fee_adjusted_pnl_1share_each": 0.0,
+    "cost_5shares_each": 0.0,
+    "fee_adjusted_pnl_5shares_each": 0.0
+  },
+  "final_official_bracket": 33,
+  "model_training_end": "2026-07-15",
+  "model_market_logit_floor": 0.005,
+  "label_joined_after_scoring": true
+}

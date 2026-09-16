@@ -1,0 +1,86 @@
+identity:
+  city_key: paris
+  display_name: Paris
+  market_unit: C
+  timezone: Europe/Paris
+
+station:
+  station_name: Paris Charles de Gaulle Airport
+  station_code: LFPG
+  iata_code: CDG
+  object_type: airport
+  settlement_scope: Only the CDG airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values, matching the Paris weather-market rules.
+  station_match_rule: Must match Paris Charles de Gaulle Airport Station / LFPG. Do not substitute a generic Paris city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: LFPG
+    role: settlement_truth
+    use_for: Final market resolution, replay, and post-trade review.
+    do_not_use_for: Do not treat provisional readings as final settlement truth.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: LFPG
+    role: trading_anchor
+    use_for: Record the target-day high, peak hour, and whether the main range is warming or cooling into the session.
+    do_not_use_for: Do not convert the displayed forecast integer into a guaranteed settlement call.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain market consensus when the crowd appears to be leaning warmer or cooler than WU.
+      do_not_use_for: Do not override the same-station WU anchor with a Paris city page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check wind, cloud, and airport observation context.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and midday-to-afternoon warming path.
+    - family: meteoblue
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check trend, peak timing, and uncertainty.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: Paris city weather is a different object from LFPG and should only be treated as noise.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: It may reflect an urban reading rather than the airport contract.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Useful for explaining drift, not for main pricing.
+
+operator_notes:
+  summary: Paris pricing should stay anchored to LFPG. The usual workflow is same-station WU Hourly first, then airport support pages to confirm whether the warming path is stable or vulnerable to a frontal rollback.
+  why_this_station: Paris Charles de Gaulle Airport is the canonical airport station in the current strategy config and fits the airport-first resolution pattern used for weather contracts.
+  main_risks:
+    - Frontal days where the peak shifts later or fails to materialize.
+    - Rain or thicker cloud cover flattening the expected afternoon high.
+    - Warm city pages pulling the market right when the airport stays more muted.
+  common_wrong_anchor:
+    - Generic Paris city pages that trade off urban warmth.
+    - Same-stack pages without a clear LFPG airport object.
+  usage_order:
+    - Open Polymarket rules and confirm LFPG plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to confirm the station and later use it as settlement truth.
+    - Check airport support pages for 1 to 2 degree disagreement or a materially different peak hour.
+    - Treat city pages only as a market-noise diagnostic.
