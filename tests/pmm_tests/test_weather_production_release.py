@@ -320,3 +320,30 @@ def test_apply_refuses_concurrent_release_operation(tmp_path: Path) -> None:
                 reason="concurrency test",
             )
     assert old in spec.read_text()
+
+
+def test_explicit_pinned_release_branch_preserves_exact_tree(tmp_path):
+    repo, spec, old, new = _fixture(tmp_path)
+    _git(repo, "checkout", "-B", "operational", new)
+    _git(repo, "checkout", "-b", "hotfix", old)
+    hotfix = _commit(repo, "pinned hotfix")
+    _git(repo, "checkout", "operational")
+    result = run_release(release_id="control_plane", source_sha=hotfix, expected_old_sha=old,
+        production_spec=spec, apply=True, confirm_production=True, reason="reviewed pinned hotfix",
+        source_basis="pinned-release")
+    assert result["checks"]["ancestry_base"] == old
+    assert result["checks"]["operational_head_is_ancestor"] is False
+    assert _git(Path(result["new"]["checkout_root"]), "rev-parse", "HEAD^{tree}") == _git(repo, "rev-parse", hotfix+"^{tree}")
+
+
+def test_pinned_release_basis_rejects_unrelated_commit(tmp_path):
+    repo, spec, old, new = _fixture(tmp_path)
+    _git(repo, "checkout", "-B", "operational", new)
+    _git(repo, "checkout", "--orphan", "unrelated")
+    unrelated = _commit(repo, "unrelated tree")
+    _git(repo, "checkout", "operational")
+    with pytest.raises(ReleaseError, match="not a descendant"):
+        run_release(release_id="control_plane", source_sha=unrelated, expected_old_sha=old,
+            production_spec=spec, apply=False, confirm_production=False, reason="",
+            source_basis="pinned-release")
+    assert old in spec.read_text()

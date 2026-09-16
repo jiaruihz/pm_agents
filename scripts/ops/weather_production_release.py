@@ -356,7 +356,7 @@ def _atomic_write(path: Path, content: str) -> None:
         raise
 
 
-def _run_release_impl(*, release_id: str, source_sha: str, expected_old_sha: str, production_spec: Path, apply: bool, confirm_production: bool, reason: str) -> dict[str, Any]:
+def _run_release_impl(*, release_id: str, source_sha: str, expected_old_sha: str, production_spec: Path, apply: bool, confirm_production: bool, reason: str, source_basis: str = "operational-head") -> dict[str, Any]:
     if not RELEASE_ID_RE.fullmatch(release_id):
         raise ReleaseError("release_id may contain only letters, digits, _ and -")
     source_sha = _full_sha(source_sha, "source_sha")
@@ -413,18 +413,27 @@ def _run_release_impl(*, release_id: str, source_sha: str, expected_old_sha: str
         raise ReleaseError(f"source SHA does not resolve exactly: {source_sha} -> {resolved_source}")
     operational_head = _git(operational_repo, "rev-parse", "HEAD").lower()
     operational_common_git_dir = _git_common_dir(operational_repo)
+    if source_basis not in {"operational-head", "pinned-release"}:
+        raise ReleaseError("unsupported source basis")
+    ancestry_base = old_sha if source_basis == "pinned-release" else operational_head
     ancestor = subprocess.run(
-        ["git", "-C", str(operational_repo), "merge-base", "--is-ancestor", operational_head, source_sha],
+        ["git", "-C", str(operational_repo), "merge-base", "--is-ancestor", ancestry_base, source_sha],
         check=False,
     ).returncode == 0
     if not ancestor:
-        raise ReleaseError("source SHA is not a descendant of the current operational HEAD")
+        raise ReleaseError(f"source SHA is not a descendant of the selected {source_basis} base {ancestry_base}")
 
     checks: dict[str, Any] = {
         "release_id_exists_once": True,
         "old_pin_matches": True,
         "source_resolves_exactly": True,
-        "operational_head_is_ancestor": True,
+        "source_basis": source_basis,
+        "ancestry_base": ancestry_base,
+        "selected_base_is_ancestor": True,
+        "operational_head_is_ancestor": subprocess.run(
+            ["git", "-C", str(operational_repo), "merge-base", "--is-ancestor", operational_head, source_sha],
+            check=False,
+        ).returncode == 0,
         "target_layout": str(target),
         "physical_release_root": str(resolved_release_root),
         "physical_target": str(physical_target),
@@ -537,6 +546,7 @@ def run_release(
     apply: bool,
     confirm_production: bool,
     reason: str,
+    source_basis: str = "operational-head",
 ) -> dict[str, Any]:
     if apply and (not confirm_production or not reason.strip()):
         raise ReleaseError(
@@ -552,6 +562,7 @@ def run_release(
                 apply=apply,
                 confirm_production=confirm_production,
                 reason=reason,
+                source_basis=source_basis,
             )
     return _run_release_impl(
         release_id=release_id,
@@ -561,6 +572,7 @@ def run_release(
         apply=apply,
         confirm_production=confirm_production,
         reason=reason,
+        source_basis=source_basis,
     )
 
 
@@ -570,6 +582,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--expected-old-sha", required=True)
     parser.add_argument("--production-spec", type=Path, required=True)
+    parser.add_argument("--source-basis", choices=("operational-head", "pinned-release"),
+                        default="operational-head", help="Require ancestry from development HEAD or the exact current production pin")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm-production", action="store_true")
     parser.add_argument("--reason", default="")
@@ -583,6 +597,7 @@ def main(argv: list[str] | None = None) -> int:
             apply=args.apply,
             confirm_production=args.confirm_production,
             reason=args.reason,
+            source_basis=args.source_basis,
         )
     except ReleaseError as exc:
         print(json.dumps({"schema_version": "weather_production_release_v1", "ok": False, "error": str(exc)}))
