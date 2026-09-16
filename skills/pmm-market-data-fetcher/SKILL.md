@@ -25,7 +25,7 @@ Run:
 .venv/bin/python skills/pmm-market-data-fetcher/scripts/fetch_market_data.py \
   --market-url "https://polymarket.com/event/natural-disaster-in-2026" \
   --include-orderbook true \
-  --translate-zh true
+  --translate-zh false
 ```
 
 Translation uses `ALIPAY_API_KEY` with the Alipay host/model variables, or

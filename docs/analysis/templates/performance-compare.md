@@ -56,7 +56,7 @@
 - variants tried K：
 - correction / uncorrected risk：
 
-## 三门
+## 已登记 gate/version 与判定
 
 ```text
 significance={}; baseline={}; forward={}; conclusion={}
@@ -66,7 +66,7 @@ significance={}; baseline={}; forward={}; conclusion={}
 
 - family living doc / registry / index update：
 - canonical paired-result format（只能一种）：
-- JRS artifact manifest：
+- artifact manifest（路径从 production.yaml 解析）：
 - dated snapshot justification（或 `merged-into-living-doc`）：
-- superseded A/B outputs removed：
+- superseded A/B evidence pointers / retained history：
 - `check_weather_docs.py`：PASS / blocker

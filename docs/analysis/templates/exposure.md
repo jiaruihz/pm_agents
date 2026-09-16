@@ -1,6 +1,6 @@
 <!--
   M4 持仓敞口报告模板
-  规则：H2 顺序不得改变，未实现 PnL 三估值必须并列，标注 [UNSETTLED]。
+  按问题组织标题；未实现 PnL 三估值并列，标注 [UNSETTLED]，缺失填 N/A 并说明原因。
   输出到：docs/analysis/YYYY-MM/YYYY-MM-DD-exposure-<snapshot_time>.md
   口径：docs/WEATHER_ANALYSIS_CONTRACT.md §2.1（未结算 PnL 三估值）
 -->
@@ -15,18 +15,21 @@
 
 | 项目 | 值 |
 |---|---|
-| 数据源路径 | {source_path} |
+| 数据源路径 / DB identity / build_id | {source_path / realpath / device / inode / build_id} |
+| 最新 fill / valuation 时间及 stale 状态 | {latest_fill / valuation_ts / stale} |
 | 快照时间 | {snapshot_ts} |
 | 未结算持仓总笔数 | {open_position_count} |
 | 涉及城市数 | {city_count} |
-| 最早到期日 | {earliest_settle_date} |
-| 最晚到期日 | {latest_settle_date} |
+| 最早目标日 | {earliest_target_date} |
+| 最晚目标日 | {latest_target_date} |
 | mid/bid 盘口数据来源 | {snapshot_source 或 "N/A（无 snapshot）"} |
+
+先给持仓成本、开放订单与主要集中度结论。即时查询可直接回答；完整逐笔清单放机器产物并提供链接。
 
 ## 未结算持仓清单
 
-| city | city_pool | target_date | side | fill_price | fill_qty | cost_usd | condition_id |
-|---|---|---|---|---|---|---|---|
+| instance_id | city | target_date | side | fill_price | fill_qty | cost_usd | fees_usd | condition_id |
+|---|---|---|---|---|---|---|---|---|
 
 ## 开放订单与 reserved
 
@@ -45,7 +48,7 @@
 | city | open_positions | total_cost_usd | avg_fill_price |
 |---|---|---|---|
 
-## 聚合：by_settle_date
+## 聚合：by_target_date（合约目标日，不是实际结算时间）
 
 | target_date | open_positions | total_cost_usd |
 |---|---|---|
@@ -72,7 +75,7 @@
 | rank | condition_id / city | cost_usd | pct_of_total |
 |---|---|---|---|
 
-**单到期日占比 Top-5：**
+**单目标日占比 Top-5：**
 
 | rank | target_date | cost_usd | pct_of_total |
 |---|---|---|---|

@@ -80,14 +80,18 @@ production manifest 为 critical（尤其 DB split/非 canonical consumer）时�
 
 ## 最终输出
 
+先统一钱包字段含义：只有 available cash 明确扣除了 reserved 时，才按下式桥接；若拿到的是链上余额，单列 reserved，不再从余额重复扣除。买入成本与 fee 是否已含手续费按字段合同说明，单独扣除尚未计入 cost 的实际现金 fee。
+
 先给余额变化桥接：
 
 ```text
 期初可用现金
 - actual fill cost
-- current reserved
++ opening reserved
+- closing reserved
 + settlement/redemption/exit cash inflow
 +/- external transfers
+- fees not already included in cash cost
 = 期末可用现金（在可见证据范围内）
 ```
 

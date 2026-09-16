@@ -88,7 +88,7 @@ YES 与 NO 必须分行；gross 可附录，不作主结论。未结算另列 `[
 | multiple testing K / correction | |
 | coverage sensitivity | |
 
-## 三门与残余风险
+## 已登记 gate/version、判定与残余风险
 
 | 门 | PASS/FAIL/NA | 证据 |
 |---|---|---|
@@ -102,7 +102,7 @@ YES 与 NO 必须分行；gross 可附录，不作主结论。未结算另列 `[
 
 - family living doc / registry / index update：
 - canonical machine format（只能一种）：
-- JRS artifact manifest：
+- artifact manifest（路径从 production.yaml 解析）：
 - dated snapshot justification（或 `merged-into-living-doc`）：
-- superseded files removed：
+- superseded evidence pointers / retained history：
 - `check_weather_docs.py`：PASS / blocker

@@ -5,7 +5,7 @@ description: 同步、补全或重建 weather canonical 数据层与 JRS physica
 
 # Weather fact refresh and rebuild
 
-把“补当前 raw 数据”“刷新 canonical DB”“全量重建”分开。当前机器是 Mac；N100 在磁盘事故恢复完成前只提供历史/抢救数据，不是 present-state truth。
+把“补当前 raw 数据”“刷新 canonical DB”“全量重建”分开。当前生产主机是 Mac；N100 只在明确的历史恢复任务中提供证据，不是 present-state truth。
 
 ## 最小上下文
 
@@ -36,8 +36,8 @@ description: 同步、补全或重建 weather canonical 数据层与 JRS physica
    `order -> fill -> fact_trades -> coverage gate`，不无条件重算全部 candidate。
 5. WCIR candidate/label/coverage 或其他派生层缺目标窗：只运行对应的、已审批的增量
    materializer；固定 `candidate_grain_version` 与输入 build，不直接改 raw journal。
-6. 只在 schema/全历史派生层失效、全量输入需重算，或用户明确要求全量重建时，才执行
-   `run_stack.sh --rebuild`。WCIR 迁移或单个 raw lineage 不能自动升级为全量重建。
+6. schema/全历史派生层失效或全量输入需重算，只构成提出全量重建的理由；执行
+   `run_stack.sh --rebuild` 仍须已有用户对全量范围的明确授权。WCIR 迁移或单个 raw lineage 不能自动升级为全量重建。
 7. 只有历史抢救问题才同步 N100；先注明 N100 覆盖截止时间与可达状态。
 
 ## 标准命令
@@ -64,7 +64,7 @@ scripts/ops/start_weather_canonical_refresh_tmux.sh
 子进程。先查 `runtime/weather_edge_v1/canonical_refresh/last_exit_status` 和日志，不得在它仍运行时另起第二个 refresh。
 不得直接调用 refresh 内部的 ingest、fill sync 或 fact builder 来制造第二条生产刷新链。
 
-全量 canonical 重建（显式动作；用户说“重建/重跑底表”即已授权，否则先说明影响）：
+全量 canonical 重建（须明确授权全量范围；仅说“刷新”或重跑某个窗口不能推定授权全库）：
 
 ```bash
 scripts/weather_dashboard/run_stack.sh --rebuild

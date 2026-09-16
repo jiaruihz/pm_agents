@@ -1,12 +1,12 @@
 <!--
   M2 单日血缘报告模板
-  规则：H2 顺序不得改变，全链路表按 city 分组，每笔订单独立展示。
+  按问题 grain 组织标题；单笔可直接回答，多单明细放可追溯产物，不强制复制整张表。
   异常订单段不得留空——若无异常，写"无"。
   输出到：docs/analysis/YYYY-MM/YYYY-MM-DD-lineage-<target_date>.md
   口径：docs/WEATHER_ANALYSIS_CONTRACT.md
 -->
 
-# 单日血缘：{target_date}
+# 血缘复盘：{order_id / target_date / scope}
 
 > 目标日期：{target_date}  
 > 策略：{strategy_id}  
@@ -45,7 +45,10 @@
 
 | 阶段 | 字段 | 值 |
 |---|---|---|
-| **Signal** | signal_id | |
+| **Event / Decision** | event_id / checkpoint_id / decision_context_id | |
+| **Model / Candidate** | model/artifact/config identity / candidate_id | |
+| **Intent / Handoff** | intent_id / execution_id / blocker | |
+| **Signal（legacy）** | signal_id / adapter / missing layers | |
 | | snapshot_ts（北京时间） | |
 | | forecast_source（model） | |
 | | target_date | |
@@ -68,7 +71,7 @@
 | | filled_shares（fill_qty） | |
 | | fees_usd / fee evidence | |
 | | fill_status | |
-| | filled_at（北京时间 / 当地时间） | |
+| | effective fill time / timestamp evidence / discovery time | |
 | **Settlement** | final_price（settlement_yes_price） | |
 | | settlement_status | |
 | | bracket | |
@@ -84,8 +87,8 @@
 | city | 异常类型 | 说明 |
 |---|---|---|
 | | missing_bracket | |
-| | plan_vs_fill 偏差 > 5%（fill − plan） | |
-| | 未成交（no fill） | |
+| | plan/fill 偏差及适用的 execution policy 判据 | |
+| | 未成交原因（resting/cancel/reject；不自动视为异常） | |
 | | 其他 | |
 
 ## 当日 PnL 汇总
@@ -98,8 +101,8 @@
 
 ## 数据完整性自检
 
-- [ ] signal_count = plan_count（每个信号都有对应计划）
-- [ ] plan_count = order_count（每个计划都下了单）
+- [ ] 每层计数注明 grain；未进入 plan 的 candidate/signal 列出 blocker 或 record-only 依据，不要求数量相等
+- [ ] plan 未发单、reprice/replacement 与 partial fills 分别可追溯，不要求 plan/order/fill 一对一
 - [ ] 无 orphan fills（fill 有 execution_id 但 order 不存在）
 - [ ] 列出无法结算城市（missing_bracket / missing_event）—— 若无写"无"
 
